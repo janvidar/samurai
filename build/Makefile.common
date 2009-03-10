@@ -1,0 +1,46 @@
+ #
+##
+## Makefile for Samurai library
+## Copyright (c) 2001-2008, Jan Vidar Krey
+##
+ #
+
+include $(BUILDDIR)/Makefile.system
+
+### Configurations
+ifeq ($(BZIP2_SUPPORT), YES)
+	DEFINES  += BZIP2
+	LIBS     += bz2
+endif
+
+ifeq ($(ZLIB_SUPPORT), YES)
+	DEFINES  += ZLIB
+	LIBS     += z
+endif
+
+ifeq ($(DEBUG), YES)
+	DEFINES += DEBUG
+endif
+
+# Choose TLS provider: "NONE", "GNUTLS", "OPENSSL" or "CYASSL"
+ifeq ($(TLSPROVIDER), NONE)
+$(warning NO TLS)
+else
+ifeq ($(TLSPROVIDER), GNUTLS)
+	LIBS     += gnutls
+	DEFINES  += SSL_SUPPORT SSL_GNUTLS
+else
+ifeq ($(TLSPROVIDER), OPENSSL)
+	LIBS     += ssl crypto
+	DEFINES  += SSL_SUPPORT SSL_OPENSSL
+endif
+endif
+endif
+
+# Choose threads provider: "PTHREADS", "WINTHREADS"
+ifeq ($(OS), Windows_NT)
+	LIBS     += ws2_32 iphlpapi
+endif
+
+include $(BUILDDIR)/Makefile.rules
+

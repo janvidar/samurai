@@ -1,0 +1,29 @@
+ #
+##
+## Makefile for Samurai library
+## Copyright (c) 2001-2008, Jan Vidar Krey
+##
+ #
+
+ifeq ($(SILENT), YES)
+MSG_COMPILE  = @echo "  Compile:" $(notdir $<);
+MSG_LINK     = @echo "     Link:" $(notdir $@);
+MSG_ARCHIVE  = @echo "  Archive:" $(notdir $@);
+MSG_DEPEND   = @echo "   Depend:" $(notdir $<);
+MSG_DLL      = @echo "  Library:" $(notdir $@);
+endif
+
+%.d: %.cpp
+	$(MSG_DEPEND) $(DEP) $(INCLUDES) $(EXTRAFLAGS) -MM $< -MT $(@:.d=$(OBJ_EXT)) -MF $@
+
+%$(OBJ_EXT): %.cpp
+	$(MSG_COMPILE) $(CXX) $(CXXFLAGS) $(INCLUDES) $(EXTRAFLAGS) ${CXX_OUT}$@ $^
+
+%$(OBJ_EXT): %.c
+	$(MSG_COMPILE) $(CC) $(CFLAGS) $(INCLUDES) $(EXTRAFLAGS) ${CC_OUT}$@ $<
+
+%.a:
+	$(MSG_ARCHIVE) $(AR) $(AR_OPTS) $@ $^
+
+%$(LIB_EXT):
+	$(MSG_DLL) $(DLL) $(DLLFLAGS) ${CC_OUT}$@ $^

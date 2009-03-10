@@ -1,0 +1,68 @@
+Dynamic MerkleTree/Node/Stack handling
+
+Example: Max 8 leafs kept. We have two stacks, one "final" and one "work".
+Using a separate one when calculating the root.
+
+Lets insert some (8) nodes:
+
+Since nodes_per_leaf is 1, everything goes directly to
+final store.
+
+When final store is full, let's double nodes_per_leaf
+
+Final:       12345678  (lev 1)
+
+Inserting one more goes to work:
+Work:        9
+
+Inserting 1 more
+Work:        9a        (lev 1)
+
+Since size of work contains nodes_per_leaf we can compact
+it and move to final.
+
+Work:        9          (lev 2)
+
+Final needs to be compacted since  it is full:
+Final:       1357       (lev 2)
+Adding 9+a:  13579      (lev 2);
+
+Adding more:
+Work:        bc         (lev 1)
+Work:        b          (lev 2)
+Final:       13579b     (lev 2)
+
+Work:        de         (lev 1)
+Final:       13579bd    (lev 2)
+
+Work:        fg         (lev 1)
+Final:       13579bdf   (lev 2)
+Final is now full again, let's double nodes_per_leaf again.
+
+Work:        hijk       (lev 1)
+Work:        hj         (lev 2)
+Work:        h          (lev 3)
+
+Final needs compacting before adding h.
+Final:       159d       (lev 3)
+
+adding h.
+Final:       159dh      (lev 3)
+
+
+
+Function Add_Node(n)
+	IF Storage_Is_Full() then
+		Compact_Storage();
+		
+	Append_Node(n);
+	Nodes = Nodes+1;
+	
+	If Storage_Is_Full() then
+		return TRUE
+		
+	return FALSE
+}
+
+
+

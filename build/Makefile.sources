@@ -1,0 +1,123 @@
+ #
+##
+## Makefile for the Samurai library
+## Copyright (c) 2001-2008, Jan Vidar Krey
+##
+ #
+
+lib_SOURCES := \
+		$(COREDIR)/os.cpp \
+		$(COREDIR)/messagehandler.cpp \
+		$(COREDIR)/stdc.cpp \
+		$(COREDIR)/timer.cpp \
+		$(COREDIR)/timestamp.cpp \
+		$(COREDIR)/io/buffer.cpp \
+		$(COREDIR)/io/codec.cpp \
+		$(COREDIR)/io/compression.cpp \
+		$(COREDIR)/io/dir.cpp \
+		$(COREDIR)/io/file.cpp \
+		$(COREDIR)/io/stream.cpp \
+		$(COREDIR)/io/unicode.cpp \
+		$(COREDIR)/io/net/bandwidth.cpp \
+		$(COREDIR)/io/net/datagram.cpp \
+		$(COREDIR)/io/net/hardwareaddress.cpp \
+		$(COREDIR)/io/net/inetaddress.cpp \
+		$(COREDIR)/io/net/interface.cpp \
+		$(COREDIR)/io/net/multicast.cpp \
+		$(COREDIR)/io/net/socket.cpp \
+		$(COREDIR)/io/net/socketbase.cpp \
+		$(COREDIR)/io/net/serversocket.cpp \
+		$(COREDIR)/io/net/socketaddress.cpp \
+		$(COREDIR)/io/net/socketmonitor.cpp \
+		$(COREDIR)/io/net/socketmonitor-poll.cpp \
+		$(COREDIR)/io/net/socketmonitor-epoll.cpp \
+		$(COREDIR)/io/net/socketmonitor-select.cpp \
+		$(COREDIR)/io/net/socketmonitor-kqueue.cpp \
+		$(COREDIR)/io/net/tlsfactory.cpp \
+		$(COREDIR)/io/net/tlsfactory-gnutls.cpp \
+		$(COREDIR)/io/net/tlsfactory-openssl.cpp \
+		$(COREDIR)/io/net/url.cpp \
+		$(COREDIR)/io/net/dns/cache.cpp \
+		$(COREDIR)/io/net/dns/dnsconfig.cpp \
+		$(COREDIR)/io/net/dns/dnsmessage.cpp \
+		$(COREDIR)/io/net/dns/dnsrrs.cpp \
+		$(COREDIR)/io/net/dns/dnsutil.cpp \
+		$(COREDIR)/io/net/dns/resolver.cpp \
+		$(COREDIR)/io/net/dns/resolver-blocking.cpp \
+		$(COREDIR)/io/net/dns/resolver-builtin.cpp \
+		$(COREDIR)/io/net/dns/resolver-fork.cpp \
+		$(COREDIR)/thread/thread.cpp \
+		$(COREDIR)/thread/mutex.cpp \
+		$(COREDIR)/util/base32.cpp \
+		$(COREDIR)/util/bwestimation.cpp \
+		$(COREDIR)/util/format.cpp \
+		$(COREDIR)/util/random.cpp \
+		$(COREDIR)/util/refcount.cpp \
+		$(COREDIR)/crypto/digest/hash.cpp \
+		$(COREDIR)/crypto/digest/hashvalue.cpp \
+		$(COREDIR)/crypto/digest/merkletree.cpp \
+		$(COREDIR)/crypto/digest/tiger.cpp \
+		$(COREDIR)/crypto/digest/tigertree.cpp \
+		$(COREDIR)/crypto/digest/tthsum.cpp \
+		$(COREDIR)/debug/dbg.cpp \
+
+lib_HEADERS := \
+		$(INCDIR)/samurai/defines.h \
+		$(INCDIR)/samurai/samurai.h \
+		$(INCDIR)/samurai/messagehandler.h \
+		$(INCDIR)/samurai/os.h \
+		$(INCDIR)/samurai/stdc.h \
+		$(INCDIR)/samurai/timer.h \
+		$(INCDIR)/samurai/timestamp.h \
+		$(INCDIR)/samurai/io/dir.h \
+		$(INCDIR)/samurai/io/file.h \
+		$(INCDIR)/samurai/io/codec.h \
+		$(INCDIR)/samurai/io/compression.h \
+		$(INCDIR)/samurai/io/stream.h \
+		$(INCDIR)/samurai/io/unicode.h \
+		$(INCDIR)/samurai/io/buffer.h \
+		$(INCDIR)/samurai/io/net/bandwidth.h \
+		$(INCDIR)/samurai/io/net/datagram.h \
+		$(INCDIR)/samurai/io/net/inetaddress.h \
+		$(INCDIR)/samurai/io/net/interface.h \
+		$(INCDIR)/samurai/io/net/hardwareaddress.h \
+		$(INCDIR)/samurai/io/net/multicast.h \
+		$(INCDIR)/samurai/io/net/socket.h \
+		$(INCDIR)/samurai/io/net/socketbase.h \
+		$(INCDIR)/samurai/io/net/serversocket.h \
+		$(INCDIR)/samurai/io/net/socketaddress.h \
+		$(INCDIR)/samurai/io/net/socketmonitor.h \
+		$(INCDIR)/samurai/io/net/socketglue.h \
+		$(INCDIR)/samurai/io/net/socketglue-bsd.h \
+		$(INCDIR)/samurai/io/net/socketglue-winsock2.h \
+		$(INCDIR)/samurai/io/net/socketevent.h \
+		$(INCDIR)/samurai/io/net/tlsfactory.h \
+		$(INCDIR)/samurai/io/net/tlsfactory-openssl.h \
+		$(INCDIR)/samurai/io/net/tlsfactory-gnutls.h \
+		$(INCDIR)/samurai/io/net/url.h \
+		$(INCDIR)/samurai/io/net/dns/cache.h \
+		$(INCDIR)/samurai/io/net/dns/dnsconfig.h \
+		$(INCDIR)/samurai/io/net/dns/dnsmessage.h \
+		$(INCDIR)/samurai/io/net/dns/dnsrrs.h \
+		$(INCDIR)/samurai/io/net/dns/dnsutil.h \
+		$(INCDIR)/samurai/io/net/dns/resolver.h \
+		$(INCDIR)/samurai/io/net/dns/resolver-blocking.h \
+		$(INCDIR)/samurai/io/net/dns/resolver-builtin.h \
+		$(INCDIR)/samurai/io/net/dns/resolver-fork.h \
+		$(INCDIR)/samurai/thread/thread.h \
+		$(INCDIR)/samurai/thread/mutex.h \
+		$(INCDIR)/samurai/util/base32.h \
+		$(INCDIR)/samurai/util/bwestimation.h \
+		$(INCDIR)/samurai/util/format.h \
+		$(INCDIR)/samurai/util/random.h \
+		$(INCDIR)/samurai/crypto/digest/hash.h \
+		$(INCDIR)/samurai/crypto/digest/hashvalue.h \
+		$(INCDIR)/samurai/crypto/digest/merkletree.h \
+		$(INCDIR)/samurai/crypto/digest/tiger.h \
+		$(INCDIR)/samurai/crypto/digest/tigertree.h \
+		$(INCDIR)/samurai/crypto/digest/tthsum.h \
+		$(INCDIR)/samurai/debug/dbg.h
+
+
+
+

@@ -1,0 +1,44 @@
+ #
+##
+## Makefile for Samurai library
+## Copyright (c) 2001-2008, Jan Vidar Krey
+##
+## This file determines operating system, and CPU architecture, and
+## enables the supported configurations for each system.
+##
+ #
+
+SILENT        ?= YES
+
+# Most basic configuration
+BZIP2_SUPPORT ?= YES
+ZLIB_SUPPORT  ?= YES
+DEBUG         ?= YES
+PROFILE       ?= NO
+DNSPROVIDER   ?= BLOCKING
+TLSPROVIDER   ?= OPENSSL
+
+ifeq ($(MINGW_CROSS), YES)
+OS            = Windows_NT
+endif
+
+ifeq ($(OS), Windows_NT)
+LIBS          += ws2_32 iphlpapi
+BIN_EXT       ?=.exe
+LIB_EXT       ?=.dll
+OBJ_EXT       ?=.obj
+else
+LIBS          += pthread
+ifeq ($(OSX), YES)
+LIB_EXT       ?=.dylib
+else
+LIB_EXT       ?=.so
+endif
+OBJ_EXT       ?=.o
+BIN_EXT       ?=
+endif
+
+# Toolchain settings
+TOOLCHAIN     ?= gcc
+
+

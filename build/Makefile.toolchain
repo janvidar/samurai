@@ -1,0 +1,88 @@
+ #
+##
+## Makefile for Samurai library
+## Copyright (c) 2001-2008, Jan Vidar Krey
+##
+ #
+
+# GNU compiler collection
+ifeq ($(TOOLCHAIN), gcc)
+
+ifeq ($(MINGW_CROSS), YES)
+GCCPREFIX     ?= /usr/bin/i586-mingw32msvc-
+endif
+
+CC            := $(GCCPREFIX)gcc$(GCCSUFFIX)
+CXX           := $(GCCPREFIX)g++$(GCCSUFFIX)
+DLL           := $(GCCPREFIX)g++$(GCCSUFFIX)
+LD            := $(GCCPREFIX)g++$(GCCSUFFIX)
+AR            := $(GCCPREFIX)ar$(GCCSUFFIX)
+AR_OPTS       := rcs
+RM            := rm -f
+
+CC_OUT        := -o 
+LD_OUT        := -o 
+CXX_OUT       := -o 
+CPP_OUT       := -o 
+
+CFLAGS        := -c
+CXXFLAGS      := -c
+EXTRAFLAGS    := -Wall -W -ansi -D_FILE_OFFSET_BITS=64 -fPIC
+LDFLAGS       :=
+
+LDFLAGS       += $(addprefix -l, $(foreach L, $(LIBS), $L) $1)
+EXTRAFLAGS    += $(addprefix -I, $(foreach L, $(INCDIR), $L) $1)
+EXTRAFLAGS    += $(addprefix -D, $(foreach L, $(DEFINES), $L) $1)
+
+ifeq ($(OSX), YES)
+DLLFLAGS      := -dynamiclib $(LDFLAGS)
+else
+DLLFLAGS      := -shared -Wl
+endif
+
+ifeq ($(DEBUG), YES)
+EXTRAFLAGS    += -g
+LDFLAGS       += -g
+else
+CXXFLAGS      += -O3
+endif
+
+ifeq ($(PROFILE), YES)
+CXXFLAGS      += -pg
+LDFLAGS       += -pg
+endif
+
+endif
+
+
+
+
+# Visual studio compiler
+ifeq ($(TOOLCHAIN), msvc)
+# $(error - not implemented support for Visual studio)
+
+CC            := cl.exe
+CXX           := cl.exe
+LD            := link.exe
+AR            := ar
+RM            := rm -f
+CFLAGSCOMMON  := /nologo /Wall /GX
+CFLAGS        := /c /Tc
+CXXFLAGS      := /c /TP
+EXTRAFLAGS    :=
+CCTARGET      := /out:
+
+ifeq ($(DEBUG), YES)
+CFLAGSCOMMON  += /MTd /Od /D DEBUG
+else
+CFLAGSCOMMON  += /MT /O2 /D NDEBUG
+endif
+
+CFLAGS        += $(CFLAGSCOMMON)
+CXXFLAGS      += $(CFLAGSCOMMON)
+
+LDFLAGS       += $(addprefix -l, $(foreach L, $(LIBS), $L) $1)
+EXTRAFLAGS    += $(addprefix /I, $(foreach L, $(INCDIR), $L) $1)
+EXTRAFLAGS    += $(addprefix /D, $(foreach L, $(DEFINES), $L) $1)
+
+endif

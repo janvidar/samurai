@@ -1,0 +1,55 @@
+ #
+##
+## Makefile for the Samuari library
+## Copyright (c) 2001-2008, Jan Vidar Krey
+##
+ #
+
+
+TESTS := \
+	testtiger$(BIN_EXT) \
+	dnslookup$(BIN_EXT) \
+	netcat$(BIN_EXT) \
+	wget$(BIN_EXT) \
+	thread$(BIN_EXT) \
+	upnplist$(BIN_EXT) \
+	interfaces$(BIN_EXT)
+
+.PHONY: tests
+tests: $(TESTS)
+
+
+test_SOURCES := \
+		$(COREDIR)/../test/applications/tiger/tiger.cpp \
+		$(COREDIR)/../test/applications/dnslookup/dnslookup.cpp \
+		$(COREDIR)/../test/applications/netcat/netcat.cpp \
+		$(COREDIR)/../test/applications/wget/wget.cpp \
+		$(COREDIR)/../test/applications/thread/thread.cpp \
+		$(COREDIR)/../test/applications/upnplist/upnplist.cpp \
+		$(COREDIR)/../test/applications/net/interfaces.cpp \
+
+test_OBJECTS := $(test_SOURCES:.cpp=$(OBJ_EXT))
+
+XLIBS=-L. -lsamurai
+
+testtiger$(BIN_EXT): $(COREDIR)/../test/applications/tiger/tiger$(OBJ_EXT) $(lib_DYNAMIC)
+	$(MSG_LINK) $(LD) ${LD_OUT}$@ $^ $(LDFLAGS) $(XLIBS)
+
+dnslookup$(BIN_EXT): $(COREDIR)/../test/applications/dnslookup/dnslookup$(OBJ_EXT) $(lib_DYNAMIC)
+	$(MSG_LINK) $(LD) ${LD_OUT}$@ $^ $(LDFLAGS) $(XLIBS)
+
+upnplist$(BIN_EXT): $(COREDIR)/../test/applications/upnplist/upnplist$(OBJ_EXT) $(lib_DYNAMIC)
+	$(MSG_LINK) $(LD) ${LD_OUT}$@ $^ $(LDFLAGS) $(XLIBS)
+
+netcat$(BIN_EXT): $(COREDIR)/../test/applications/netcat/netcat$(OBJ_EXT) $(lib_DYNAMIC)
+	$(MSG_LINK) $(LD) ${LD_OUT}$@ $^ $(LDFLAGS) $(XLIBS)
+
+wget$(BIN_EXT): $(COREDIR)/../test/applications/wget/wget$(OBJ_EXT) $(lib_DYNAMIC)
+	$(MSG_LINK) $(LD) ${LD_OUT}$@ $^ $(LDFLAGS) $(XLIBS)
+
+thread$(BIN_EXT): $(COREDIR)/../test/applications/thread/thread$(OBJ_EXT) $(lib_DYNAMIC)
+	$(MSG_LINK) $(LD) ${LD_OUT}$@ $^ $(LDFLAGS) $(XLIBS)
+
+interfaces$(BIN_EXT): $(COREDIR)/../test/applications/net/interfaces$(OBJ_EXT) $(lib_DYNAMIC)
+	$(MSG_LINK) $(LD) ${LD_OUT}$@ $^ $(LDFLAGS) $(XLIBS)
+
