@@ -64,9 +64,9 @@ namespace Samurai {
 
 #if defined(SAMURAI_OS_LINUX)
 #define X_IP4_32 data->internal.in.s_addr
-#define X_IP6_32 data->internal.in6.in6_u.u6_addr32 /*  4 of these */
-#define X_IP6_16 data->internal.in6.in6_u.u6_addr16 /*  8 of these */
-#define X_IP6_08 data->internal.in6.in6_u.u6_addr8  /* 16 of these */
+#define X_IP6_32 data->internal.in6.s6_addr32 /*  4 of these */
+#define X_IP6_16 data->internal.in6.s6_addr16 /*  8 of these */
+#define X_IP6_08 data->internal.in6.s6_addr  /* 16 of these */
 #endif
 				} internal;
 			};
