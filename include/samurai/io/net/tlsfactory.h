@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2001-2007 Jan Vidar Krey, janvidar@extatic.org
+ * Copyright (C) 2001-2009 Jan Vidar Krey, janvidar@extatic.org
  * See the file "COPYING" for licensing details.
  */
 
@@ -24,7 +24,8 @@ class TlsFactory {
 
 		enum TlsStatus {
 			TLS_STATUS_OK,
-			TLS_STATUS_RETRY,
+			TLS_STATUS_WANT_WRITE,
+			TLS_STATUS_WANT_READ,
 			TLS_STATUS_CLOSED,
 			TLS_STATUS_ERROR
 		};

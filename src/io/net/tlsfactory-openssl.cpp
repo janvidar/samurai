@@ -1,6 +1,6 @@
 /*
  *
- * Copyright (C) 2001-2007 Jan Vidar Krey, janvidar@extatic.org
+ * Copyright (C) 2001-2009 Jan Vidar Krey, janvidar@extatic.org
  * See the file "COPYING" for licensing details.
  */
 
@@ -15,25 +15,28 @@
 #include <openssl/opensslv.h>
 #include <openssl/err.h>
 
-bool Samurai::IO::Net::TlsFactory::global_init() {
+bool Samurai::IO::Net::TlsFactory::global_init()
+{
 	TlsFactory::priv_init();
 	SSL_library_init();
 	return true;
 }
 
-bool Samurai::IO::Net::TlsFactory::global_deinit() {
-//	EVP_cleanup();
+bool Samurai::IO::Net::TlsFactory::global_deinit()
+{
 	TlsFactory::priv_fini();
 	return true;
 }
 
 
-Samurai::IO::Net::OpenSSL::OpenSSL() {
+Samurai::IO::Net::OpenSSL::OpenSSL()
+{
 	ssl = 0;
 	ctx = 0;
 }
 
-Samurai::IO::Net::OpenSSL::~OpenSSL() {
+Samurai::IO::Net::OpenSSL::~OpenSSL()
+{
 	deinitialize();
 }
 
@@ -48,16 +51,20 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 
 	SSL_METHOD* method;
 	
-	if (mode == Samurai::IO::Net::TlsFactory::TLS_OPERATE_CLIENT) {
+	if (mode == Samurai::IO::Net::TlsFactory::TLS_OPERATE_CLIENT)
+	{
 		method = TLSv1_client_method();
 		// method = SSLv23_client_method();
-	} else {
+	}
+	else
+	{
 		method = TLSv1_server_method();
 	}
 	
 	ctx = SSL_CTX_new(method);
 	ssl = 0;
-	if (!ctx) {
+	if (!ctx)
+	{
 			char msg[128] = { 0, };
 #ifndef SAMURAI_OS_MACOSX
 			ERR_error_string(ERR_get_error(), msg);
@@ -68,7 +75,6 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 	}
 	
 	SSL_CTX_set_verify(ctx, TlsFactory::allowUntrustedConnections() ? SSL_VERIFY_NONE : SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
-	
 	
 	Samurai::IO::File* cert = TlsFactory::getCertificate();
 	if (cert && cert->exists())
@@ -110,7 +116,8 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 	return Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
 }
 
-enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::deinitialize() {
+enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::deinitialize()
+{
 	if (ssl) SSL_free(ssl);
 	if (ctx) SSL_CTX_free(ctx);
 	ssl = 0;
@@ -120,8 +127,8 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::deinitia
 
 
 // FIXME: Cleanup!!!
-enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendHandshake() {
-	// fcntl(sd, F_SETFL, O_RDWR);
+enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendHandshake()
+{
 	int ret = 0;
 	
 	if (mode == Samurai::IO::Net::TlsFactory::TLS_OPERATE_CLIENT)
@@ -129,11 +136,9 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendHand
 	else
 		ret = SSL_accept(ssl);
 	
-	// fcntl(sd, F_SETFL, O_RDWR | O_NONBLOCK);
-	// return Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
 	int error = SSL_get_error(ssl, ret);
-
-	if (ret == -1 && (error == SSL_ERROR_SYSCALL || error == SSL_ERROR_SSL)) {
+	if (ret == -1 && (error == SSL_ERROR_SYSCALL || error == SSL_ERROR_SSL))
+	{
 		char msg[128] = { 0, };
 #ifndef SAMURAI_OS_MACOSX
 		ERR_error_string(ERR_get_error(), msg);
@@ -143,17 +148,21 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendHand
 		return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
 	}
 	
-	if (ret == -1) {
-		switch (error) {
+	if (ret == -1)
+	{
+		switch (error)
+		{
 			case SSL_ERROR_NONE:
 				QERR("Handshake ok: %s", "OpenSSL_strerror(ret)");
 				return Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
 			case SSL_ERROR_WANT_READ:  /* hm? */
+				return Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_READ;
+				
 			case SSL_ERROR_WANT_WRITE: /* hm? */
+				return Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE;
 			case SSL_ERROR_WANT_CONNECT:
 			case SSL_ERROR_WANT_ACCEPT:
-				// QERR("Handshake retry: %d", error);
-				return Samurai::IO::Net::TlsFactory::TLS_STATUS_RETRY;
+				return Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE;
 			default:
 			{
 				QERR("Handshake failed: %d", error);
@@ -162,24 +171,34 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendHand
 		}
 	}
 	
+	QDBG("Handshake OK");
+	
+	QDBG("Verifying certificate...");
+	long status = SSL_get_verify_result(ssl);
+	QDBG("Certificate result=%d", (int) status);
+	
+	X509* cert = SSL_get_peer_certificate(ssl);
+	QDBG("Certificate ptr=%p", cert);
+	if (cert) X509_free(cert);
+	
 	return Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
 }
 
 enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendGoodbye() {
 	
-	// fcntl(sd, F_SETFL, O_RDWR);
 	int ret = SSL_shutdown(ssl);
-	// fcntl(sd, F_SETFL, O_RDWR | O_NONBLOCK);
 	
 	int error = SSL_get_error(ssl, ret);
 	switch (error) {
 		case SSL_ERROR_NONE:
 			return Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
 		case SSL_ERROR_WANT_READ:
+			return Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_READ;
 		case SSL_ERROR_WANT_WRITE:
+			return Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE;
 		case SSL_ERROR_WANT_CONNECT:/* hm? */
 		case SSL_ERROR_WANT_ACCEPT: /* hm? */
-			return Samurai::IO::Net::TlsFactory::TLS_STATUS_RETRY;
+			return Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE;
 		default:
 			return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
 	}
@@ -206,8 +225,11 @@ ssize_t Samurai::IO::Net::OpenSSL::read(char* data, size_t length, enum Samurai:
 				return 0;
 			
 			case SSL_ERROR_WANT_READ:
+				status = Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_READ;
+				return 0;
+				
 			case SSL_ERROR_WANT_WRITE:
-				status = Samurai::IO::Net::TlsFactory::TLS_STATUS_RETRY;
+				status = Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE;
 				return 0;
 				
 			default:
@@ -234,10 +256,13 @@ ssize_t Samurai::IO::Net::OpenSSL::write(const char* data, size_t length, enum S
 			status = Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
 			return ret;
 	
-		case SSL_ERROR_WANT_READ:
-		case SSL_ERROR_WANT_WRITE:
-			status = Samurai::IO::Net::TlsFactory::TLS_STATUS_RETRY;	
-			return 0;
+			case SSL_ERROR_WANT_READ:
+				status = Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_READ;
+				return 0;
+				
+			case SSL_ERROR_WANT_WRITE:
+				status = Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE;
+				return 0;
 		
 		default:
 			status = Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;

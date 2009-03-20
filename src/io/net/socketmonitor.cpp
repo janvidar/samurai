@@ -97,7 +97,6 @@ void Samurai::IO::Net::SocketMonitor::handleSocketEvent(Samurai::IO::Net::Socket
 		{
 			switch (socket->state)
 			{
-				case SSLConnected:
 				case Connected:
 				{
 					char buf[1];
@@ -124,6 +123,14 @@ void Samurai::IO::Net::SocketMonitor::handleSocketEvent(Samurai::IO::Net::Socket
 					}
 				}
 				break;
+				
+				
+				case SSLBye:
+				case SSLHandshake:
+				case SSLConnected:
+					socket->internal_canWrite();
+					break;
+				
 				
 				default:
 					// ignore
