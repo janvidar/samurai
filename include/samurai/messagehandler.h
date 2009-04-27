@@ -30,8 +30,13 @@ class Message {
 			, m_arg2(arg2)
 		{
 		}
-		
-	public:
+	
+		size_t getID()   const { return m_id; }
+		void*  getData() const { return m_data; }
+		size_t getArg1() const { return m_arg1; }
+		size_t getArg2() const { return m_arg2; }
+	
+	private:
 		size_t m_id;
 		void*  m_data;
 		size_t m_arg1;
