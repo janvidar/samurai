@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2001-2007 Jan Vidar Krey, janvidar@extatic.org
+ * Copyright (C) 2001-2009 Jan Vidar Krey, janvidar@extatic.org
  * See the file "COPYING" for licensing details.
  */
 
@@ -15,7 +15,8 @@ Samurai::MessageHandler* Samurai::MessageHandler::getInstance()
 	return g_message_handler;
 }
 
-void Samurai::postMessage(enum Samurai::MessageID id, void* data, size_t arg1, size_t arg2) {
+void Samurai::postMessage(size_t id, void* data, size_t arg1, size_t arg2)
+{
 	Samurai::MessageHandler::getInstance()->postMessage(id, data, arg1, arg2);
 }
 
@@ -38,15 +39,19 @@ Samurai::MessageHandler::~MessageHandler() {
 
 }
 	
-void Samurai::MessageHandler::postMessage(enum Samurai::MessageID id, void* data, size_t arg1, size_t arg2) {
+void Samurai::MessageHandler::postMessage(size_t id, void* data, size_t arg1, size_t arg2)
+{
 	// We should perhaps allocate the new message from inside a static buffer.
 	// In that case we could ignore freeing up memory, but it is always uncertain what the
 	// worst case of queued messages would look like.
 	Samurai::Message* msg = new Samurai::Message(id, data, arg1, arg2);
 	
-	if (!busy) {
+	if (!busy)
+	{
 		queue.push_front(msg);
-	} else {
+	}
+	else
+	{
 		busy_queue.push_front(msg);
 	}
 }
