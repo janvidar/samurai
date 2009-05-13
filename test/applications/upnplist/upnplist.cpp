@@ -53,6 +53,7 @@ class UPnPHandler
 				(*it)->locateServices();
 			}
 		}
+		
 	protected:
 
 		
