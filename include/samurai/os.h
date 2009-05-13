@@ -23,7 +23,14 @@ class OS {
 		/**
 		 * Returns the operating system name, such as Linux, FreeBSD, Darwin or Windows.
 		 */
-		static const char* getOSName();
+		static const char* getName();
+		
+		/**
+		 * Returns the operating system vesion.
+		 *
+		 * Example: "2.6.29" for Linux kernel 2.6.29
+		 */
+		static const char* getVersion();
 		
 	private:
 		static OSBase* instance;

@@ -34,7 +34,8 @@ class OSBase
 		virtual pid_t getProcessID()        = 0;
 		virtual const char* getHostName()   = 0;
 		virtual const char* getDomainName() = 0;
-		virtual const char* getOSName()     = 0;
+		virtual const char* getName()       = 0;
+		virtual const char* getVersion()    = 0;
 };
 
 #ifdef SAMURAI_POSIX
@@ -49,7 +50,8 @@ class OSUnix : public OSBase
 		pid_t getProcessID();
 		const char* getHostName();
 		const char* getDomainName();
-		const char* getOSName();
+		const char* getName();
+		const char* getVersion();
 		
 	private:
 		struct rlimit  limits;
@@ -69,7 +71,8 @@ class OSWindows : public OSBase
 		pid_t getProcessID();
 		const char* getHostName();
 		const char* getDomainName();
-		const char* getOSName();
+		const char* getName();
+		const char* getVersion();
 };
 #endif
 
@@ -122,10 +125,16 @@ pid_t Samurai::OSUnix::getProcessID()
 	return getpid();
 }
 
-const char* Samurai::OSUnix::getOSName()
+const char* Samurai::OSUnix::getName()
 {
 	return info.sysname;
 }
+
+const char* Samurai::OSUnix::getVersion()
+{
+	return info.release;
+}
+
 
 #endif
 
@@ -168,10 +177,16 @@ pid_t Samurai::OSWindows::getProcessID()
 	return _getpid();
 }
 
-const char* Samurai::OSWindows::getOSName()
+const char* Samurai::OSWindows::getName()
 {
 	return "Windows"; // FIXME
 }
+
+const char* Samurai::OSWindows::getVersion()
+{
+	return "Windows"; // FIXME
+}
+
 #endif
 
 
@@ -219,8 +234,12 @@ pid_t Samurai::OS::getProcessID()
 	return getInstance()->getProcessID();
 }
 
-const char* Samurai::OS::getOSName()
+const char* Samurai::OS::getName()
 {
-	return getInstance()->getOSName();
+	return getInstance()->getName();
 }
 
+const char* Samurai::OS::getVersion()
+{
+	return getInstance()->getVersion();
+}
