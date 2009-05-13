@@ -25,10 +25,16 @@ test_SOURCES := \
 		$(COREDIR)/../test/applications/netcat/netcat.cpp \
 		$(COREDIR)/../test/applications/wget/wget.cpp \
 		$(COREDIR)/../test/applications/thread/thread.cpp \
-		$(COREDIR)/../test/applications/upnplist/upnplist.cpp \
 		$(COREDIR)/../test/applications/net/interfaces.cpp \
 
 test_OBJECTS := $(test_SOURCES:.cpp=$(OBJ_EXT))
+
+test_upnp_SOURCES := \
+		$(COREDIR)/../test/applications/upnplist/upnp.cpp \
+		$(COREDIR)/../test/applications/upnplist/upnpworker.cpp \
+		$(COREDIR)/../test/applications/upnplist/upnplist.cpp
+
+test_upnp_OBJECTS := $(test_upnp_SOURCES:.cpp=$(OBJ_EXT))
 
 XLIBS=-L. -lsamurai
 
@@ -38,7 +44,7 @@ testtiger$(BIN_EXT): $(COREDIR)/../test/applications/tiger/tiger$(OBJ_EXT) $(lib
 dnslookup$(BIN_EXT): $(COREDIR)/../test/applications/dnslookup/dnslookup$(OBJ_EXT) $(lib_DYNAMIC)
 	$(MSG_LINK) $(LD) ${LD_OUT}$@ $^ $(LDFLAGS) $(XLIBS)
 
-upnplist$(BIN_EXT): $(COREDIR)/../test/applications/upnplist/upnplist$(OBJ_EXT) $(lib_DYNAMIC)
+upnplist$(BIN_EXT): $(test_upnp_OBJECTS) $(lib_DYNAMIC)
 	$(MSG_LINK) $(LD) ${LD_OUT}$@ $^ $(LDFLAGS) $(XLIBS)
 
 netcat$(BIN_EXT): $(COREDIR)/../test/applications/netcat/netcat$(OBJ_EXT) $(lib_DYNAMIC)

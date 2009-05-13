@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2001-2008 Jan Vidar Krey, janvidar@extatic.org
+ * Copyright (C) 2001-2009 Jan Vidar Krey, janvidar@extatic.org
  * See the file "COPYING" for licensing details.
  */
 
@@ -14,16 +14,42 @@
 #define USE_ADAPTER_INFO
 #endif
 
+enum NetworkInterfaceFlags
+{
+	InterfaceEnabled      = 0x01,
+	InterfaceLoopback     = 0x02,
+	InterfacePointToPoint = 0x04,
+	InterfaceBroadcast    = 0x10,
+	InterfaceMulticast    = 0x20,
+};
+
 namespace Samurai {
 namespace IO {
 namespace Net {
+
 
 #ifdef SAMURAI_UNIX
 class NetworkInterfaceUnix : public NetworkInterface
 {
 	public:
 		NetworkInterfaceUnix(const char* name);
+
+		const char* getName() const;
+		interface_t getHandle() const;
+		virtual int getMtu() const;
+		
+	private:
+		bool getInfo(int info, int af = AF_INET);
+		void extractHardwareAddress();
+		void extractAddresses();
+		void extractFlags();
+
+	private:
+		int m_mtu;
+		interface_t m_ifnumber;
+		struct ifreq m_ifr;
 };
+
 #endif // SAMURAI_UNIX
 
 #ifdef SAMURAI_WINDOWS
@@ -35,7 +61,14 @@ class NetworkInterfaceWindows : public NetworkInterface
 #else
 		NetworkInterfaceWindows(PIP_ADAPTER_ADDRESSES info);
 #endif
+
+	private:
+		interface_t ifnumber;
+		char* name;
+		int flags;
+		int mtu;
 };
+
 #endif // SAMURAI_WINDOWS
 
 }
@@ -43,12 +76,29 @@ class NetworkInterfaceWindows : public NetworkInterface
 }
 
 #ifdef SAMURAI_UNIX
-
-static bool unix_get_interface_info(struct ifreq& ifr, int info)
+Samurai::IO::Net::NetworkInterfaceUnix::NetworkInterfaceUnix(const char* name)
+	: Samurai::IO::Net::NetworkInterface()
+	, m_mtu(0)
+	, m_ifnumber(0)
 {
-	int sock = socket(AF_INET, SOCK_DGRAM, 0);
+	memset(&m_ifr, 0, sizeof(m_ifr));
+	m_ifr.ifr_addr.sa_family = AF_INET;
+	strcpy(m_ifr.ifr_name, name); // FIXME: Buffer overflow potential
+
+	m_ifnumber = if_nametoindex(name);
+	if (getInfo(SIOCGIFMTU))
+		m_mtu = m_ifr.ifr_mtu;
+
+	extractFlags();
+	extractHardwareAddress();
+	extractAddresses();
+}
+
+bool Samurai::IO::Net::NetworkInterfaceUnix::getInfo(int info, int af)
+{
+	int sock = socket(af, SOCK_DGRAM, 0);
 	if (sock == -1) return false;
-	if (ioctl(sock, info, &ifr) < 0)
+	if (ioctl(sock, info, &m_ifr) < 0)
 	{
 		close(sock);
 		return false;
@@ -57,76 +107,16 @@ static bool unix_get_interface_info(struct ifreq& ifr, int info)
 	return true;
 }
 
-Samurai::IO::Net::NetworkInterfaceUnix::NetworkInterfaceUnix(const char* name_) : Samurai::IO::Net::NetworkInterface()
+void Samurai::IO::Net::NetworkInterfaceUnix::extractHardwareAddress()
 {
-	name        = strdup(name_);
-	ifnumber    = if_nametoindex(name);
-	
-	struct ifreq ifr;
-	memset(&ifr, 0, sizeof(ifr));
-	ifr.ifr_addr.sa_family = AF_INET;
-	strcpy(ifr.ifr_name, name);
-	
-	if (unix_get_interface_info(ifr, SIOCGIFADDR))
-		address = new Samurai::IO::Net::InetAddress(inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
-
-	if (unix_get_interface_info(ifr, SIOCGIFNETMASK))
-		netmask = new Samurai::IO::Net::InetAddress(inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
-	
-	if (unix_get_interface_info(ifr, SIOCGIFBRDADDR))
-		broadcast   = new Samurai::IO::Net::InetAddress(inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
-
-	if (unix_get_interface_info(ifr, SIOCGIFBRDADDR))
-		destination = new Samurai::IO::Net::InetAddress(inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
-	
-	if (unix_get_interface_info(ifr, SIOCGIFMTU))
-		mtu = ifr.ifr_mtu;
-	
-	
-	if (unix_get_interface_info(ifr, SIOCGIFFLAGS))
-	{
-		int my_flags = ifr.ifr_flags;
-		
-		if (
-#ifdef IFF_UP
-		my_flags & IFF_UP &&
-#endif
-#ifdef IFF_RUNNING
-		my_flags & IFF_RUNNING &&
-#endif
-			true)
-		flags |= InterfaceEnabled;
-		
-		if (my_flags & IFF_LOOPBACK)
-			flags |= InterfaceLoopback;
-		
-#ifdef IFF_POINTOPOINT
-		if (my_flags & IFF_POINTOPOINT)
-			flags |= InterfacePointToPoint;
-#endif
-
-		if (my_flags & IFF_BROADCAST)
-			flags |= InterfaceBroadcast;
-
-		if (my_flags & IFF_MULTICAST)
-			flags |= InterfaceMulticast;
-	}
-
-	
-	
+	/* Extract MAC-address */
 	uint8_t hwaddr_bytes[6];
 	memset(hwaddr_bytes, 0, sizeof(hwaddr_bytes));
 	
-#ifdef SIOCGIFHWADDR
-	if (unix_get_interface_info(ifr, SIOCGIFHWADDR))
-	memcpy(hwaddr_bytes, &ifr.ifr_hwaddr.sa_data, 6);
-	
-	// Must be ARPHRD_ETHER (1)
-	// if (ifr.ifr_hwaddr.sa_family != 1)
-	//	memset(hwaddr_bytes, 0, sizeof(hwaddr_bytes));
-
-#else // !SIOCGIFHWADDR
-#ifdef SAMURAI_BSD
+#if defined(SIOCGIFHWADDR)
+	if (getInfo(SIOCGIFHWADDR))
+	memcpy(hwaddr_bytes, &m_ifr.ifr_hwaddr.sa_data, 6);
+#elif defined(SAMURAI_BSD)
 	struct ifaddrs* first = 0;
 	struct sockaddr_dl* link;
 	if (getifaddrs(&first) == 0)
@@ -146,26 +136,90 @@ Samurai::IO::Net::NetworkInterfaceUnix::NetworkInterfaceUnix(const char* name_) 
 				}
 			}
 		}
-		
 		if (first)
 			freeifaddrs(first);
 	}
-#endif // SAMURAI_BSD
 #endif // SIOCGIFHWADDR
 
 	if (hwaddr_bytes[0] || hwaddr_bytes[1] || hwaddr_bytes[2] || hwaddr_bytes[3] || hwaddr_bytes[4] || hwaddr_bytes[5])
-		hwaddr = new Samurai::IO::Net::HardwareAddress(hwaddr_bytes);
+		m_hwaddr = new Samurai::IO::Net::HardwareAddress(hwaddr_bytes);
 }
+
+// FIXME: very IPv4 centric!
+void Samurai::IO::Net::NetworkInterfaceUnix::extractAddresses()
+{
+	if (getInfo(SIOCGIFADDR)) 
+		m_address = new Samurai::IO::Net::InetAddress(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_addr)->sin_addr));
+
+	if (getInfo(SIOCGIFNETMASK))
+		m_netmask = new Samurai::IO::Net::InetAddress(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_addr)->sin_addr));
+
+	if (getInfo(SIOCGIFBRDADDR))
+		m_broadcast = new Samurai::IO::Net::InetAddress(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_addr)->sin_addr));
+
+	if (getInfo(SIOCGIFBRDADDR))
+		m_destination = new Samurai::IO::Net::InetAddress(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_addr)->sin_addr));
+}
+
+void Samurai::IO::Net::NetworkInterfaceUnix::extractFlags()
+{
+	if (getInfo(SIOCGIFFLAGS))
+	{
+		int f = m_ifr.ifr_flags;
+		m_flags = 0;
+
+		if (true
+#ifdef IFF_UP
+			&& (f & IFF_UP)
+#endif
+#ifdef IFF_RUNNING
+			&& (f & IFF_RUNNING)
+#endif
+			)
+			m_flags |= InterfaceEnabled;
+
+		if (f & IFF_LOOPBACK)
+			m_flags |= InterfaceLoopback;
+
+		if (f & IFF_BROADCAST)
+			m_flags |= InterfaceBroadcast;
+
+		if (f & IFF_MULTICAST)
+			m_flags |= InterfaceMulticast;
+
+#ifdef IFF_POINTOPOINT
+		if (f & IFF_POINTOPOINT)
+			m_flags |= InterfacePointToPoint;
+#endif
+	}
+}
+
+const char* Samurai::IO::Net::NetworkInterfaceUnix::getName() const
+{
+	return m_ifr.ifr_name;
+}
+
+int Samurai::IO::Net::NetworkInterfaceUnix::getMtu() const
+{
+	return m_mtu;
+}
+
+interface_t Samurai::IO::Net::NetworkInterfaceUnix::getHandle() const
+{
+	return m_ifnumber;
+}
+
 #endif // SAMURAI_UNIX
 
 
 #ifdef SAMURAI_WINDOWS
 
 #ifdef USE_ADAPTER_INFO
-Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_INFO info) : Samurai::IO::Net::NetworkInterface()
+Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_INFO info)
+	: Samurai::IO::Net::NetworkInterface()
 {
-	name = strdup(info->Description); // AdapterName
-	ifnumber = info->Index;
+	m_name = strdup(info->Description); // AdapterName
+	m_ifnumber = info->Index;
 	
 	if (info->AddressLength == 6)
 	{
@@ -175,19 +229,10 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_I
 			hwaddr = new Samurai::IO::Net::HardwareAddress(hwaddr_bytes);
 	}
 	
-	flags |= InterfaceEnabled;
-	
-	if (info->Type == MIB_IF_TYPE_LOOPBACK)
-		flags |= InterfaceLoopback;
-	
-	if (info->Type == MIB_IF_TYPE_PPP)
-		flags |= InterfacePointToPoint;
-	
-	if (info->Type == MIB_IF_TYPE_ETHERNET)
-	{
-		flags |= InterfaceBroadcast;
-		flags |= InterfaceMulticast;
-	}
+	m_flags |= InterfaceEnabled;
+	if (info->Type == MIB_IF_TYPE_LOOPBACK)   m_flags |= InterfaceLoopback;
+	if (info->Type == MIB_IF_TYPE_PPP)        m_flags |= InterfacePointToPoint;
+	if (info->Type == MIB_IF_TYPE_ETHERNET)   m_flags |= (InterfaceBroadcast | InterfaceMulticast);
 	
 	PIP_ADDR_STRING ipstr = &info->IpAddressList;
 	while (ipstr)
@@ -202,15 +247,17 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_I
 		address = new Samurai::IO::Net::InetAddress(ip, Samurai::IO::Net::InetAddress::IPv4);
 		netmask = new Samurai::IO::Net::InetAddress(mask, Samurai::IO::Net::InetAddress::IPv4);
 		break;
-		
 		ipstr = ipstr->Next;
 	}
 	printf("\n");
 }
 
+
 #else // USE_ADAPTER_INFO
 
-Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_ADDRESSES info) : Samurai::IO::Net::NetworkInterface()
+Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_ADDRESSES info)
+	: Samurai::IO::Net::NetworkInterface()
+	
 {
 	name = strdup(info->AdapterName); // AdapterName
 	ifnumber = info->IfIndex;
@@ -266,10 +313,6 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_A
 #endif // SAMURAI_WINDOWS
 
 
-
-
-
-
 Samurai::IO::Net::NetworkInterface* Samurai::IO::Net::NetworkInterface::getInterface(const Samurai::IO::Net::InetAddress& addr)
 {
 	(void) addr;
@@ -293,6 +336,7 @@ bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<NetworkInterf
 	if (!ifaces) return false;
 	for (size_t i = 0; ifaces[i].if_index; i++)
 	{
+		
 		iface = new Samurai::IO::Net::NetworkInterfaceUnix(ifaces[i].if_name);
 		interfaces.push_back(iface);
 	}
@@ -371,96 +415,115 @@ bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<NetworkInterf
 #endif // SAMURAI_WINDOWS
 }
 
-Samurai::IO::Net::NetworkInterface::NetworkInterface() :
-	hwaddr(0),
-	ifnumber(0),
-	name(0),
-	flags(0),
-	mtu(0),
-	address(0),
-	netmask(0),
-	broadcast(0),
-	destination(0)
+Samurai::IO::Net::NetworkInterface::NetworkInterface()
+	: m_hwaddr(0)
+	, m_address(0)
+	, m_netmask(0)
+	, m_broadcast(0)
+	, m_destination(0)
+	, m_flags(0)
 {
 
 }
 
-
 Samurai::IO::Net::NetworkInterface::~NetworkInterface()
 {
-	free(name);
-	delete hwaddr;
-	delete address;
-	delete netmask;
-	delete broadcast;
-	delete destination;
+	delete m_hwaddr;
+	delete m_address;
+	delete m_netmask;
+	delete m_broadcast;
+	delete m_destination;
 }
 
 const char* Samurai::IO::Net::NetworkInterface::getName() const
 {
-	return name;
+	assert(! "Samurai::IO::Net::NetworkInterface::getName()");
+	return 0;
 }
 
 int Samurai::IO::Net::NetworkInterface::getMtu() const
 {
-	return mtu;
+	assert(! "Samurai::IO::Net::NetworkInterface::getMtu()");
+	return 0;
 }
 
 interface_t Samurai::IO::Net::NetworkInterface::getHandle() const
 {
-	return ifnumber;
+	assert(! "Samurai::IO::Net::NetworkInterface::getHandle()");
+	return (interface_t) 0;
 }
 
 Samurai::IO::Net::InetAddress* Samurai::IO::Net::NetworkInterface::getAddress() const
 {
-	return address;
+	return m_address;
 }
 
 Samurai::IO::Net::InetAddress* Samurai::IO::Net::NetworkInterface::getBroadcastAddress() const
 {
-	return broadcast;
+	return m_broadcast;
 }
 
 Samurai::IO::Net::InetAddress* Samurai::IO::Net::NetworkInterface::getNetmask() const
 {
-	return netmask;
+	return m_netmask;
 }
 
 Samurai::IO::Net::InetAddress* Samurai::IO::Net::NetworkInterface::getDestinationAddress() const
 {
-	return destination;
+	return m_destination;
 }
 
 Samurai::IO::Net::HardwareAddress* Samurai::IO::Net::NetworkInterface::getHWAddress() const
 {
-	return hwaddr;
+	return m_hwaddr;
 }
 
 bool Samurai::IO::Net::NetworkInterface::isEnabled() const
 {
-
-	return flags & InterfaceEnabled;
+	return m_flags & InterfaceEnabled;
 }
 
 bool Samurai::IO::Net::NetworkInterface::isMulticast() const
 {
 
-	return flags & InterfaceMulticast;
+	return m_flags & InterfaceMulticast;
 }
 
 bool Samurai::IO::Net::NetworkInterface::isBroadcast() const
 {
-	return flags & InterfaceBroadcast;
+	return m_flags & InterfaceBroadcast;
 }
 
 bool Samurai::IO::Net::NetworkInterface::isLoopback() const
 {
-	return flags & InterfaceLoopback;
+	return m_flags & InterfaceLoopback;
 }
 
 bool Samurai::IO::Net::NetworkInterface::isPointToPoint() const
 {
-	return flags & InterfacePointToPoint;
+	return m_flags & InterfacePointToPoint;
 }
 
+bool Samurai::IO::Net::NetworkInterface::operator==(const NetworkInterface& other)
+{
+	return other.getHandle() == getHandle();
+}
 
+bool Samurai::IO::Net::NetworkInterface::operator==(const NetworkInterface* other)
+{
+	if (other == this)
+		return true;
+	return other->getHandle() == getHandle();
+}
+
+bool Samurai::IO::Net::NetworkInterface::operator!=(const NetworkInterface& other)
+{
+	return other.getHandle() != getHandle();
+}
+
+bool Samurai::IO::Net::NetworkInterface::operator!=(const NetworkInterface* other)
+{
+	if (other == this)
+		return false;
+	return other->getHandle() != getHandle();
+}
