@@ -109,6 +109,6 @@ int main(int, char**)
 	Samurai::IO::Net::SocketMonitor* monitor = Samurai::IO::Net::SocketMonitor::getInstance();
 	while (running)
 	{
-		monitor->wait(1000);
+		monitor->wait(100000);
 	}
 }
