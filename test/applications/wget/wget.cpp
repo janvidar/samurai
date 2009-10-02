@@ -126,9 +126,9 @@ int main(int argc, char** argv) {
 
 	Connection con(url);
 	con.connect();
-	while (running) {
-		Samurai::IO::Net::SocketMonitor::getInstance()->wait(10);
-		
+	while (running)
+	{
+		Samurai::IO::Net::SocketMonitor::getInstance()->wait(10000);
 	}
 	
 }
