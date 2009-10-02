@@ -16,58 +16,61 @@ namespace Samurai {
 	namespace IO {
 		class Buffer;
 		namespace Net {
-			
+
 			class DatagramSocket;
 			class DatagramPacket;
 			class InetSocketAddress;
 			class NetworkInterface;
-	
+
 			/**
 			* A very simple to use datagram socket class for non-blocking operations.
 			*/
 			class MulticastSocket : public DatagramSocket {
 				public:
-				
+
 					/**
 					 * Set up a MulticastSocket to bind on the local address and port.
 					 */
 					MulticastSocket(DatagramEventHandler* eh, const InetAddress& addr, uint16_t port);
-					
+
 					/**
 					 * Set up a MulticastSocket to bind on any address and the given port.
 					 */
 					MulticastSocket(DatagramEventHandler* eh, uint16_t port);
-					
-					
+
 					/**
 					 * Join the given multicast-address.
 					 */
 					bool join(const InetAddress& maddr, uint16_t port);
-					
+
 					/**
 					 * Join the given multicast-address.
 					 */
 					bool leave(const InetAddress& maddr, uint16_t port);
-					
+
 					virtual ~MulticastSocket();
-			
+
 					/**
 					 * Set the interface to be used for multicast.
 					 */
 					void setInterface(NetworkInterface* iface);
-					
+
 					/**
 					 * Toggle loopback mode (ie. recive what you send yourself).
 					 */
 					bool setLoopbackMode(bool toggle);
-					
+
 					/**
 					 * Returns true if the socket is set to receive locally generated multicast
 					 * packets.
 					 */
 					bool getLoopbackMode();
-					
-			
+
+					/**
+					 * Overloaded from ServerSocket.
+					 */
+					bool listen(size_t backlog = 5);
+
 				protected:
 					std::vector<InetSocketAddress*> joined;
 					interface_t netif;

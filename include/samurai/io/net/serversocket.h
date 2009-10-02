@@ -43,7 +43,7 @@ class ServerSocket : public SocketBase {
 		
 		virtual ~ServerSocket();
 
-		bool listen(size_t backlog = 5);
+		virtual bool listen(size_t backlog = 5);
 
 	protected:
 		ServerSocket();

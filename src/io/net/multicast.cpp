@@ -8,6 +8,7 @@
 #include <samurai/io/net/interface.h>
 #include <samurai/io/net/multicast.h>
 #include <samurai/io/net/socketaddress.h>
+#include <samurai/io/net/socketmonitor.h>
 
 
 Samurai::IO::Net::MulticastSocket::MulticastSocket(DatagramEventHandler* eh_, const InetAddress& addr_, uint16_t port_) : DatagramSocket(eh_, addr_, port_), netif(0)
@@ -94,3 +95,16 @@ bool Samurai::IO::Net::MulticastSocket::getLoopbackMode()
 	return loop != 0;
 }
 
+bool Samurai::IO::Net::MulticastSocket::listen(size_t backlog)
+{
+	(void) backlog;
+
+        if (!addr) return false;
+	if (!setReusePort(true)) return false;
+        if (!setReuseAddress(true)) return false;
+        if (!setNonBlocking(true)) return false;
+        if (!bind(addr)) return false;
+
+        setMonitor(SocketMonitor::MRead);
+        return true;
+}

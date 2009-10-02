@@ -98,6 +98,7 @@ class SocketBase {
 		 * when we shutdown until we can restart a server at the same address again.
 		 */
 		bool setReuseAddress(bool toggle);
+		bool setReusePort(bool toggle);
 
 		/**
 		 * Get the local address part of the socket.
