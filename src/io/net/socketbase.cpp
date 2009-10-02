@@ -189,6 +189,23 @@ bool Samurai::IO::Net::SocketBase::setReuseAddress(bool toggle) {
 	return true;
 }
 
+bool Samurai::IO::Net::SocketBase::setReusePort(bool toggle) {
+#ifndef SO_REUSEPORT
+	(void) toggle;
+	return true;
+#else
+        int on = toggle ? 1 : 0;
+        int ret = SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+        if (ret == SOCKET_ERROR)
+        {
+                QERR("ERROR: setReusePort to %s failed", toggle ? "ON" : "OFF");
+                return false;
+        }
+        return true;
+#endif
+}
+
+
 bool Samurai::IO::Net::SocketBase::setSendBufferSize(size_t size) {
 	int ret = SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_SNDBUF, &size, sizeof(size));
 	if (ret == SOCKET_ERROR) {
