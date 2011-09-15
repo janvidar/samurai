@@ -7,7 +7,7 @@
 #include <samurai/samurai.h>
 #include <samurai/os.h>
 
-UPnP::PacketHeader::PacketHeader(const UPnP::PacketHeader::PacketHeader& header)
+UPnP::PacketHeader::PacketHeader(const UPnP::PacketHeader& header)
 	: m_name(header.m_name)
 	, m_value(header.m_value)
 {
