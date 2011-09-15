@@ -546,7 +546,7 @@ bool Samurai::IO::Net::InetAddress::stringToAddress(enum Samurai::IO::Net::InetA
 			{
 				return false;
 			}
-			*p++;
+			p++;
 		}
 		if (pos < last_pos) RETURN_ERROR;
 
@@ -622,7 +622,7 @@ bool Samurai::IO::Net::InetAddress::stringToAddress(enum Samurai::IO::Net::InetA
 				// QERR("Unexpected: '%c'", ch);
 				RETURN_ERROR;
 			}
-			*p++;
+			p++;
 		}
 		
 		if (pos < last_pos) RETURN_ERROR;
