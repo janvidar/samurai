@@ -7,6 +7,7 @@
 #define HAVE_QUICKDC_SOCKET_SSL_API_H
 
 #include <samurai/io/net/socketglue.h>
+#include <string>
 
 namespace Samurai {
 namespace IO {
@@ -31,7 +32,19 @@ class TlsFactory {
 		};
 
 		virtual ~TlsFactory() { }
-	
+
+		/**
+		 * Set the name the peer is expected to present in its certificate,
+		 * as used for hostname verification and SNI. This must be the name
+		 * that was looked up - not an address obtained from the connection -
+		 * or verification is meaningless.
+		 *
+		 * Call this before initialize(). Without it no hostname verification
+		 * is possible, and a valid certificate for *any* host is accepted.
+		 */
+		void setPeerName(const std::string& name) { peer_name = name; }
+		const std::string& getPeerName() const { return peer_name; }
+
 		/**
 		 * Initialize SSL contexts, etc.
 		 */
@@ -85,7 +98,8 @@ class TlsFactory {
 	protected:
 		socket_t sd;
 		enum TlsOperation mode;
-		
+		std::string peer_name;
+
 		static Samurai::IO::File* pem_key;
 		static Samurai::IO::File* pem_cert;
 		static bool allow_untrusted;

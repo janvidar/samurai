@@ -9,22 +9,38 @@
 #include <samurai/io/device.h>
 #include <stdlib.h>
 
-/**
- * Should add a method called capasity(), which will return the
- * initialized bufsize.
+/*
+ * memrchr() and memmem() are glibc extensions. g++ defines _GNU_SOURCE on
+ * glibc targets, but check for it rather than assume it - the portable
+ * fallbacks below are equivalent, only slower.
  */
+#if defined(__GLIBC__) && defined(_GNU_SOURCE)
+#define SAMURAI_HAVE_GNU_MEMSEARCH
+#endif
+
 Samurai::IO::Buffer::Buffer(size_t bufsize_) :  buf(0), len(0), bufsize(bufsize_), initialCapasity(bufsize_) {
 	buf = (char*) malloc(bufsize);
+	if (!buf) bufsize = 0;
 }
 
 Samurai::IO::Buffer::Buffer(const Samurai::IO::Buffer& copy) : buf(0), len(copy.len), bufsize(copy.bufsize), initialCapasity(copy.initialCapasity) {
 	buf = (char*) malloc(bufsize);
+	if (!buf) {
+		bufsize = 0;
+		len = 0;
+		return;
+	}
 	memcpy(buf, copy.buf, len);
 }
 
 
 Samurai::IO::Buffer::Buffer(const Samurai::IO::Buffer* copy) : buf(0), len(copy->len), bufsize(copy->bufsize), initialCapasity(copy->initialCapasity) {
 	buf = (char*) malloc(bufsize);
+	if (!buf) {
+		bufsize = 0;
+		len = 0;
+		return;
+	}
 	memcpy(buf, copy->buf, len);
 }
 
@@ -34,24 +50,29 @@ Samurai::IO::Buffer::~Buffer() {
 }
 
 void Samurai::IO::Buffer::append(const char* data, size_t len_) {
-	if (len + len_ > bufsize) resize(len_);
+	if (len + len_ > bufsize && !resize(len_)) {
+		QERR("Buffer::append: unable to grow buffer, dropping %lu bytes", (unsigned long) len_);
+		return;
+	}
 	memcpy(&buf[len], data, len_);
 	len += len_;
 }
 
 void Samurai::IO::Buffer::append(const std::string& string) {
-	append((char*) string.c_str());
+	/* NOTE: Must not go via the strlen() overload - a std::string is
+	   allowed to contain embedded NUL bytes. */
+	append(string.data(), string.size());
 }
 
 void Samurai::IO::Buffer::append(const char* string) {
-	size_t len_ = strlen(string);
-	if (len + len_ > bufsize) resize(len_);
-	memcpy(&buf[len], string, len_);
-	len += len_;
+	append(string, strlen(string));
 }
 
 void Samurai::IO::Buffer::append(char c) {
-	if (len + 1 > bufsize) resize(1);
+	if (len + 1 > bufsize && !resize(1)) {
+		QERR("Buffer::append: unable to grow buffer, dropping 1 byte");
+		return;
+	}
 	buf[len++] = c;
 }
 
@@ -89,19 +110,26 @@ void Samurai::IO::Buffer::pop(char* data, size_t len_) {
 }
 
 void Samurai::IO::Buffer::pop(char* data, size_t offset, size_t len_) {
-	if (len == 0) return;
-	size_t mylen = (len_ > len) ? len : len_;
+	if (offset >= len) return;
+	size_t available = len - offset;
+	size_t mylen = (len_ > available) ? available : len_;
 	memcpy(data, &buf[offset], mylen);
 }
 
 /**
  * Allocate memory and return a chunk based on the
  * given offset and length.
+ * Returns 0 if the range is outside the buffer, or on allocation failure.
  */
 char* Samurai::IO::Buffer::memdup(size_t offset, size_t end) {
-	char* temp_buf = (char*) malloc((end-offset)+1);
-	memcpy(temp_buf, &buf[offset], end-offset);
-	temp_buf[end-offset] = 0;
+	if (offset > end || end > len) return 0;
+
+	size_t size = end - offset;
+	char* temp_buf = (char*) malloc(size + 1);
+	if (!temp_buf) return 0;
+
+	memcpy(temp_buf, &buf[offset], size);
+	temp_buf[size] = 0;
 	return temp_buf;
 }
 
@@ -118,15 +146,27 @@ void Samurai::IO::Buffer::remove(size_t count) {
 	len -= cnt;
 }
 
-void Samurai::IO::Buffer::resize(size_t size) {
-	size_t nsize = bufsize*2;
-	if (nsize < bufsize+size) nsize = (bufsize*2)+size;
-	
-	char* ptr = (char*) realloc(buf, nsize);
-	if (ptr) {
-		buf = ptr;
-		bufsize = nsize;
+bool Samurai::IO::Buffer::resize(size_t needed) {
+	size_t required = len + needed;
+	if (required < len) return false; /* size_t overflow */
+	if (required <= bufsize) return true;
+
+	size_t nsize = (bufsize > 0) ? bufsize : INITBUFSIZE;
+	while (nsize < required) {
+		size_t next = nsize * 2;
+		if (next <= nsize) { /* size_t overflow */
+			nsize = required;
+			break;
+		}
+		nsize = next;
 	}
+
+	char* ptr = (char*) realloc(buf, nsize);
+	if (!ptr) return false;
+
+	buf = ptr;
+	bufsize = nsize;
+	return true;
 }
 
 void Samurai::IO::Buffer::clear() {
@@ -139,42 +179,52 @@ void Samurai::IO::Buffer::clear() {
 }
 
 int Samurai::IO::Buffer::find(char achar, size_t offset) {
+	if (offset >= len) return -1;
+
 	char* pos = (char*) memchr(&buf[offset], achar, len - offset);
 	if (!pos) return -1;
-	return &pos[0] - &buf[0];
+	return (int) (pos - buf);
 }
 
 int Samurai::IO::Buffer::rfind(char achar) {
-#ifdef LINUX
+	if (len == 0) return -1;
+
+#ifdef SAMURAI_HAVE_GNU_MEMSEARCH
 	char* pos = (char*) memrchr(buf, achar, len);
 	if (!pos) return -1;
-	return &pos[0] - &buf[0];
+	return (int) (pos - buf);
 #else
-	for (size_t x = len; x > 0; x--)
-		if (buf[x] == (uint8_t) achar) return x;
+	/* NOTE: x is unsigned - 'x-- > 0' walks len-1 down to 0 inclusive. */
+	for (size_t x = len; x-- > 0; )
+		if (buf[x] == achar) return (int) x;
 	return -1;
 #endif
 }
 
 int Samurai::IO::Buffer::find(const char* str, size_t offset) {
-#ifdef LINUX
-	char* pos = (char*) memmem(&buf[offset], len-offset, str, strlen(str));
-	if (!pos) return -1;
-	return (&pos[0] - &buf[0]);
-#else
-	int p = offset;
 	size_t n = strlen(str);
 
-	if (len - p < n) return -1;
+	if (n == 0) return (offset <= len) ? (int) offset : -1;
+	if (offset >= len) return -1;
+	if (len - offset < n) return -1;
 
+#ifdef SAMURAI_HAVE_GNU_MEMSEARCH
+	char* pos = (char*) memmem(&buf[offset], len - offset, str, n);
+	if (!pos) return -1;
+	return (int) (pos - buf);
+#else
+	size_t p = offset;
 	for (;;) {
-		p = find(str[0], p);
-		if (p == -1) return -1;
+		int found = find(str[0], p);
+		if (found == -1) return -1;
+
+		p = (size_t) found;
 		if (len - p < n) return -1;
-		if (memcmp(&buf[offset], str, n) == 0) return p;
+
+		/* NOTE: compare at p, not at the starting offset. */
+		if (memcmp(&buf[p], str, n) == 0) return (int) p;
 		p++;
 	}
-	return -1;
 #endif
 }
 
@@ -191,17 +241,17 @@ char Samurai::IO::Buffer::at(size_t offset) const {
 	return buf[offset];
 }
 
-#define SWAP16(x) (\
+#define SWAP16(x) ((uint16_t) (\
 			(((x) & (uint16_t) 0x00ff) << 8) | \
-			(((x) & (uint16_t) 0xff00) >> 8))
+			(((x) & (uint16_t) 0xff00) >> 8)))
 
-#define SWAP32(x) (\
-			(((x) & 0x000000ff) << 24) | \
-			(((x) & 0x0000ff00) <<  8) | \
-			(((x) & 0x00ff0000) >>  8) | \
-			(((x) & 0xff000000) >> 24))
+#define SWAP32(x) ((uint32_t) (\
+			(((x) & 0x000000ffUL) << 24) | \
+			(((x) & 0x0000ff00UL) <<  8) | \
+			(((x) & 0x00ff0000UL) >>  8) | \
+			(((x) & 0xff000000UL) >> 24)))
 
-#define SWAP64(x) (\
+#define SWAP64(x) ((uint64_t) (\
 			(((x) & 0x00000000000000ffULL) << 56) | \
 			(((x) & 0x000000000000ff00ULL) << 40) | \
 			(((x) & 0x0000000000ff0000ULL) << 24) | \
@@ -209,19 +259,25 @@ char Samurai::IO::Buffer::at(size_t offset) const {
 			(((x) & 0x000000ff00000000ULL) >>  8) | \
 			(((x) & 0x0000ff0000000000ULL) >> 24) | \
 			(((x) & 0x00ff000000000000ULL) >> 40) | \
-			(((x) & 0xff00000000000000ULL) >> 56))
+			(((x) & 0xff00000000000000ULL) >> 56)))
+
+/*
+ * NOTE: The guard is SAMURAI_BIG_ENDIAN, as defined by samurai/defines.h.
+ * This used to read SAMURAI_BIGENDIAN, which is never defined anywhere, so
+ * every conversion below silently did nothing on big endian hosts.
+ */
 
 void Samurai::IO::Buffer::appendBinary(uint16_t number_, BinaryMode endiannes) {
 	uint16_t number = number_;
 	switch (endiannes) {
 		case LittleEndian:
-#ifdef SAMURAI_BIGENDIAN
+#ifdef SAMURAI_BIG_ENDIAN
 			number = SWAP16(number);
 #endif
 			break;
-			
+
 		case BigEndian:
-#ifndef SAMURAI_BIGENDIAN
+#ifndef SAMURAI_BIG_ENDIAN
 			number = SWAP16(number);
 #endif
 			break;
@@ -235,13 +291,13 @@ void Samurai::IO::Buffer::appendBinary(uint32_t number_, BinaryMode endiannes) {
 	uint32_t number = number_;
 	switch (endiannes) {
 		case LittleEndian:
-#ifdef SAMURAI_BIGENDIAN
+#ifdef SAMURAI_BIG_ENDIAN
 			number = SWAP32(number);
 #endif
 			break;
-			
+
 		case BigEndian:
-#ifndef SAMURAI_BIGENDIAN
+#ifndef SAMURAI_BIG_ENDIAN
 			number = SWAP32(number);
 #endif
 			break;
@@ -255,13 +311,13 @@ void Samurai::IO::Buffer::appendBinary(uint64_t number_, BinaryMode endiannes) {
 	uint64_t number = number_;
 	switch (endiannes) {
 		case LittleEndian:
-#ifdef SAMURAI_BIGENDIAN
+#ifdef SAMURAI_BIG_ENDIAN
 			number = SWAP64(number);
 #endif
 			break;
-			
+
 		case BigEndian:
-#ifndef SAMURAI_BIGENDIAN
+#ifndef SAMURAI_BIG_ENDIAN
 			number = SWAP64(number);
 #endif
 			break;
@@ -271,53 +327,36 @@ void Samurai::IO::Buffer::appendBinary(uint64_t number_, BinaryMode endiannes) {
 	 append((char*) &number, sizeof(number));
 }
 
+/*
+ * NOTE: These read the *value stored at* the offset. The uint32/uint64
+ * variants used to return reinterpret_cast<...>(&buf[offset]) - that is, the
+ * address of the slot rather than its contents.
+ *
+ * memcpy() is used rather than a cast through a uint32_t*, since the offset
+ * carries no alignment guarantee and type-punning through a pointer is
+ * undefined behaviour.
+ */
+
 bool Samurai::IO::Buffer::popBinary(size_t offset, uint8_t& number) {
-	number = (uint8_t) buf[offset];
+	if (offset > len || len - offset < sizeof(number)) return false;
+
+	memcpy(&number, &buf[offset], sizeof(number));
 	return true;
 }
-/*
-union {
-	struct {
-		uint8_t d1;
-		uint8_t d2;
-		uint8_t d3;
-		uint8_t d4;
-		uint8_t d5;
-		uint8_t d6;
-		uint8_t d7;
-		uint8_t d8;
-	} bytes;
-
-	struct {
-		uint16_t d1;
-		uint16_t d2;
-		uint16_t d3;
-		uint16_t d4;
-	} words;
-
-	struct {
-		uint32_t d1;
-		uint32_t d2;
-	} dwords;
-
-	struct {
-		uint64_t d;
-	} ddwords;
-	
-} storage;
-*/
 
 bool Samurai::IO::Buffer::popBinary(size_t offset, uint16_t& number, BinaryMode endianness) {
-	number = (uint16_t) *reinterpret_cast<uint16_t*>(&buf[offset]);
+	if (offset > len || len - offset < sizeof(number)) return false;
+
+	memcpy(&number, &buf[offset], sizeof(number));
 	switch (endianness) {
 		case LittleEndian:
-#ifdef SAMURAI_BIGENDIAN
+#ifdef SAMURAI_BIG_ENDIAN
 			number = SWAP16(number);
 #endif
 			break;
 
 		case BigEndian:
-#ifndef SAMURAI_BIGENDIAN
+#ifndef SAMURAI_BIG_ENDIAN
 			number = SWAP16(number);
 #endif
 			break;
@@ -330,16 +369,18 @@ bool Samurai::IO::Buffer::popBinary(size_t offset, uint16_t& number, BinaryMode 
 }
 
 bool Samurai::IO::Buffer::popBinary(size_t offset, uint32_t& number, BinaryMode endianness) {
-	number = (uint32_t) reinterpret_cast<size_t>(&buf[offset]); // FIXME: Is this 32/64 bit safe?
+	if (offset > len || len - offset < sizeof(number)) return false;
+
+	memcpy(&number, &buf[offset], sizeof(number));
 	switch (endianness) {
 		case LittleEndian:
-#ifdef SAMURAI_BIGENDIAN
+#ifdef SAMURAI_BIG_ENDIAN
 			number = SWAP32(number);
 #endif
 			break;
 
 		case BigEndian:
-#ifndef SAMURAI_BIGENDIAN
+#ifndef SAMURAI_BIG_ENDIAN
 			number = SWAP32(number);
 #endif
 			break;
@@ -351,16 +392,18 @@ bool Samurai::IO::Buffer::popBinary(size_t offset, uint32_t& number, BinaryMode 
 }
 
 bool Samurai::IO::Buffer::popBinary(size_t offset, uint64_t& number, BinaryMode endianness) {
-	number = reinterpret_cast<uint64_t>(&buf[offset]);
+	if (offset > len || len - offset < sizeof(number)) return false;
+
+	memcpy(&number, &buf[offset], sizeof(number));
 	switch (endianness) {
 		case LittleEndian:
-#ifdef SAMURAI_BIGENDIAN
+#ifdef SAMURAI_BIG_ENDIAN
 			number = SWAP64(number);
 #endif
 			break;
 
 		case BigEndian:
-#ifndef SAMURAI_BIGENDIAN
+#ifndef SAMURAI_BIG_ENDIAN
 			number = SWAP64(number);
 #endif
 			break;
@@ -370,5 +413,4 @@ bool Samurai::IO::Buffer::popBinary(size_t offset, uint64_t& number, BinaryMode 
 	}
 	return true;
 }
-
 

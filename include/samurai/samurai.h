@@ -13,15 +13,14 @@
 
 #if defined(SAMURAI_OS_LINUX) || defined(SAMURAI_OS_MACOSX)
 #define HAVE_STDINT_H
-#define HAVE_STDINT_H
 #endif
 
 #ifndef MIN
-#define MIN(a,b) a < b ? a : b
+#define MIN(a,b) (((a) < (b)) ? (a) : (b))
 #endif
 
 #ifndef MAX
-#define MAX(a,b) a > b ? a : b
+#define MAX(a,b) (((a) > (b)) ? (a) : (b))
 #endif
 
 /* Misc crap */

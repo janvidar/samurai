@@ -17,6 +17,8 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
 #include <samurai/io/net/socketmonitor.h>
 
 /*
@@ -61,27 +63,37 @@ void Samurai::IO::Net::DNS::ForkResolver::lookup(const char* address) {
 	
 	p = fork();
 	if (p == 0) {
-		close(FDs[0]);
-		sd = FDs[1];
-
 		// We close the reading part, as we are not interrested in reading from
 		// the parent process, but rather just writing back the result as soon as it gets in.
-		// close(fds[1]);
+		close(FDs[0]);
+		int out = FDs[1];
+
 		struct hostent* host = gethostbyname(address);
 
-		if (!host) {
-			// host not found, return h_errno.
-			::write(sd, (void*) 0, 4);
-			close(sd);
-			exit(h_errno);
+		/* NOTE: The parent always expects 4 bytes; success or failure is
+		   carried by the exit status. The failure path used to call
+		   ::write(sd, (void*) 0, 4), which is undefined behaviour - reading
+		   4 bytes from a null pointer - and in practice wrote nothing at
+		   all, leaving the parent's read() to see end-of-file instead. */
+		char result[4] = { 0, 0, 0, 0 };
+		int error = 0;
 
+		if (!host || host->h_addrtype != AF_INET || host->h_length != 4 || !host->h_addr_list[0]) {
+			/* h_errno is only meaningful when gethostbyname() failed. */
+			error = (!host && h_errno) ? h_errno : NO_ADDRESS;
 		} else {
-			// host found, return 0.
-			::write(sd, (void*) host->h_addr_list[0], 4);
-			close(sd);
-			exit(0);
+			memcpy(result, host->h_addr_list[0], sizeof(result));
 		}
-		
+
+		ssize_t ignored = ::write(out, result, sizeof(result));
+		(void) ignored;
+		close(out);
+
+		/* _exit() rather than exit(): this process is a fork of the parent
+		   and shares its stdio buffers, so exit() would flush any output the
+		   parent had pending a second time. */
+		_exit(error);
+
 	} else if (p > 0) {
 		childPid = p;
 	
@@ -99,23 +111,29 @@ void Samurai::IO::Net::DNS::ForkResolver::lookup(const char* address) {
 
 
 void Samurai::IO::Net::DNS::ForkResolver::internal_lookup() {
-	char ipaddress[4];
-	
-	::read(sd, (void*) ipaddress, 4);
-	int status;	
+	char ipaddress[4] = { 0, 0, 0, 0 };
+
+	ssize_t got = ::read(sd, (void*) ipaddress, sizeof(ipaddress));
+	int status = 0;
 	waitpid(childPid, &status, 0);
 
 	// getSocketMonitorInstance()->remove(this);
 
 	childPid = -1;
 	close(sd); sd = -1;
-	
-	if (status == 0) {
+
+	/* NOTE: waitpid() reports an encoded status, not the child's exit code -
+	   an exit code of N appears here as N << 8. Matching the raw value
+	   against HOST_NOT_FOUND and friends below therefore never succeeded,
+	   and every failure was reported as Unknown. */
+	int error = WIFEXITED(status) ? WEXITSTATUS(status) : NO_RECOVERY;
+
+	if (error == 0 && got == (ssize_t) sizeof(ipaddress)) {
 		Samurai::IO::Net::InetAddress inet_addr;
 		inet_addr.setRawAddress(ipaddress, 4, Samurai::IO::Net::InetAddress::IPv4);
 		eventHandler->EventHostFound(&inet_addr);
 	} else {
-		switch (status) {
+		switch (error) {
 			case HOST_NOT_FOUND:
 				eventHandler->EventHostError(NotFound);
 				break;

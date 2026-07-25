@@ -128,7 +128,18 @@ void Samurai::IO::Net::SocketMonitor::handleSocketEvent(Samurai::IO::Net::Socket
 				case SSLBye:
 				case SSLHandshake:
 				case SSLConnected:
-					socket->internal_canWrite();
+					/* NOTE: This is a *read* event, so it has to dispatch to
+					   internal_canRead(). It used to call internal_canWrite(),
+					   which delivered incoming application data as
+					   EventCanWrite - so EventDataAvailable never fired once
+					   the TLS handshake had completed.
+
+					   No MSG_PEEK probe as in the Connected case above: a
+					   complete TLS record may already be buffered inside the
+					   TLS library while the socket itself reads empty, so
+					   peeking would skip valid reads. End-of-stream arrives
+					   as TLS_STATUS_CLOSED through read() instead. */
+					socket->internal_canRead();
 					break;
 				
 				
