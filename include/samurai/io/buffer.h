@@ -46,10 +46,16 @@ class Buffer {
 		void appendBinary(uint64_t number, BinaryMode endiannes = NativeEndian);
 	
 		/**
-		 * Copy the first 'len' bytes into a char array, 
+		 * Copy the first 'len' bytes into a char array,
 		 * or string.
 		 */
 		void pop(char* data, size_t len);
+
+		/**
+		 * NOTE: The popBinary() family returns false and leaves 'number'
+		 * untouched if fewer than sizeof(number) bytes are available at
+		 * 'offset'. Always check the return value.
+		 */
 		
 		/**
 		 * Returns a string with the 'len' first bytes of the buffer.
@@ -116,8 +122,9 @@ class Buffer {
 		
 		
 	protected:
-		// grow buffer if capacity is exceeded
-		void resize(size_t newsize = 0);
+		// Grow the buffer so that 'needed' more bytes fit.
+		// Returns false (leaving the buffer untouched) if allocation fails.
+		bool resize(size_t needed = 0);
 		
 	protected:
 		char* buf;

@@ -9,7 +9,11 @@ namespace Samurai {
 namespace Util {
 
 /**
- * Generates a pseudo-random number between low and high.
+ * Generates a pseudo-random number in the range [low, high) - low inclusive,
+ * high exclusive. Returns low if high <= low.
+ *
+ * NOTE: This is seeded from the clock and is not suitable for keys, nonces,
+ * session identifiers or anything else where predictability matters.
  */
 int pseudoRandom(int low, int high);
 

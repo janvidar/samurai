@@ -26,18 +26,22 @@ CXX_OUT       := -o
 CPP_OUT       := -o 
 
 CFLAGS        := -c
-CXXFLAGS      := -c
-EXTRAFLAGS    := -Wall -W -ansi -D_FILE_OFFSET_BITS=64 -fPIC
+CXXFLAGS      := -c -std=c++11
+EXTRAFLAGS    := -Wall -W -D_FILE_OFFSET_BITS=64 -fPIC
 LDFLAGS       :=
 
 LDFLAGS       += $(addprefix -l, $(foreach L, $(LIBS), $L) $1)
 EXTRAFLAGS    += $(addprefix -I, $(foreach L, $(INCDIR), $L) $1)
 EXTRAFLAGS    += $(addprefix -D, $(foreach L, $(DEFINES), $L) $1)
 
+# NOTE: Deferred (=) rather than immediate (:=) assignment, so that $@ refers
+# to the library being linked, and so that flags appended below are included.
+# The libraries themselves come from LDFLAGS, which the link rule places
+# *after* the object files.
 ifeq ($(OSX), YES)
-DLLFLAGS      := -dynamiclib $(LDFLAGS)
+DLLFLAGS       = -dynamiclib -install_name $(notdir $@)
 else
-DLLFLAGS      := -shared -Wl
+DLLFLAGS       = -shared -Wl,-soname,$(notdir $@)
 endif
 
 ifeq ($(DEBUG), YES)

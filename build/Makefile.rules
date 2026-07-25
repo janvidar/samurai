@@ -17,7 +17,7 @@ endif
 	$(MSG_DEPEND) $(DEP) $(INCLUDES) $(EXTRAFLAGS) -MM $< -MT $(@:.d=$(OBJ_EXT)) -MF $@
 
 %$(OBJ_EXT): %.cpp
-	$(MSG_COMPILE) $(CXX) $(CXXFLAGS) $(INCLUDES) $(EXTRAFLAGS) ${CXX_OUT}$@ $^
+	$(MSG_COMPILE) $(CXX) $(CXXFLAGS) $(INCLUDES) $(EXTRAFLAGS) ${CXX_OUT}$@ $<
 
 %$(OBJ_EXT): %.c
 	$(MSG_COMPILE) $(CC) $(CFLAGS) $(INCLUDES) $(EXTRAFLAGS) ${CC_OUT}$@ $<
@@ -25,5 +25,7 @@ endif
 %.a:
 	$(MSG_ARCHIVE) $(AR) $(AR_OPTS) $@ $^
 
+# LDFLAGS holds the -l flags and must come after the objects that need them,
+# or --as-needed (the default on most modern toolchains) discards them.
 %$(LIB_EXT):
-	$(MSG_DLL) $(DLL) $(DLLFLAGS) ${CC_OUT}$@ $^
+	$(MSG_DLL) $(DLL) $(DLLFLAGS) ${CC_OUT}$@ $^ $(LDFLAGS)

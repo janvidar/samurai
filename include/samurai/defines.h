@@ -115,8 +115,12 @@
 #define SAMURAI_64BIT
 #endif
 
-/* Big endian */
-#if defined(__BIG_ENDIAN__) || defined(_BIG_ENDIAN)
+/* Big endian.
+ * NOTE: __BYTE_ORDER__ is the only one of these that gcc/clang actually
+ * define on the common big endian targets (ppc64, s390x, mips, sparc). */
+#if defined(__BIG_ENDIAN__) || defined(_BIG_ENDIAN) || \
+    (defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && \
+     __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
 #define SAMURAI_BIG_ENDIAN
 #endif
 

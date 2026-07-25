@@ -393,12 +393,44 @@ ssize_t Samurai::IO::Net::Socket::read(char* data, size_t length) {
 }
 
 
-// FIXME: does not work for SSL
 ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
-	if (state != Connected) {
+	if (state != Connected
+#ifdef SSL_SUPPORT
+	 && state != SSLConnected
+#endif
+		)
+	{
 		if (eventHandler) eventHandler->EventError(this, SocketRead, "Not connected");
 		return 0;
 	}
+
+#ifdef SSL_SUPPORT
+	if (state == SSLConnected && tls)
+	{
+		enum Samurai::IO::Net::TlsFactory::TlsStatus status;
+		ssize_t tls_ret = tls->peek(data, length, status);
+
+		switch (status) {
+			case Samurai::IO::Net::TlsFactory::TLS_STATUS_OK:
+				return tls_ret;
+
+			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE:
+				toggleWriteNotifier(true);
+				return 0;
+
+			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_READ:
+				return 0;
+
+			case Samurai::IO::Net::TlsFactory::TLS_STATUS_CLOSED:
+			case Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR:
+				if (eventHandler) eventHandler->EventTLSDisconnected(this);
+				state = Invalid;
+				disableMonitor();
+				if (eventHandler) eventHandler->EventError(this, SocketRead, "SSL/TLS peek error");
+				return 0;
+		}
+	}
+#endif
 
 	ssize_t ret = ::recv(sd, data, length, MSG_PEEK);
 	if (ret == -1) {
@@ -471,6 +503,11 @@ bool Samurai::IO::Net::Socket::TLSInitialize(bool server) {
 		return false;
 	}
 
+	/* The name we asked for - not one derived from the connection - is the
+	   only thing a certificate can meaningfully be verified against. */
+	if (!server && address && !address->getHostname().empty())
+		tls->setPeerName(address->getHostname());
+
 	enum Samurai::IO::Net::TlsFactory::TlsStatus status = tls->initialize(server ? Samurai::IO::Net::TlsFactory::TLS_OPERATE_SERVER : Samurai::IO::Net::TlsFactory::TLS_OPERATE_CLIENT, sd);
 	return (status == Samurai::IO::Net::TlsFactory::TLS_STATUS_OK);
 }
@@ -525,9 +562,9 @@ void Samurai::IO::Net::Socket::TLSsendHandshake() {
 
 void Samurai::IO::Net::Socket::TLSsendGoodbye() {
 	if (tls && (state == SSLConnected || state == SSLBye)) {
-		state = SSLHandshake;
+		state = SSLBye;
 		enum Samurai::IO::Net::TlsFactory::TlsStatus status;
-		status = tls->sendHandshake();
+		status = tls->sendGoodbye();
 		switch (status) {
 			case Samurai::IO::Net::TlsFactory::TLS_STATUS_OK:
 				toggleWriteNotifier(false);
