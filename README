@@ -1,2 +1,68 @@
-Nothing much to report, yet.
+Samurai
+=======
 
+A portable C++ platform abstraction library: buffers, files and directories,
+unicode, compression, sockets (TCP/UDP/multicast) with four socket-monitor
+backends, a DNS resolver, threads, and Tiger/TigerTree hashing.
+
+
+Building
+--------
+
+Samurai builds with CMake (3.16 or newer):
+
+    cmake -S . -B build
+    cmake --build build -j
+    ctest --test-dir build
+
+Requirements: a C++11 compiler, zlib, bzip2, and OpenSSL 1.0.2 or newer.
+
+
+Configuration
+-------------
+
+    -DCMAKE_BUILD_TYPE=Debug|Release      Debug (the default) enables the
+                                          QDBG/QERR tracing macros.
+    -DBUILD_SHARED_LIBS=ON|OFF            Shared (default) or static.
+    -DSAMURAI_BUILD_TESTS=ON|OFF          Build the test programs. Default ON.
+    -DSAMURAI_TLS_PROVIDER=OPENSSL|GNUTLS|NONE
+                                          TLS backend. Default OPENSSL.
+                                          GNUTLS is unmaintained and is not
+                                          expected to compile.
+    -DSAMURAI_DNS_PROVIDER=BLOCKING|FORKED|BUILTIN
+                                          DNS resolver. Default BLOCKING,
+                                          which is the only working backend.
+
+For example, an optimised static build without TLS:
+
+    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=OFF -DSAMURAI_TLS_PROVIDER=NONE
+
+
+Tests
+-----
+
+The programs under test/applications are interactive tools (netcat, wget,
+dnslookup, ...). They are built, but not run by ctest.
+
+The automated suite lives in test/exotic and is written for the "exotic" test
+generator. If exotic is not on PATH those tests are skipped, with a notice at
+configure time; install it to enable them.
+
+
+Installing
+----------
+
+    cmake --install build --prefix /usr/local
+
+Consumers can then use it from CMake:
+
+    find_package(samurai REQUIRED)
+    target_link_libraries(myapp PRIVATE samurai::samurai)
+
+
+Notes
+-----
+
+src/media (audio and video) is not part of the build and does not currently
+compile.
