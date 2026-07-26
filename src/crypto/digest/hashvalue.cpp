@@ -58,23 +58,37 @@ uint8_t* Samurai::Crypto::Digest::HashValue::getData()
 
 bool Samurai::Crypto::Digest::HashValue::getFormattedString(enum Format format, char* buf, size_t buflen)
 {
+	if (!buf || buflen == 0)
+		return false;
+
 	buf[0] = 0;
 	if (format == FormatHex) {
+		/* Two characters per byte, plus the terminator. */
 		if (buflen < (m_size*2)+1)
 			return false;
 		for (size_t n = 0; n < m_size; n++)
 			sprintf(&buf[n*2], "%02x", (int) m_data[n]);
-		
+		buf[m_size*2] = 0;
+
 	} else  if (format == FormatBase32) {
-		if (buflen < (m_size*5/8)+1)
+		/* NOTE: base32 expands rather than contracts - every 5 bits become
+		   one character, so the output is ceil(m_size*8/5) characters plus a
+		   terminator. This test used to read (m_size*5/8)+1, the inverse
+		   ratio, which is far too small: for a 24 byte digest it accepted a
+		   16 byte buffer while base32_encode() went on to write 40 bytes.
+		   base32_encode() takes no length argument, so the caller's buffer is
+		   all that stands between it and the rest of the stack. */
+		if (buflen < ((m_size*8 + 4) / 5) + 1)
 			return false;
 		base32_encode((unsigned char*) m_data, m_size, (char*) buf);
-		buf[buflen] = 0;
-	
+
 	} else {
 		return false;
 	}
-	buf[buflen] = 0;
+
+	/* NOTE: deliberately no buf[buflen] = 0 here. That is one byte past the
+	   end of a buflen-sized buffer, and it used to run on every call - twice
+	   on the base32 path. Both encoders terminate their own output. */
 	return true;
 }
 
