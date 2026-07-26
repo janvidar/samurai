@@ -259,9 +259,28 @@ size_t Samurai::Crypto::Digest::MerkleTree::getLevels()
 }
 
 
+void Samurai::Crypto::Digest::MerkleTree::deleteNodes(Samurai::Crypto::Digest::MerkleWorkStack* stack)
+{
+	if (!stack) return;
+
+	/* Only [0, pos) holds live nodes: setPosition() and removeLast() zero the
+	   tail, and compact() never leaves a duplicate pointer below pos, so
+	   nothing here is deleted twice. */
+	for (size_t n = 0; n < stack->getPosition(); n++)
+		delete stack->get(n);
+
+	stack->clear();
+}
+
+
 Samurai::Crypto::Digest::MerkleTree::~MerkleTree()
 {
-	
+	/* NOTE: This used to be empty, leaking both work stacks together with
+	   every node still held in them. */
+	deleteNodes(m_nodes);
+	deleteNodes(m_work);
+	delete m_nodes;
+	delete m_work;
 }
 
 
@@ -270,6 +289,10 @@ void Samurai::Crypto::Digest::MerkleTree::reset()
 	m_hasher->reset();
 	m_blocks_per_leaf = 1;
 	m_count = 0;
+	/* The stacks do not own their nodes, so release those before discarding
+	   the stacks themselves. */
+	deleteNodes(m_nodes);
+	deleteNodes(m_work);
 	delete m_nodes;
 	delete m_work;
 	m_nodes = new MerkleWorkStack(m_max_leaves);

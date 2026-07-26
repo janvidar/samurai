@@ -218,6 +218,15 @@ class MerkleTree : public Samurai::Crypto::Digest::Hash
 		MerkleNode* combine(MerkleNode* a, MerkleNode* b);
 
 		/**
+		 * Delete every node the stack still holds, and reset it.
+		 *
+		 * MerkleWorkStack stores bare pointers and does not own the nodes -
+		 * its destructor frees only the pointer array - so the tree has to
+		 * release them itself.
+		 */
+		void deleteNodes(MerkleWorkStack* stack);
+
+		/**
 		 * Internal mehod for hashing leaf data.
 		 * length is always block_size, except for the last leaf which may be shorter.
 		 */

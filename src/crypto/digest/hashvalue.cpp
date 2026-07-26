@@ -37,7 +37,13 @@ Samurai::Crypto::Digest::HashValue::HashValue(const Samurai::Crypto::Digest::Has
 
 void Samurai::Crypto::Digest::HashValue::setData(const uint8_t* data)
 {
-	m_data = new uint8_t[m_size];
+	/* NOTE: This used to allocate a fresh buffer on every call while dropping
+	   the previous one on the floor, leaking m_size bytes per call. m_size is
+	   fixed at construction, so the existing buffer can just be reused.
+	   Everything that finalizes a hash arrives here through
+	   Hash::set_finalized_value(), so every Tiger::digest() leaked. */
+	if (!m_data)
+		m_data = new uint8_t[m_size];
 	memcpy(m_data, data, m_size);
 }
 
