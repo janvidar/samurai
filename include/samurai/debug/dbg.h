@@ -7,11 +7,19 @@
 #define BUILD "internal"
 #endif
 
-#if defined(DEBUG)
-
+/*
+ * NOTE: These are included for both configurations on purpose. They used to be
+ * inside the #ifdef DEBUG branch below, so the set of headers this file pulled
+ * in changed with the build type - and the ~18 translation units that reach
+ * memcpy()/memset()/strcmp() through this header compiled with DEBUG but not
+ * without it. The old Makefile defaulted to DEBUG=YES, so a release build was
+ * never attempted.
+ */
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+
+#if defined(DEBUG)
 
 #if !defined(QDBG)
 #define QDBG(format, ...)  do { QuickDC_Debug(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0);
@@ -56,8 +64,6 @@ void QuickDC_Memory(const char* func, void* addr, size_t size, void* code_addr, 
 
 
 #else /* ! DEBUG */
-
-#include <stdio.h>
 
 #if !defined(QDBG)
 #define QDBG(format, ...) do { } while(0);
