@@ -12,7 +12,7 @@
 #define MTX_INIT(X)       pthread_mutex_init(X, 0)
 #define MTX_FINI(X)       pthread_mutex_destroy(X)
 #define MTX_LOCK(X)       pthread_mutex_lock(X)
-#define MTX_TRY_LOCK(X)   pthread_mutex_trylock(X)
+#define MTX_TRY_LOCK(X)   (pthread_mutex_trylock(X) == 0)
 #define MTX_UNLOCK(X)     pthread_mutex_unlock(X)
 #endif
 
@@ -22,7 +22,7 @@
 #define MTX_INIT(X)       InitializeCriticalSection(X)
 #define MTX_FINI(X)       DeleteCriticalSection(X)
 #define MTX_LOCK(X)       EnterCriticalSection(X)
-#define MTX_TRY_LOCK(X)   TryEnterCriticalSection(X)
+#define MTX_TRY_LOCK(X)   (TryEnterCriticalSection(X) != 0)
 #define MTX_UNLOCK(X)     LeaveCriticalSection(X)
 #endif
 
