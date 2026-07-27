@@ -402,12 +402,25 @@ bool Samurai::IO::File::isDeleteable() const
 
 bool Samurai::IO::File::isExcecutable()  const
 {
+	/* NOTE: neither branch was followed by a return, so a platform that is
+	   neither ran off the end of a non-void function. */
 #ifdef SAMURAI_WINDOWS
-	return (matchExtension("exe") || matchExtension("bat") || matchExtension("com"));
-#endif
+	/* Windows has no execute bit; the extension is what decides. Compared
+	   case-insensitively, since "PROGRAM.EXE" is just as executable. */
+	std::string ext = getExtension();
+	for (std::string::size_type n = 0; n < ext.size(); n++)
+		ext[n] = (char) tolower((unsigned char) ext[n]);
 
-#ifdef SAMURAI_UNIX
+	return (ext == "exe" || ext == "bat" || ext == "cmd" || ext == "com");
+#elif defined(SAMURAI_UNIX)
 	return (access(getName().c_str(), X_OK) == 0);
+#else
+	std::error_code ec;
+	const std::filesystem::perms p = std::filesystem::status(filename, ec).permissions();
+	if (ec) return false;
+	return (p & (std::filesystem::perms::owner_exec |
+	             std::filesystem::perms::group_exec |
+	             std::filesystem::perms::others_exec)) != std::filesystem::perms::none;
 #endif
 }
 
@@ -486,7 +499,11 @@ bool Samurai::IO::File::remove(std::error_code& ec) {
 
 bool Samurai::IO::File::remove(const char* path)
 {
-	return (unlink(path) != -1);
+	/* NOTE: this called unlink() directly while the member remove() went
+	   through SAMURAI_UNLINK, so the static overload alone failed to build
+	   on Windows, where the name is _unlink. */
+	if (!path) return false;
+	return (SAMURAI_UNLINK(path) != -1);
 }
 
 
@@ -514,23 +531,36 @@ Samurai::TimeStamp Samurai::IO::File::getTimeAccessed() const
 }
 
 
+/*
+ * NOTE: these were split across #ifdefs that named the POSIX functions on
+ * Windows - ::mkdir there is _mkdir and takes no mode, and rmdir had no
+ * Windows branch at all, so neither compiled. std::filesystem covers both.
+ * Return values keep the ::mkdir convention: 0 on success, -1 on failure.
+ */
 int Samurai::IO::File::mkdir(const char* dirname, int mode)
 {
 	const std::string dir = resolvePath(dirname ? dirname : "");
-#ifdef SAMURAI_UNIX
-	return ::mkdir(dir.c_str(), mode);
-#endif
 
-#ifdef SAMURAI_WINDOWS
-	(void) mode; // Ignore mode
-	return ::mkdir(dir.c_str());
-#endif
+	std::error_code ec;
+	if (!std::filesystem::create_directory(dir, ec) || ec)
+		return -1;
+
+	/* Permission bits are a POSIX notion; on Windows this reduces to the
+	   read-only flag, which is the closest thing available. */
+	std::filesystem::permissions(dir, static_cast<std::filesystem::perms>(mode), ec);
+
+	return 0;
 }
 
 int Samurai::IO::File::rmdir(const char* dirname)
 {
 	const std::string dir = resolvePath(dirname ? dirname : "");
-	return ::rmdir(dir.c_str());
+
+	std::error_code ec;
+	if (!std::filesystem::remove(dir, ec) || ec)
+		return -1;
+
+	return 0;
 }
 
 /**

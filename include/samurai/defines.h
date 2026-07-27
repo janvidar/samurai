@@ -84,6 +84,30 @@
 #define SAMURAI_WINDOWS
 #endif
 
+/*
+ * Exactly one platform family must be selected, and the two Windows spellings
+ * always travel together. Both are in use across the tree - SAMURAI_WINDOWS
+ * for the OS class, SAMURAI_OS_WINDOWS for the specific OS - and a guard that
+ * names a macro nobody defines compiles to nothing rather than complaining.
+ * That is how the Winsock startup came to be guarded on plain WINSOCK and
+ * never ran. These checks turn the next such slip into a build error.
+ */
+#if defined(SAMURAI_WINDOWS) != defined(SAMURAI_OS_WINDOWS)
+#error "SAMURAI_WINDOWS and SAMURAI_OS_WINDOWS must be defined together"
+#endif
+
+#if defined(SAMURAI_WINDOWS) && defined(SAMURAI_UNIX)
+#error "SAMURAI_WINDOWS and SAMURAI_UNIX are mutually exclusive"
+#endif
+
+#if !defined(SAMURAI_WINDOWS) && !defined(SAMURAI_UNIX)
+#error "Unsupported platform: neither SAMURAI_WINDOWS nor SAMURAI_UNIX was detected"
+#endif
+
+#if defined(SAMURAI_UNIX) && !defined(SAMURAI_POSIX)
+#error "SAMURAI_UNIX implies SAMURAI_POSIX"
+#endif
+
 /* SPARC cpus */
 #if defined(__sparc__) || defined(__sparc) || defined(sparc)
 #ifdef __arch64__

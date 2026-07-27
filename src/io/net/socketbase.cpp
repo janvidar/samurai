@@ -212,10 +212,18 @@ bool Samurai::IO::Net::SocketBase::setNonBlocking(bool toggle, std::error_code& 
 	u_long on = toggle ? 1 : 0;
 	ret = ioctlsocket(sd, FIONBIO, &on);
 	if (ret == SOCKET_ERROR) {
+		ec = Samurai::system_error(NETERROR);
 		QERR("ERROR: Setting socket to %s mode failed ", toggle ? "non-blocking" : "blocking");
 		return false;
 	}
 	return true;
+#endif
+
+#if !defined(SAMURAI_POSIX) && !defined(SAMURAI_WINSOCK)
+	/* NOTE: neither branch applied and the function ran off the end. */
+	(void) toggle;
+	ec = Samurai::system_error(ENOSYS);
+	return false;
 #endif
 }
 
