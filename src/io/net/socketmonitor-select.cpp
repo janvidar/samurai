@@ -16,6 +16,8 @@
 #include <samurai/io/net/socketmonitor.h>
 #include <samurai/io/net/datagram.h>
 
+#include <vector>
+
 #define MAXSOCK 1024
 
 Samurai::IO::Net::SelectSocketMonitor::SelectSocketMonitor() : Samurai::IO::Net::SocketMonitor("select")
@@ -85,12 +87,29 @@ static bool fd_fits_in_set(socket_t fd)
 }
 
 
+/*
+ * A descriptor that has been closed behind the monitor's back makes select()
+ * fail with EBADF for the whole call. The loop then reported the error and
+ * returned without dispatching anything - and did so again on the next call,
+ * and every call after that, so one stale descriptor stalled every socket in
+ * the process permanently. Identifying the offenders lets them be torn down.
+ */
+static bool fd_is_usable(socket_t fd)
+{
+	int type = 0;
+	socklen_t len = sizeof(type);
+	return SAMURAI_GETSOCKOPT(fd, SOL_SOCKET, SO_TYPE, &type, &len) == 0;
+}
+
+
 void Samurai::IO::Net::SelectSocketMonitor::wait(int time_ms) {
 	fd_set rfds;
 	fd_set wfds;
+	fd_set efds;
 
 	FD_ZERO(&rfds);
 	FD_ZERO(&wfds);
+	FD_ZERO(&efds);
 
 	socket_t maxfd = INVALID_SOCKET;
 	size_t skipped = 0;
@@ -112,10 +131,14 @@ void Samurai::IO::Net::SelectSocketMonitor::wait(int time_ms) {
 		   registered for both - which is what connect() and
 		   toggleWriteNotifier(true) do - was never placed in rfds and its
 		   reads went unreported for as long as the write notifier was on. */
-		if (trigger & MWrite) FD_SET(fd, &wfds);
-		if (trigger & MRead)  FD_SET(fd, &rfds);
+		if (trigger & MWrite)  FD_SET(fd, &wfds);
+		if (trigger & MRead)   FD_SET(fd, &rfds);
 
-		if (!(trigger & (MRead | MWrite))) continue;
+		/* select()'s third set is out-of-band data, which is what MUrgent
+		   means; epoll and kqueue already report it and this did not. */
+		if (trigger & MUrgent) FD_SET(fd, &efds);
+
+		if (!(trigger & (MRead | MWrite | MUrgent))) continue;
 
 		if (maxfd == INVALID_SOCKET || maxfd < fd)
 			maxfd = fd;
@@ -132,15 +155,34 @@ void Samurai::IO::Net::SelectSocketMonitor::wait(int time_ms) {
 	timeout.tv_sec = (time_ms / 1000);
 	timeout.tv_usec = ((time_ms % 1000) * 1000);
 
-	int ret = ::select(maxfd + 1, &rfds, &wfds, 0, &timeout);
+	int ret = ::select(maxfd + 1, &rfds, &wfds, &efds, &timeout);
 	if (ret == 0) return;
 
 	if (ret == -1)
 	{
-		if (NETERROR != EINTR)
+		if (NETERROR == EINTR) return;
+
+		if (NETERROR == EBADF)
 		{
-			QERR("Select error: %i, %s", NETERROR, strerror(NETERROR));
+			/* Report the unusable descriptors so their owners tear them down.
+			   Collected first, because dispatching can modify 'sockets'. */
+			std::vector<socket_t> bad;
+			for (std::vector<SocketBase*>::iterator b = sockets.begin(); b != sockets.end(); b++)
+			{
+				const socket_t fd = (*b)->getFD();
+				if (fd != INVALID_SOCKET && !fd_is_usable(fd)) bad.push_back(fd);
+			}
+
+			QERR("Select: %lu stale descriptor(s) in the set; reporting them as errors",
+			     (unsigned long) bad.size());
+
+			for (size_t n = 0; n < bad.size(); n++)
+				dispatch(bad[n], MError);
+
+			return;
 		}
+
+		QERR("Select error: %i, %s", NETERROR, strerror(NETERROR));
 		return;
 	}
 
@@ -157,6 +199,7 @@ void Samurai::IO::Net::SelectSocketMonitor::wait(int time_ms) {
 		int trig = 0;
 		if (FD_ISSET(fd, &wfds)) trig |= MWrite;
 		if (FD_ISSET(fd, &rfds)) trig |= MRead;
+		if (FD_ISSET(fd, &efds)) trig |= MUrgent;
 
 		if (!trig) continue;
 
