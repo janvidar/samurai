@@ -86,7 +86,8 @@ bool Samurai::Crypto::Digest::HashValue::getFormattedString(enum Format format, 
 		   all that stands between it and the rest of the stack. */
 		if (buflen < ((m_size*8 + 4) / 5) + 1)
 			return false;
-		base32_encode((unsigned char*) m_data, m_size, (char*) buf);
+		if (!base32_encode((unsigned char*) m_data, m_size, (char*) buf, buflen))
+			return false;
 
 	} else {
 		return false;

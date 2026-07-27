@@ -28,10 +28,11 @@ Samurai::Crypto::Digest::Hash::~Hash()
 	delete[] m_current_block;
 }
 
-void Samurai::Crypto::Digest::Hash::update(uint8_t* data, uint64_t length)
+void Samurai::Crypto::Digest::Hash::update(const void* data_, size_t length)
 {
-	if (!data || !length || m_finalized) return;
-	
+	if (!data_ || !length || m_finalized) return;
+
+	const uint8_t* data = (const uint8_t*) data_;
 	size_t offset = 0;
 	while (offset < length)
 	{
