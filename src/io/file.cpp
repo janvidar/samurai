@@ -68,13 +68,13 @@ class FileBase
 
 Samurai::IO::File::File(const char* path) : info(0), temp(""), fd(-1)
 {
-	filename = std::string(resolvePath(path));
+	filename = resolvePath(std::string(path));
 }
 
 
 Samurai::IO::File::File(const std::string& path) : info(0), temp(""), fd(-1)
 {
-	filename = std::string(resolvePath(path.c_str()));
+	filename = resolvePath(path);
 }
 
 
@@ -185,7 +185,7 @@ bool Samurai::IO::File::close()
 
 bool Samurai::IO::File::rename(const std::string& new_name)
 {
-	std::string new_filename = std::string(resolvePath(new_name.c_str()));
+	std::string new_filename = resolvePath(new_name);
 	int ret = ::rename(filename.c_str(), new_filename.c_str());
 	if (ret == 0)
 	{
@@ -434,21 +434,21 @@ Samurai::TimeStamp Samurai::IO::File::getTimeAccessed() const
 
 int Samurai::IO::File::mkdir(const char* dirname, int mode)
 {
-	const char* dir = resolvePath(dirname);
+	const std::string dir = resolvePath(dirname ? dirname : "");
 #ifdef SAMURAI_UNIX
-	return ::mkdir(dir, mode);
+	return ::mkdir(dir.c_str(), mode);
 #endif
 
 #ifdef SAMURAI_WINDOWS
 	(void) mode; // Ignore mode
-	return ::mkdir(dir);
+	return ::mkdir(dir.c_str());
 #endif
 }
 
 int Samurai::IO::File::rmdir(const char* dirname)
 {
-	const char* dir = resolvePath(dirname);
-	return ::rmdir(dir);
+	const std::string dir = resolvePath(dirname ? dirname : "");
+	return ::rmdir(dir.c_str());
 }
 
 /**
@@ -542,18 +542,19 @@ char* fix_slash(char* path)
 
 #endif
 
-const char* Samurai::IO::File::resolvePath(const char* oldpath) {
+std::string Samurai::IO::File::resolvePath(const std::string& input) {
 
 // 	printf("Samurai::IO::File::resolvePath(): oldpath=%s\n", oldpath);
 
-	static char path[PATH_BUF_SIZE] = { 0, }; // FIXME: static
-	static char copy[PATH_BUF_SIZE] = { 0, }; // FIXME: static
-	path[0] = '\0';
-	copy[0] = '\0';
+	/* NOTE: These were static, so the returned pointer aliased across calls
+	   and the function was neither reentrant nor thread safe. They are locals
+	   now and the result is returned by value. */
+	char path[PATH_BUF_SIZE] = { 0, };
+	char copy[PATH_BUF_SIZE] = { 0, };
 
-	if (!oldpath) oldpath = "";
+	const char* oldpath = input.c_str();
 
-	size_t len = strlen(oldpath);
+	size_t len = input.size();
 	if (len > MAX_FILE_NAME) len = MAX_FILE_NAME;
 	memcpy(path, oldpath, len);
 	path[len] = '\0';
@@ -700,7 +701,7 @@ const char* Samurai::IO::File::resolvePath(const char* oldpath) {
 
 // 	printf("   -- result: %s\n", path);
 
-	return path;
+	return std::string(path);
 }
 
 

@@ -24,7 +24,7 @@ UPnP::PacketHeader::PacketHeader(const std::string& name, int value)
 	: m_name(name)
 	, m_value("")
 {
-	m_value += quickdc_itoa(value, 10);
+	m_value += std::to_string(value);
 }
 
 	

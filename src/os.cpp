@@ -33,8 +33,8 @@ class OSBase
 		virtual size_t getMaxOpenSockets()  = 0;
 		virtual time_t getUptime()          = 0;
 		virtual pid_t getProcessID()        = 0;
-		virtual const char* getHostName()   = 0;
-		virtual const char* getDomainName() = 0;
+		virtual std::string getHostName()   = 0;
+		virtual std::string getDomainName() = 0;
 		virtual const char* getName()       = 0;
 		virtual const char* getVersion()    = 0;
 };
@@ -49,8 +49,8 @@ class OSUnix : public OSBase
 		size_t getMaxOpenSockets();
 		time_t getUptime();
 		pid_t getProcessID();
-		const char* getHostName();
-		const char* getDomainName();
+		std::string getHostName();
+		std::string getDomainName();
 		const char* getName();
 		const char* getVersion();
 		
@@ -70,8 +70,8 @@ class OSWindows : public OSBase
 		size_t getMaxOpenSockets();
 		time_t getUptime();
 		pid_t getProcessID();
-		const char* getHostName();
-		const char* getDomainName();
+		std::string getHostName();
+		std::string getDomainName();
 		const char* getName();
 		const char* getVersion();
 };
@@ -120,24 +120,25 @@ time_t Samurai::OSUnix::getUptime()
 	return 0;
 }
 
-const char* Samurai::OSUnix::getHostName()
+std::string Samurai::OSUnix::getHostName()
 {
-	static char hostname[MAXHOSTNAMELEN] = {0, };
+	/* NOTE: was a static buffer, so the returned pointer aliased across calls. */
+	char hostname[MAXHOSTNAMELEN] = {0, };
 	if (gethostname(hostname, MAXHOSTNAMELEN-1) == 0) {
 		hostname[MAXHOSTNAMELEN-1] = 0;
-		return hostname;
+		return std::string(hostname);
 	}
-	return "localhost";
+	return std::string("localhost");
 }
 
-const char* Samurai::OSUnix::getDomainName()
+std::string Samurai::OSUnix::getDomainName()
 {
-	static char hostname[MAXHOSTNAMELEN];
+	char hostname[MAXHOSTNAMELEN] = {0, };
 	if (getdomainname(hostname, MAXHOSTNAMELEN) == 0) {
 		hostname[MAXHOSTNAMELEN-1] = 0;
-		return hostname;
+		return std::string(hostname);
 	}
-	return "localdomain";
+	return std::string("localdomain");
 }
 
 pid_t Samurai::OSUnix::getProcessID()
@@ -175,7 +176,7 @@ time_t Samurai::OSWindows::getUptime()
 	return 0; // FIXME
 }
 
-const char* Samurai::OSWindows::getHostName()
+std::string Samurai::OSWindows::getHostName()
 {
 /*
 	static char hostname[MAXHOSTNAMELEN] = { 0, };
@@ -187,7 +188,7 @@ const char* Samurai::OSWindows::getHostName()
 	return "localhost";
 }
 
-const char* Samurai::OSWindows::getDomainName()
+std::string Samurai::OSWindows::getDomainName()
 {
 	return "localdomain";
 }
@@ -239,12 +240,12 @@ time_t Samurai::OS::getUptime()
 	return getInstance()->getUptime();
 }
 
-const char* Samurai::OS::getHostName()
+std::string Samurai::OS::getHostName()
 {
 	return getInstance()->getHostName();
 }
 
-const char* Samurai::OS::getDomainName()
+std::string Samurai::OS::getDomainName()
 {
 	return getInstance()->getDomainName();
 }

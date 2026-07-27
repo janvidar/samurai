@@ -6,6 +6,7 @@
 #include <samurai/samurai.h>
 #include <string.h>
 #include <samurai/io/buffer.h>
+#include <string>
 #include <samurai/io/device.h>
 #include <stdlib.h>
 
@@ -77,13 +78,13 @@ void Samurai::IO::Buffer::append(char c) {
 }
 
 void Samurai::IO::Buffer::append(int n) {
-	const char* num = quickdc_itoa(n, 10);
-	append(num, strlen(num));
+	const std::string num = std::to_string(n);
+	append(num.data(), num.size());
 }
 
 void Samurai::IO::Buffer::append(uint64_t n) {
-	const char* num = quickdc_ulltoa(n);
-	append(num, strlen(num));
+	const std::string num = std::to_string(n);
+	append(num.data(), num.size());
 }
 
 void Samurai::IO::Buffer::append(Samurai::IO::Buffer* buffer, size_t len) {

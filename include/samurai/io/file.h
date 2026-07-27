@@ -146,7 +146,7 @@ class File {
 		 * 
 		 * Also any /../ are followed, /./ are removed etc.
 		 */
-		static const char* resolvePath(const char*);
+		static std::string resolvePath(const std::string& path);
 		
 		bool operator==(const File& file);
 		

@@ -7,6 +7,7 @@
 #define HAVE_OS_ABSTRACTIONS_H
 
 #include <samurai/samurai.h>
+#include <string>
 
 namespace Samurai {
 
@@ -16,8 +17,8 @@ class OS {
 	public:
 		static size_t getMaxOpenSockets();
 		static time_t getUptime();
-		static const char* getHostName();
-		static const char* getDomainName();
+		static std::string getHostName();
+		static std::string getDomainName();
 		static pid_t getProcessID();
 		
 		/**
