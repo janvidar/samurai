@@ -61,6 +61,12 @@ bool Samurai::IO::Net::PollSocketMonitor::isValid()
 }
 
 
+/*
+ * NOTE: the descriptor array is kept compact - entries in [0, num) are live -
+ * so poll() is handed 'num' rather than 'max'. It used to be given the whole
+ * 4096 entry array on every call whatever the real count, which is a syscall
+ * argument the kernel has to walk in full.
+ */
 void Samurai::IO::Net::PollSocketMonitor::internal_add(Samurai::IO::Net::SocketBase* socket)
 {
 	int trigger = socket->getMonitorTrigger();
@@ -68,16 +74,13 @@ void Samurai::IO::Net::PollSocketMonitor::internal_add(Samurai::IO::Net::SocketB
 	if (trigger & MRead)  ev |= POLLIN;
 	if (trigger & MWrite) ev |= POLLOUT;
 	
-	size_t n = 0;
-	for (; n < max; n++)
-		if (list[n].fd == -1)
-			break;
-	
-	if (n == max)
+	if (num == max)
 	{
 		QERR("Cannot add socket, list is full!");
-		return; // not found!
+		return;
 	}
+
+	const size_t n = num;
 
 	list[n].fd = socket->getFD();
 	list[n].events = ev;
@@ -91,27 +94,34 @@ void Samurai::IO::Net::PollSocketMonitor::internal_add(Samurai::IO::Net::SocketB
 
 void Samurai::IO::Net::PollSocketMonitor::internal_remove(Samurai::IO::Net::SocketBase* socket) {
 	size_t n = 0;
-	for (; n < max; n++)
-		if (list[n].fd == socket->getFD())
+	for (; n < num; n++)
+		if (sockets[n] == socket)
 			break;
-	
-	if (n == max) return;  // not found
-	
-	list[n].fd = INVALID_SOCKET;
-	list[n].events = 0;
-	list[n].revents = 0;
-	sockets[n] = 0;
+
+	if (n == num) return;  // not found
+
+	/* Move the last live entry into the hole so the array stays compact. */
 	num--;
+	if (n != num)
+	{
+		list[n] = list[num];
+		sockets[n] = sockets[num];
+	}
+
+	list[num].fd = INVALID_SOCKET;
+	list[num].events = 0;
+	list[num].revents = 0;
+	sockets[num] = 0;
 }
 
 
 void Samurai::IO::Net::PollSocketMonitor::internal_modify(Samurai::IO::Net::SocketBase* socket) {
 	size_t n = 0;
-	for (; n < max; n++)
-		if (list[n].fd == socket->getFD())
+	for (; n < num; n++)
+		if (sockets[n] == socket)
 			break;
 
-	if (n == max) return; // not found
+	if (n == num) return; // not found
 	
 	int trigger = socket->getMonitorTrigger();
 	
@@ -124,7 +134,9 @@ void Samurai::IO::Net::PollSocketMonitor::internal_modify(Samurai::IO::Net::Sock
 
 void Samurai::IO::Net::PollSocketMonitor::wait(int time_ms)
 {
-	int ret = ::poll(list, max, time_ms);
+	if (num == 0) return;
+
+	int ret = ::poll(list, num, time_ms);
 	if (ret == 0) return;
 	
 	if (ret == -1)
@@ -137,11 +149,11 @@ void Samurai::IO::Net::PollSocketMonitor::wait(int time_ms)
 	}
 	
 	size_t act_num = 0;
-	for (size_t n = 0; n < max; n++)
+	for (size_t n = 0; n < num; n++)
 	{
 		Samurai::IO::Net::SocketBase* sock = sockets[n];
 		if (!sock) continue;
-		
+
 		int trig = 0;
 		const short f = list[n].revents;
 		if (f & POLLOUT) trig |= MWrite;
