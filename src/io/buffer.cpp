@@ -7,6 +7,7 @@
 #include <string.h>
 #include <samurai/io/buffer.h>
 #include <string>
+#include <bit>
 #include <samurai/io/device.h>
 #include <stdlib.h>
 #include <new>
@@ -251,24 +252,23 @@ char Samurai::IO::Buffer::at(size_t offset) const {
 			(((x) & 0xff00000000000000ULL) >> 56)))
 
 /*
- * NOTE: The guard is SAMURAI_BIG_ENDIAN, as defined by samurai/defines.h.
- * This used to read SAMURAI_BIGENDIAN, which is never defined anywhere, so
- * every conversion below silently did nothing on big endian hosts.
+ * NOTE: This used to be #ifdef SAMURAI_BIG_ENDIAN around every conversion, and
+ * before that a misspelled SAMURAI_BIGENDIAN that is defined nowhere - so the
+ * byte swapping silently did nothing on big endian hosts and no compiler ever
+ * said so. std::endian is a value the compiler supplies, so a typo here is a
+ * build error rather than a wrong result on a machine nobody tests on.
  */
+static constexpr bool host_is_big_endian = (std::endian::native == std::endian::big);
 
 void Samurai::IO::Buffer::appendBinary(uint16_t number_, BinaryMode endiannes) {
 	uint16_t number = number_;
 	switch (endiannes) {
 		case LittleEndian:
-#ifdef SAMURAI_BIG_ENDIAN
-			number = SWAP16(number);
-#endif
+			if constexpr (host_is_big_endian) number = SWAP16(number);
 			break;
 
 		case BigEndian:
-#ifndef SAMURAI_BIG_ENDIAN
-			number = SWAP16(number);
-#endif
+			if constexpr (!host_is_big_endian) number = SWAP16(number);
 			break;
 		case NativeEndian:
 			break;
@@ -280,15 +280,11 @@ void Samurai::IO::Buffer::appendBinary(uint32_t number_, BinaryMode endiannes) {
 	uint32_t number = number_;
 	switch (endiannes) {
 		case LittleEndian:
-#ifdef SAMURAI_BIG_ENDIAN
-			number = SWAP32(number);
-#endif
+			if constexpr (host_is_big_endian) number = SWAP32(number);
 			break;
 
 		case BigEndian:
-#ifndef SAMURAI_BIG_ENDIAN
-			number = SWAP32(number);
-#endif
+			if constexpr (!host_is_big_endian) number = SWAP32(number);
 			break;
 		case NativeEndian:
 			break;
@@ -300,15 +296,11 @@ void Samurai::IO::Buffer::appendBinary(uint64_t number_, BinaryMode endiannes) {
 	uint64_t number = number_;
 	switch (endiannes) {
 		case LittleEndian:
-#ifdef SAMURAI_BIG_ENDIAN
-			number = SWAP64(number);
-#endif
+			if constexpr (host_is_big_endian) number = SWAP64(number);
 			break;
 
 		case BigEndian:
-#ifndef SAMURAI_BIG_ENDIAN
-			number = SWAP64(number);
-#endif
+			if constexpr (!host_is_big_endian) number = SWAP64(number);
 			break;
 		case NativeEndian:
 			break;
@@ -339,15 +331,11 @@ bool Samurai::IO::Buffer::popBinary(size_t offset, uint16_t& number, BinaryMode 
 	memcpy(&number, &buf[offset], sizeof(number));
 	switch (endianness) {
 		case LittleEndian:
-#ifdef SAMURAI_BIG_ENDIAN
-			number = SWAP16(number);
-#endif
+			if constexpr (host_is_big_endian) number = SWAP16(number);
 			break;
 
 		case BigEndian:
-#ifndef SAMURAI_BIG_ENDIAN
-			number = SWAP16(number);
-#endif
+			if constexpr (!host_is_big_endian) number = SWAP16(number);
 			break;
 
 		case NativeEndian:
@@ -363,15 +351,11 @@ bool Samurai::IO::Buffer::popBinary(size_t offset, uint32_t& number, BinaryMode 
 	memcpy(&number, &buf[offset], sizeof(number));
 	switch (endianness) {
 		case LittleEndian:
-#ifdef SAMURAI_BIG_ENDIAN
-			number = SWAP32(number);
-#endif
+			if constexpr (host_is_big_endian) number = SWAP32(number);
 			break;
 
 		case BigEndian:
-#ifndef SAMURAI_BIG_ENDIAN
-			number = SWAP32(number);
-#endif
+			if constexpr (!host_is_big_endian) number = SWAP32(number);
 			break;
 
 		case NativeEndian:
@@ -386,15 +370,11 @@ bool Samurai::IO::Buffer::popBinary(size_t offset, uint64_t& number, BinaryMode 
 	memcpy(&number, &buf[offset], sizeof(number));
 	switch (endianness) {
 		case LittleEndian:
-#ifdef SAMURAI_BIG_ENDIAN
-			number = SWAP64(number);
-#endif
+			if constexpr (host_is_big_endian) number = SWAP64(number);
 			break;
 
 		case BigEndian:
-#ifndef SAMURAI_BIG_ENDIAN
-			number = SWAP64(number);
-#endif
+			if constexpr (!host_is_big_endian) number = SWAP64(number);
 			break;
 
 		case NativeEndian:
