@@ -5,6 +5,7 @@
 
 #include <samurai/samurai.h>
 #include <samurai/io/net/socketbase.h>
+#include <samurai/error.h>
 #include <samurai/io/net/inetaddress.h>
 #include <samurai/io/net/socketaddress.h>
 #include <samurai/io/net/socketmonitor.h>
@@ -69,6 +70,14 @@ const Samurai::IO::Net::InetAddress* Samurai::IO::Net::SocketBase::getLocalAddre
 }
 
 bool Samurai::IO::Net::SocketBase::bind(Samurai::IO::Net::SocketAddress* sa) {
+	std::error_code ec;
+	return bind(sa, ec);
+}
+
+
+bool Samurai::IO::Net::SocketBase::bind(Samurai::IO::Net::SocketAddress* sa, std::error_code& ec) {
+	ec.clear();
+
 	InetSocketAddress* isa = dynamic_cast<InetSocketAddress*>(sa);
 	if (isa && sd != INVALID_SOCKET) {
 		if (isa->getAddress()->getType() == Samurai::IO::Net::InetAddress::IPv4) {
@@ -82,6 +91,7 @@ bool Samurai::IO::Net::SocketBase::bind(Samurai::IO::Net::SocketAddress* sa) {
 			int ret = ::bind(sd, (sockaddr*) &localaddr, len);
 			if (ret == SOCKET_ERROR)
 			{
+				ec = Samurai::system_error(NETERROR);
 				QDBG("Bind on IPv4 failed. Error %d: %s", NETERROR, strerror(NETERROR));
 				return false;
 			}
@@ -97,6 +107,7 @@ bool Samurai::IO::Net::SocketBase::bind(Samurai::IO::Net::SocketAddress* sa) {
 			int ret = ::bind(sd, (sockaddr*) &localaddr, len);
 			if (ret == SOCKET_ERROR)
 			{
+				ec = Samurai::system_error(NETERROR);
 				QDBG("Bind on IPv6 failed. Error %d: %s", NETERROR, strerror(NETERROR));
 				return false;
 			}
@@ -104,6 +115,8 @@ bool Samurai::IO::Net::SocketBase::bind(Samurai::IO::Net::SocketAddress* sa) {
 			
 		}
 	}
+
+	ec = Samurai::system_error(EINVAL);
 	return false;
 }
 
@@ -148,6 +161,14 @@ bool Samurai::IO::Net::SocketBase::setKeepAlive(bool toggle) {
 
 
 bool Samurai::IO::Net::SocketBase::setNonBlocking(bool toggle) {
+	std::error_code ec;
+	return setNonBlocking(toggle, ec);
+}
+
+
+bool Samurai::IO::Net::SocketBase::setNonBlocking(bool toggle, std::error_code& ec) {
+	ec.clear();
+
 	int ret = SOCKET_ERROR;
 #ifdef SAMURAI_POSIX
 #ifdef SAMURAI_OS_SOLARIS
@@ -163,7 +184,8 @@ bool Samurai::IO::Net::SocketBase::setNonBlocking(bool toggle) {
 #else
 	int on = toggle ? 1 : 0;
 	ret = ioctl(sd, FIONBIO, &on);
-	return ret != SOCKET_ERROR;
+	if (ret == SOCKET_ERROR) { ec = Samurai::system_error(NETERROR); return false; }
+	return true;
 #endif
 #endif
 
