@@ -8,16 +8,8 @@
 
 #include <samurai/samurai.h>
 
-// FIXME: Remove all platform specifcs here!
-
-#ifdef SAMURAI_UNIX
-#include <sys/types.h>
-#include <dirent.h>
-#endif
-
-#ifdef SAMURAI_OS_WINDOWS
-#include <io.h>
-#endif
+#include <filesystem>
+#include <string>
 
 namespace Samurai {
 namespace IO {
@@ -55,21 +47,13 @@ class Directory {
 		bool next(Samurai::IO::File& entry);
 
 	protected:
-		Samurai::IO::File* file;
-#ifdef 	SAMURAI_UNIX
-		DIR* dir;
-		struct dirent* entry_data;
-#endif
-
-#ifdef SAMURAI_OS_WINDOWS
-		struct _finddata_t* dir;
-#endif
-
-
-	private:
-		/* Owns 'file' and 'iterator': copying would double free both. */
-		Directory(const Directory&);
-		Directory& operator=(const Directory&);
+		/* NOTE: this used to be an opendir()/readdir() loop behind
+		   SAMURAI_UNIX with an unimplemented _finddata_t stub for Windows.
+		   std::filesystem::directory_iterator is portable, so the platform
+		   conditionals are gone and Windows works. */
+		std::string path;
+		std::filesystem::directory_iterator iter;
+		bool opened;
 };
 
 }

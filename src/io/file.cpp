@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <samurai/io/file.h>
 #include <samurai/error.h>
+#include <filesystem>
 #include <samurai/io/buffer.h>
 
 #include <unistd.h>
@@ -428,29 +429,28 @@ bool Samurai::IO::File::matchExtension(const std::string& other) const
 	return ext == other;
 }
 
+/* NOTE: S_ISREG and friends are only guaranteed non-zero, not 1, so the
+   '== 1' these used to do was wrong on platforms that return the masked
+   value. std::filesystem answers the question directly. */
 bool Samurai::IO::File::isRegular() const
 {
-	if (!info_valid) getInfo();
-	if (!info_valid) return 0;
-	return (S_ISREG(info.st_mode) == 1);
+	std::error_code ec;
+	return std::filesystem::is_regular_file(filename, ec) && !ec;
 }
 
+/* NOTE: this could never return true. It tested the cached stat(), which
+   follows symlinks, so a link always reported as whatever it pointed at.
+   is_symlink() has lstat() semantics. */
 bool Samurai::IO::File::isSymlink() const
 {
-#ifndef SAMURAI_WINDOWS
-	if (!info_valid) getInfo();
-	if (!info_valid) return 0;
-	return (S_ISLNK(info.st_mode) == 1);
-#else
-	return false;
-#endif
+	std::error_code ec;
+	return std::filesystem::is_symlink(std::filesystem::symlink_status(filename, ec)) && !ec;
 }
 
 bool Samurai::IO::File::isDirectory() const
 {
-	if (!info_valid) getInfo();
-	if (!info_valid) return 0;
-	return (S_ISDIR(info.st_mode) == 1);
+	std::error_code ec;
+	return std::filesystem::is_directory(filename, ec) && !ec;
 }
 
 bool Samurai::IO::File::exists(const char* path)
@@ -553,237 +553,50 @@ int Samurai::IO::File::rmdir(const char* dirname)
  * 5) Remove trailing '/' (if any).
  */
 
-#define PATHSEP '/'
-#define PATHSEP2 "/"
-#define PATHSEP_DOUBLE "//"
-#define PATHSEP_NULL "/./"
-#define PATHSEP_UP "/../"
-
-#define MAX_FILE_NAME 4096
-
-// The working buffers hold the input plus a getcwd() or HOME prefix plus a
-// separator, so they need room for two full names rather than one.
-#define PATH_BUF_SIZE (MAX_FILE_NAME * 2 + 16)
-
-// t_len < num underflows and runs off the end of the buffer.
-#define SQUEEZE_LEFT(str, atpos, num) { \
-	size_t t_len = strlen(str); \
-	size_t n = atpos; \
-	if (t_len >= (size_t) (num)) { \
-		for (; n < t_len-(num); n++) \
-			str[n] = str[n+(num)]; \
-		str[n] = '\0'; \
-	} \
-}
-
-// Bounded replacements for the strcat()/strcpy() calls in resolvePath().
-// Every one of those appended caller or environment supplied data to a fixed
-// buffer without checking the room left in it.
-static void path_append(char* dst, size_t dstsize, const char* src)
-{
-	if (!dstsize || !src) return;
-
-	size_t used = strlen(dst);
-	if (used + 1 >= dstsize) return;
-
-	size_t avail = dstsize - used - 1;
-	size_t len = strlen(src);
-	if (len > avail) len = avail;
-
-	memcpy(&dst[used], src, len);
-	dst[used + len] = '\0';
-}
-
-static void path_set(char* dst, size_t dstsize, const char* src)
-{
-	if (!dstsize) return;
-	dst[0] = '\0';
-	path_append(dst, dstsize, src);
-}
-
-#ifdef SAMURAI_WINDOWS
-char* fix_backslash(char* path)
-{
-	for (size_t n = 0; n < strlen(path); n++)
-	{
-		if (path[n] == '\\')
-			path[n] = '/';
-	}
-	return path;
-}
-
-char* fix_slash(char* path)
-{
-	for (size_t n = 0; n < strlen(path); n++)
-	{
-		if (path[n] == '/')
-			path[n] = '\\';
-	}
-	return path;
-}
-
-#endif
-
+/**
+ * NOTE: This was ~150 lines of hand-rolled path arithmetic over two fixed
+ * buffers - the source of a global-buffer-overflow, a SQUEEZE_LEFT length
+ * underflow and an out-of-bounds read on the empty path. std::filesystem does
+ * the normalisation; the only thing it does not do is '~', so that stays.
+ */
 std::string Samurai::IO::File::resolvePath(const std::string& input) {
+	std::string work = input;
 
-// 	printf("Samurai::IO::File::resolvePath(): oldpath=%s\n", oldpath);
-
-	/* NOTE: These were static, so the returned pointer aliased across calls
-	   and the function was neither reentrant nor thread safe. They are locals
-	   now and the result is returned by value. */
-	char path[PATH_BUF_SIZE] = { 0, };
-	char copy[PATH_BUF_SIZE] = { 0, };
-
-	const char* oldpath = input.c_str();
-
-	size_t len = input.size();
-	if (len > MAX_FILE_NAME) len = MAX_FILE_NAME;
-	memcpy(path, oldpath, len);
-	path[len] = '\0';
-	path_append(path, sizeof(path), PATHSEP2);
-
-#ifdef SAMURAI_WINDOWS
-	char drive = 0;
-	fix_backslash(path);
-#endif
-
-#ifdef SAMURAI_UNIX
-	// If the path starts with a '~', replace it with the home directory.
-	if (path[0] == '~' && (path[1] == '/' || path[1] == PATHSEP))
+	// Expand a leading '~' to the home directory.
+	if (!work.empty() && work[0] == '~' && (work.size() == 1 || work[1] == '/'))
 	{
-		char* prepend = getenv("HOME");
-		if (prepend) {
-			path_set(copy, sizeof(copy), prepend);
-			path_append(copy, sizeof(copy), &path[1]);
-			path_set(path, sizeof(path), copy);
-		} else {
-			SQUEEZE_LEFT(path, 0, 1);
-		}
-	}
-	else if (path[0] != '/')
-	{ // path is relative to working directory
-		if (getcwd(copy, sizeof(copy))) {
-			path_append(copy, sizeof(copy), PATHSEP2);
-			path_append(copy, sizeof(copy), path);
-			path_set(path, sizeof(path), copy);
-		}
-	}
-	
-#endif
 #ifdef SAMURAI_WINDOWS
-	// If the path starts with a '~', replace it with the home directory.
-	if (path[0] == '~' && (path[1] == '/' || path[1] == PATHSEP))
+		const char* home = getenv("USERPROFILE");
+#else
+		const char* home = getenv("HOME");
+#endif
+		if (home)
+			work = std::string(home) + work.substr(1);
+		else
+			work = work.substr(1);
+	}
+
+	std::error_code ec;
+	std::filesystem::path p(work);
+
+	/* absolute() needs the current directory, which can fail (a deleted cwd,
+	   or one we cannot read). Fall back to lexical normalisation rather than
+	   returning something half-resolved. */
+	if (p.is_relative())
 	{
-		char* prepend = getenv("USERPROFILE");
-		if (prepend)
-		{
-			char* tmp = strdup(prepend);
-			fix_backslash(tmp);
-			path_set(copy, sizeof(copy), tmp);
-			path_append(copy, sizeof(copy), &path[1]);
-			path_set(path, sizeof(path), copy);
-			free(tmp);
-		} else {
-			SQUEEZE_LEFT(path, 0, 1);
-		}
-	}
-// 	if (path[1] == ':' && (path[0] >= 'a' && path[0] <= 'z') || (path[0] >= 'A' && path[0] <= 'Z'))
-// 	{
-// 		drive = path[0];
-// 		SQUEEZE_LEFT(path, 0, 2);	
-// 	}
-	else if (path[0] != '/' && path[1] != ':')
-	{
-		if (getcwd(copy, sizeof(copy))) {
-			fix_backslash(copy);
-			path_append(copy, sizeof(copy), PATHSEP2);
-			path_append(copy, sizeof(copy), path);
-			path_set(path, sizeof(path), copy);
-		}
+		std::filesystem::path abs = std::filesystem::absolute(p, ec);
+		if (!ec) p = abs;
 	}
 
-#endif
+	std::string out = p.lexically_normal().string();
 
+	/* lexically_normal() leaves a trailing separator on directory-like paths;
+	   the previous implementation stripped it and callers compare these. */
+	while (out.size() > 1 && (out[out.size()-1] == '/' || out[out.size()-1] == '\\'))
+		out.erase(out.size()-1);
 
-#ifdef SAMURAI_WINDOWS
- 	if (path[1] == ':' && (path[0] >= 'a' && path[0] <= 'z') || (path[0] >= 'A' && path[0] <= 'Z'))
- 	{
- 		drive = path[0];
- 		SQUEEZE_LEFT(path, 0, 2);	
-	} else {
-		char* sysdrive = getenv("SamuraiDrive");
-		if (sysdrive)
-		{
-			drive = sysdrive[0];
-		} else {
-			QERR("Unable to detect system drive. Assuming C:");
-			drive = 'C'; // Last resort
-		}
-	}
-#endif
-
-	// Add a leading '/' (bodge)
-	path_set(copy, sizeof(copy), PATHSEP2);
-	path_append(copy, sizeof(copy), path);
-	path_set(path, sizeof(path), copy);
-
-	// replace any '//' with '/'.
-	char* pos = 0;
-	while ((pos = strstr(path, PATHSEP_DOUBLE))) {
-		SQUEEZE_LEFT(pos, 0, 1);
-	}
-	
-	// replace any '/./' with '/'.
-	while ((pos = strstr(path, PATHSEP_NULL))) {
-		SQUEEZE_LEFT(pos, 0, 2);
-	}
-
-	// figure out the real path when we have "/../" in the path.
-	// printf("sqeeze    0: '%s'\n", oldpath);
-	path_set(copy, sizeof(copy), path);
-	while ((pos = strstr(copy, PATHSEP_UP))) {
-//		printf("sqeeze    1: '%s'\n", pos);
-		SQUEEZE_LEFT(pos, 0, 3); /* Remove "/.." keep the '/' */
-// 		printf("sqeeze    2: '%s'\n", pos);
-		pos[0] = '\0';           /* Turn the '/' into '\0'    */
-		
-// 		printf("sqeeze    3: '%s'\n", copy);
-		
-		char* npos = strrchr(copy, PATHSEP);
-		if (npos) {
-// 			printf("sqeeze 1  4: '%s'\n", npos);
-			npos[1] = '\0';
-			path_set(path, sizeof(path), copy);
-			path_append(path, sizeof(path), &pos[1]);
-		} else {
-			path_set(path, sizeof(path), &pos[1]);
-		}
-		
-// 		printf("sqeeze    5: '%s'\n", path);
-		path_set(copy, sizeof(copy), path);
-	}
-	
-	// remove any trailing /  (n == 0 reads and writes path[-1])
-	size_t n = strlen(path);
-	if (n && path[n-1] == PATHSEP) path[n-1] = '\0';
-
-	// make sure path is at least "/" if empty.
-	if (!strlen(path)) {
-		path_append(path, sizeof(path), PATHSEP2);
-	}
-
-#ifdef SAMURAI_WINDOWS
-	copy[0] = drive;
-	copy[1] = ':';
-	copy[2] = '\0';
-	path_append(copy, sizeof(copy), path);
-	// fix_slash(copy);
-	path_set(path, sizeof(path), copy);
-#endif
-
-// 	printf("   -- result: %s\n", path);
-
-	return std::string(path);
+	if (out.empty()) out = "/";
+	return out;
 }
 
 
