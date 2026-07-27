@@ -7,6 +7,7 @@
 #include <string.h>
 #include <samurai/io/buffer.h>
 #include <string>
+#include <string_view>
 #include <bit>
 #include <samurai/io/device.h>
 #include <stdlib.h>
@@ -21,19 +22,20 @@
 #define SAMURAI_HAVE_GNU_MEMSEARCH
 #endif
 
-Samurai::IO::Buffer::Buffer(size_t bufsize_) : buf(bufsize_), len(0), initialCapasity(bufsize_) {
+Samurai::IO::Buffer::Buffer(size_t bufsize_) : buf(bufsize_), head(0), len(0), initialCapasity(bufsize_) {
 }
 
-Samurai::IO::Buffer::Buffer(const Samurai::IO::Buffer& copy) : buf(copy.buf), len(copy.len), initialCapasity(copy.initialCapasity) {
+Samurai::IO::Buffer::Buffer(const Samurai::IO::Buffer& copy) : buf(copy.buf), head(copy.head), len(copy.len), initialCapasity(copy.initialCapasity) {
 }
 
 
-Samurai::IO::Buffer::Buffer(const Samurai::IO::Buffer* copy) : buf(copy->buf), len(copy->len), initialCapasity(copy->initialCapasity) {
+Samurai::IO::Buffer::Buffer(const Samurai::IO::Buffer* copy) : buf(copy->buf), head(copy->head), len(copy->len), initialCapasity(copy->initialCapasity) {
 }
 
 Samurai::IO::Buffer& Samurai::IO::Buffer::operator=(const Samurai::IO::Buffer& copy) {
 	if (this == &copy) return *this;
 	buf = copy.buf;
+	head = copy.head;
 	len = copy.len;
 	initialCapasity = copy.initialCapasity;
 	return *this;
@@ -55,6 +57,10 @@ void Samurai::IO::Buffer::append(const char* data, size_t len_) {
 void Samurai::IO::Buffer::append(const std::string& string) {
 	/* NOTE: Must not go via the strlen() overload - a std::string is
 	   allowed to contain embedded NUL bytes. */
+	append(string.data(), string.size());
+}
+
+void Samurai::IO::Buffer::append(const std::string_view string) {
 	append(string.data(), string.size());
 }
 
@@ -82,32 +88,34 @@ void Samurai::IO::Buffer::append(uint64_t n) {
 
 void Samurai::IO::Buffer::append(Samurai::IO::Buffer* buffer, size_t len) {
 	size_t mylen = (len > buffer->size()) ? buffer->size() : len;
-	if (mylen) append(&buffer->buf[0], mylen);
+	if (mylen) append(&buffer->buf[buffer->head], mylen);
 }
 
 void Samurai::IO::Buffer::append(const Buffer& buffer)
 {
-	if (buffer.size()) append(&buffer.buf[0], buffer.size());
+	if (buffer.size()) append(&buffer.buf[buffer.head], buffer.size());
 }
 
 void Samurai::IO::Buffer::append(const Buffer& buffer, size_t len)
 {
 	size_t mylen = (len > buffer.size()) ? buffer.size() : len;
-	if (mylen) append(&buffer.buf[0], mylen);
+	if (mylen) append(&buffer.buf[buffer.head], mylen);
 }
 
 
 void Samurai::IO::Buffer::pop(char* data, size_t len_) {
-	if (len == 0) return;
-	size_t mylen = (len_ > len) ? len : len_;
-	memcpy(data, &buf[0], mylen);
+	const size_t live = len - head;
+	if (live == 0) return;
+	size_t mylen = (len_ > live) ? live : len_;
+	memcpy(data, &buf[head], mylen);
 }
 
 void Samurai::IO::Buffer::pop(char* data, size_t offset, size_t len_) {
-	if (offset >= len) return;
-	size_t available = len - offset;
+	const size_t live = len - head;
+	if (offset >= live) return;
+	size_t available = live - offset;
 	size_t mylen = (len_ > available) ? available : len_;
-	memcpy(data, &buf[offset], mylen);
+	memcpy(data, &buf[head + offset], mylen);
 }
 
 /**
@@ -116,31 +124,60 @@ void Samurai::IO::Buffer::pop(char* data, size_t offset, size_t len_) {
  * Returns 0 if the range is outside the buffer, or on allocation failure.
  */
 char* Samurai::IO::Buffer::memdup(size_t offset, size_t end) {
-	if (offset > end || end > len) return 0;
+	const size_t live = len - head;
+	if (offset > end || end > live) return 0;
 
 	size_t size = end - offset;
 	char* temp_buf = (char*) malloc(size + 1);
 	if (!temp_buf) return 0;
 
-	memcpy(temp_buf, &buf[offset], size);
+	memcpy(temp_buf, &buf[head + offset], size);
 	temp_buf[size] = 0;
 	return temp_buf;
 }
 
 
 std::string Samurai::IO::Buffer::pop(size_t len_) {
-	if (len == 0) return std::string("");
-	size_t mylen = (len_ > len) ? len : len_;
-	return std::string(&buf[0], mylen);
+	const size_t live = len - head;
+	if (live == 0) return std::string("");
+	size_t mylen = (len_ > live) ? live : len_;
+	return std::string(&buf[head], mylen);
 }
 
 void Samurai::IO::Buffer::remove(size_t count) {
-	size_t cnt = (count > len) ? len : count;
-	if (len > cnt) memmove(&buf[0], &buf[cnt], len-cnt);
-	len -= cnt;
+	const size_t live = len - head;
+	const size_t cnt = (count > live) ? live : count;
+
+	head += cnt;
+
+	/* Everything consumed: start over at the front rather than drifting. */
+	if (head == len) { head = 0; len = 0; return; }
+
+	/* Otherwise only pay for a move once the dead prefix dominates. */
+	if (head >= (buf.size() / 2)) compact();
 }
 
+void Samurai::IO::Buffer::compact() {
+	if (!head) return;
+
+	const size_t live = len - head;
+	if (live) memmove(&buf[0], &buf[head], live);
+	head = 0;
+	len = live;
+}
+
+
+void Samurai::IO::Buffer::reserve(size_t n) {
+	if (n) resize(n);
+}
+
+
 bool Samurai::IO::Buffer::resize(size_t needed) {
+	/* Reclaim the consumed prefix before asking for more memory: a long-lived
+	   connection would otherwise keep growing the allocation while most of it
+	   sat behind 'head'. */
+	if (head && len + needed > buf.size()) compact();
+
 	size_t required = len + needed;
 	if (required < len) return false; /* size_t overflow */
 	if (required <= buf.size()) return true;
@@ -165,43 +202,47 @@ bool Samurai::IO::Buffer::resize(size_t needed) {
 
 void Samurai::IO::Buffer::clear() {
 	buf.assign(initialCapasity, 0);
+	head = 0;
 	len = 0;
 }
 
 int Samurai::IO::Buffer::find(char achar, size_t offset) {
-	if (offset >= len) return -1;
+	const size_t live = len - head;
+	if (offset >= live) return -1;
 
-	char* pos = (char*) memchr(&buf[offset], achar, len - offset);
+	char* pos = (char*) memchr(&buf[head + offset], achar, live - offset);
 	if (!pos) return -1;
-	return (int) (pos - &buf[0]);
+	return (int) (pos - &buf[head]);
 }
 
 int Samurai::IO::Buffer::rfind(char achar) {
-	if (len == 0) return -1;
+	const size_t live = len - head;
+	if (live == 0) return -1;
 
 #ifdef SAMURAI_HAVE_GNU_MEMSEARCH
-	char* pos = (char*) memrchr(&buf[0], achar, len);
+	char* pos = (char*) memrchr(&buf[head], achar, live);
 	if (!pos) return -1;
-	return (int) (pos - &buf[0]);
+	return (int) (pos - &buf[head]);
 #else
 	/* NOTE: x is unsigned - 'x-- > 0' walks len-1 down to 0 inclusive. */
-	for (size_t x = len; x-- > 0; )
-		if (buf[x] == achar) return (int) x;
+	for (size_t x = live; x-- > 0; )
+		if (buf[head + x] == achar) return (int) x;
 	return -1;
 #endif
 }
 
 int Samurai::IO::Buffer::find(const char* str, size_t offset) {
 	size_t n = strlen(str);
+	const size_t live = len - head;
 
-	if (n == 0) return (offset <= len) ? (int) offset : -1;
-	if (offset >= len) return -1;
-	if (len - offset < n) return -1;
+	if (n == 0) return (offset <= live) ? (int) offset : -1;
+	if (offset >= live) return -1;
+	if (live - offset < n) return -1;
 
 #ifdef SAMURAI_HAVE_GNU_MEMSEARCH
-	char* pos = (char*) memmem(&buf[offset], len - offset, str, n);
+	char* pos = (char*) memmem(&buf[head + offset], live - offset, str, n);
 	if (!pos) return -1;
-	return (int) (pos - &buf[0]);
+	return (int) (pos - &buf[head]);
 #else
 	size_t p = offset;
 	for (;;) {
@@ -209,10 +250,10 @@ int Samurai::IO::Buffer::find(const char* str, size_t offset) {
 		if (found == -1) return -1;
 
 		p = (size_t) found;
-		if (len - p < n) return -1;
+		if (live - p < n) return -1;
 
 		/* NOTE: compare at p, not at the starting offset. */
-		if (memcmp(&buf[p], str, n) == 0) return (int) p;
+		if (memcmp(&buf[head + p], str, n) == 0) return (int) p;
 		p++;
 	}
 #endif
@@ -220,15 +261,15 @@ int Samurai::IO::Buffer::find(const char* str, size_t offset) {
 
 char* Samurai::IO::Buffer::ptr()
 {
-	return buf.empty() ? 0 : &buf[0];
+	return buf.empty() ? 0 : &buf[head];
 }
 
 char Samurai::IO::Buffer::operator[](size_t offset) const {
-	return buf[offset];
+	return buf[head + offset];
 }
 
 char Samurai::IO::Buffer::at(size_t offset) const {
-	return buf[offset];
+	return buf[head + offset];
 }
 
 #define SWAP16(x) ((uint16_t) (\
@@ -319,16 +360,16 @@ void Samurai::IO::Buffer::appendBinary(uint64_t number_, BinaryMode endiannes) {
  */
 
 bool Samurai::IO::Buffer::popBinary(size_t offset, uint8_t& number) {
-	if (offset > len || len - offset < sizeof(number)) return false;
+	if (offset > (len - head) || (len - head) - offset < sizeof(number)) return false;
 
-	memcpy(&number, &buf[offset], sizeof(number));
+	memcpy(&number, &buf[head + offset], sizeof(number));
 	return true;
 }
 
 bool Samurai::IO::Buffer::popBinary(size_t offset, uint16_t& number, BinaryMode endianness) {
-	if (offset > len || len - offset < sizeof(number)) return false;
+	if (offset > (len - head) || (len - head) - offset < sizeof(number)) return false;
 
-	memcpy(&number, &buf[offset], sizeof(number));
+	memcpy(&number, &buf[head + offset], sizeof(number));
 	switch (endianness) {
 		case LittleEndian:
 			if constexpr (host_is_big_endian) number = SWAP16(number);
@@ -346,9 +387,9 @@ bool Samurai::IO::Buffer::popBinary(size_t offset, uint16_t& number, BinaryMode 
 }
 
 bool Samurai::IO::Buffer::popBinary(size_t offset, uint32_t& number, BinaryMode endianness) {
-	if (offset > len || len - offset < sizeof(number)) return false;
+	if (offset > (len - head) || (len - head) - offset < sizeof(number)) return false;
 
-	memcpy(&number, &buf[offset], sizeof(number));
+	memcpy(&number, &buf[head + offset], sizeof(number));
 	switch (endianness) {
 		case LittleEndian:
 			if constexpr (host_is_big_endian) number = SWAP32(number);
@@ -365,9 +406,9 @@ bool Samurai::IO::Buffer::popBinary(size_t offset, uint32_t& number, BinaryMode 
 }
 
 bool Samurai::IO::Buffer::popBinary(size_t offset, uint64_t& number, BinaryMode endianness) {
-	if (offset > len || len - offset < sizeof(number)) return false;
+	if (offset > (len - head) || (len - head) - offset < sizeof(number)) return false;
 
-	memcpy(&number, &buf[offset], sizeof(number));
+	memcpy(&number, &buf[head + offset], sizeof(number));
 	switch (endianness) {
 		case LittleEndian:
 			if constexpr (host_is_big_endian) number = SWAP64(number);
