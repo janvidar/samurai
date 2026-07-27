@@ -23,7 +23,9 @@ Configuration
 
     -DCMAKE_BUILD_TYPE=Debug|Release      Debug (the default) enables the
                                           QDBG/QERR tracing macros.
-    -DBUILD_SHARED_LIBS=ON|OFF            Shared (default) or static.
+    -DSAMURAI_BUILD_SHARED=ON|OFF         Build libsamurai.so. Default ON.
+    -DSAMURAI_BUILD_STATIC=ON|OFF         Build libsamurai.a. Default ON.
+                                          Both flavours share one compile pass.
     -DSAMURAI_BUILD_TESTS=ON|OFF          Build the test programs. Default ON.
     -DSAMURAI_TLS_PROVIDER=OPENSSL|GNUTLS|NONE
                                           TLS backend. Default OPENSSL.
@@ -33,10 +35,10 @@ Configuration
                                           DNS resolver. Default BLOCKING,
                                           which is the only working backend.
 
-For example, an optimised static build without TLS:
+For example, an optimised static-only build without TLS:
 
     cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-        -DBUILD_SHARED_LIBS=OFF -DSAMURAI_TLS_PROVIDER=NONE
+        -DSAMURAI_BUILD_SHARED=OFF -DSAMURAI_TLS_PROVIDER=NONE
 
 
 Tests
@@ -59,6 +61,9 @@ Consumers can then use it from CMake:
 
     find_package(samurai REQUIRED)
     target_link_libraries(myapp PRIVATE samurai::samurai)
+
+samurai::samurai is the shared library when one was installed and the static
+library otherwise. To insist on the static library, link samurai::samurai_static.
 
 
 Notes
