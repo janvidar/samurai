@@ -70,6 +70,13 @@ class TimerManager {
 	protected:
 		void add(Timer* timer);
 		void remove(Timer* timer);
+
+		/**
+		 * True if the timer has been destroyed during the current process()
+		 * pass. Compares pointer values only - the object it names may
+		 * already be freed.
+		 */
+		bool isPendingRemoval(const Timer* timer) const;
 		
 		std::vector<Timer*> timers;
 		std::vector<Timer*> pending_remove;
