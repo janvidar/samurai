@@ -132,7 +132,7 @@ class File {
 		 */
 		virtual bool matchExtension(const std::string& ext) const;
 		
-		static int mkdir(const char* dirname, int mode = 666);
+		static int mkdir(const char* dirname, int mode = 0755);
 		static int rmdir(const char* dirname);
 
 		/**

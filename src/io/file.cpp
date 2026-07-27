@@ -125,29 +125,31 @@ bool Samurai::IO::File::open(int mode)
 	int flags = 0;
 	mode_t fmode = 0666;
 	
-	if (mode & Write && mode & Read)
-	{
+	const bool wants_write  = (mode & Write) != 0;
+	const bool wants_read   = (mode & Read) != 0;
+	const bool wants_append = (mode & Append) != 0;
+
+	if ((wants_write || wants_append) && wants_read)
 		flags |= O_RDWR;
-	}
-	else if (mode & Read)
-	{
-		flags |= O_RDONLY;
-	}
-	else if (mode & Write || mode & Append)
-	{
+	else if (wants_write || wants_append)
 		flags |= O_WRONLY;
+	else
+		flags |= O_RDONLY;
+
+	if (wants_write || wants_append)
+	{
 		flags |= O_CREAT;
-		
-		if (mode & Append)
+
+		if (wants_append)
 			flags |= O_APPEND;
-		
+
 		if (mode & Truncate)
 			flags |= O_TRUNC;
 
 		if (mode & Exclusive)
 			flags |= O_EXCL;
 	}
-	
+
 #ifdef O_NOFOLLOW
 	if (mode & Paranoid)
 		flags |= O_NOFOLLOW;
