@@ -8,6 +8,7 @@
 
 #include <samurai/samurai.h>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #define INITBUFSIZE 8192
@@ -33,6 +34,7 @@ class Buffer {
 		void append(const char* data, size_t len);
 		void append(const char* string);
 		void append(const std::string& string);
+		void append(const std::string_view string);
 		void append(char c);
 		void append(int number);
 		void append(uint64_t number);
@@ -91,7 +93,10 @@ class Buffer {
 		/**
 		 * Returns the size of the buffer
 		 */
-		size_t size() const { return len; }
+		size_t size() const { return len - head; }
+
+		/** Ensure room for 'n' more bytes without reallocating on append. */
+		void reserve(size_t n);
 		
 		/**
 		 * Remove the first n bytes from the buffer.
@@ -129,11 +134,23 @@ class Buffer {
 		bool resize(size_t needed = 0);
 		
 	protected:
+		/* Compact the consumed prefix away, so that head becomes 0. */
+		void compact();
+
+	protected:
 		/* NOTE: was a malloc'd char* with no assignment operator, so assigning
 		   one Buffer to another double freed. The vector owns the storage and
 		   supplies the copy and move semantics. */
 		std::vector<char> buf;
-		size_t len;             // bytes stored in the buffer
+
+		/*
+		 * Live bytes are [head, len). 'head' is what remove() advances instead
+		 * of memmove()ing the remainder down: a protocol loop that consumes one
+		 * message at a time used to move the whole rest of the buffer on every
+		 * message, which is quadratic in the number of messages buffered.
+		 */
+		size_t head;
+		size_t len;
 		size_t initialCapasity; // the buffer's initial capasity
 };
 
