@@ -66,6 +66,25 @@ void Samurai::IO::Net::SelectSocketMonitor::internal_modify(Samurai::IO::Net::So
 }
 
 
+/*
+ * NOTE: fd_set is a fixed size bitmap of FD_SETSIZE bits, and FD_SET() on a
+ * descriptor at or above that limit writes past the end of it - here, past two
+ * fd_sets living on this function's stack frame. Nothing bounded the
+ * descriptor numbers: 'max' sizes the act[] array, not the values. A process
+ * whose descriptor limit is above FD_SETSIZE can perfectly well be handed a
+ * socket numbered 5000 while monitoring only a handful, so this was reachable
+ * without anything unusual happening.
+ *
+ * select() cannot represent such a descriptor at all, so the only honest thing
+ * is to leave it out and say so. The other backends have no such limit, and
+ * this one is the last-resort fallback.
+ */
+static bool fd_fits_in_set(socket_t fd)
+{
+	return fd != INVALID_SOCKET && (long) fd >= 0 && (long) fd < (long) FD_SETSIZE;
+}
+
+
 void Samurai::IO::Net::SelectSocketMonitor::wait(int time_ms) {
 	fd_set rfds;
 	fd_set wfds;
@@ -74,21 +93,39 @@ void Samurai::IO::Net::SelectSocketMonitor::wait(int time_ms) {
 	FD_ZERO(&wfds);
 
 	socket_t maxfd = INVALID_SOCKET;
+	size_t skipped = 0;
+
 	std::vector<SocketBase*>::iterator it = sockets.begin();
 	for (; it != sockets.end(); it++) {
 		SocketBase* sock = (*it);
-		if (sock->getMonitorTrigger() & MWrite)
+		const socket_t fd = sock->getFD();
+
+		if (!fd_fits_in_set(fd))
 		{
-			FD_SET(sock->getFD(), &wfds);
-			if (maxfd < sock->getFD())
-				maxfd = sock->getFD();
+			skipped++;
+			continue;
 		}
-		else if (sock->getMonitorTrigger() & MRead)
-		{
-			FD_SET(sock->getFD(), &rfds);
-			if (maxfd < sock->getFD())
-				maxfd = sock->getFD();
-		}
+
+		const int trigger = sock->getMonitorTrigger();
+
+		/* NOTE: these were 'if (MWrite) ... else if (MRead)', so a socket
+		   registered for both - which is what connect() and
+		   toggleWriteNotifier(true) do - was never placed in rfds and its
+		   reads went unreported for as long as the write notifier was on. */
+		if (trigger & MWrite) FD_SET(fd, &wfds);
+		if (trigger & MRead)  FD_SET(fd, &rfds);
+
+		if (!(trigger & (MRead | MWrite))) continue;
+
+		if (maxfd == INVALID_SOCKET || maxfd < fd)
+			maxfd = fd;
+	}
+
+	if (skipped)
+	{
+		QERR("select(): %lu socket(s) have a descriptor >= FD_SETSIZE (%d) and "
+		     "cannot be monitored; use the poll or epoll backend",
+		     (unsigned long) skipped, (int) FD_SETSIZE);
 	}
 
 	struct ::timeval timeout;
@@ -112,18 +149,29 @@ void Samurai::IO::Net::SelectSocketMonitor::wait(int time_ms) {
 	for (; it != sockets.end(); it++)
 	{
 		SocketBase* sock = (*it);
+		const socket_t fd = sock->getFD();
+
+		/* Same bound as above: FD_ISSET reads the bitmap too. */
+		if (!fd_fits_in_set(fd)) continue;
+
 		int trig = 0;
-		if (FD_ISSET(sock->getFD(), &wfds)) trig |= MWrite;
-		if (FD_ISSET(sock->getFD(), &rfds)) trig |= MRead;
-		
+		if (FD_ISSET(fd, &wfds)) trig |= MWrite;
+		if (FD_ISSET(fd, &rfds)) trig |= MRead;
+
 		if (!trig) continue;
 
-		if (act_num == max) break;
-		act[act_num].fd = sock->getFD();
+		if (act_num == max)
+		{
+			QERR("select(): more than %lu ready sockets, deferring the rest",
+			     (unsigned long) max);
+			break;
+		}
+
+		act[act_num].fd = fd;
 		act[act_num].trig = trig;
 		act_num++;
 	}
-	
+
 	for (size_t n = 0; n < act_num; n++)
 		dispatch(act[n].fd, act[n].trig);
 }
