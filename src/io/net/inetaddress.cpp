@@ -201,8 +201,16 @@ Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress* 
 
 Samurai::IO::Net::InetAddress::~InetAddress()
 {
-	delete data;
+	/* The resolver holds this object as its event handler. Clearing dnsevent
+	   before destroying it means a callback arriving during teardown cannot be
+	   forwarded to a user handler that believes this address is still alive. */
+	dnsevent = 0;
+
 	delete resolver;
+	resolver = 0;
+
+	delete data;
+	data = 0;
 }
 
 
@@ -428,15 +436,22 @@ bool Samurai::IO::Net::InetAddress::isResolved()
 
 void Samurai::IO::Net::InetAddress::EventHostFound(Samurai::IO::Net::InetAddress* address)
 {
+	if (!address || !address->data) return;
+
+	/* NOTE: this used to allocate a fresh __InternalAddress over the one
+	   already held, leaking it on every resolution. Every constructor
+	   allocates it, so there is always a block to copy into. */
 	version = address->version;
-	data = new Samurai::IO::Net::__InternalAddress();
 	memcpy(data, address->data, sizeof(struct Samurai::IO::Net::__InternalAddress));
 	resolveState = Resolved;
-	
-	if (dnsevent) {
-		dnsevent->EventHostFound(this);
-	}
+
+	/* Cleared before the callback, not after: the handler is free to destroy
+	   this object, and coming back to touch a member afterwards would be a
+	   use-after-free. */
+	Samurai::IO::Net::ResolveEventHandler* handler = dnsevent;
 	dnsevent = 0;
+
+	if (handler) handler->EventHostFound(this);
 }
 
 
@@ -453,18 +468,21 @@ void Samurai::IO::Net::InetAddress::EventHostError(enum Samurai::IO::Net::DNS::R
 void Samurai::IO::Net::InetAddress::lookup(ResolveEventHandler* eventHandler)
 {
 	if (eventHandler) dnsevent = eventHandler;
-	
-	if (resolveState != Resolved)
+
+	if (resolveState == Resolved)
 	{
-		resolver = Samurai::IO::Net::DNS::Resolver::getHostByName(this, hostname.c_str()); /* FIXME: std::string-ify */
+		Samurai::IO::Net::ResolveEventHandler* handler = dnsevent;
+		dnsevent = 0;
+		if (handler) handler->EventHostFound(this);
+		return;
 	}
-	else
-	{
-		if (eventHandler)
-		{
-			eventHandler->EventHostFound(this);	
-		}
-	}
+
+	/* NOTE: this used to assign straight over 'resolver', leaking the
+	   previous one on every repeated lookup. */
+	delete resolver;
+	resolver = 0;
+
+	resolver = Samurai::IO::Net::DNS::Resolver::getHostByName(this, hostname.c_str()); /* FIXME: std::string-ify */
 }
 
 
