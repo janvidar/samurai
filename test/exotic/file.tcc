@@ -14,6 +14,16 @@
 #define PATH_PREFIX ""
 #endif
 
+/* The fixtures under data/ are reached through a directory baked in at compile
+   time, so the suite passes regardless of the working directory it is started
+   from. The fallback suits the legacy Makefile here, which builds and runs
+   autotest inside this directory. */
+#ifndef EXOTIC_DATA_DIR
+#define EXOTIC_DATA_DIR "."
+#endif
+
+#define EXOTIC_DATA_PATH(relative) EXOTIC_DATA_DIR "/" relative
+
 EXO_TEST(file_1, {
 	Samurai::IO::File f(PATH_PREFIX "/path/to/file/jalla");
 	
@@ -63,17 +73,17 @@ EXO_TEST(file_8, {
 });
 
 EXO_TEST(file_exist_1, {
-	Samurai::IO::File f("data");
+	Samurai::IO::File f(EXOTIC_DATA_PATH("data"));
 	return f.exists();
 });
 
 EXO_TEST(file_exist_2, {
-	Samurai::IO::File f("data/file1");
+	Samurai::IO::File f(EXOTIC_DATA_PATH("data/file1"));
 	return f.exists();
 });
 
 EXO_TEST(file_exist_3, {
-	Samurai::IO::File f("data/file2");
+	Samurai::IO::File f(EXOTIC_DATA_PATH("data/file2"));
 	return !f.exists();
 });
 

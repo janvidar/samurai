@@ -109,6 +109,11 @@ target_include_directories(autotest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/exotic   # the .tcc files are #included by name
     ${SAMURAI_EXOTIC_HEADER_DIR})
 
+# file.tcc reaches its data/ fixtures through this directory rather than by a
+# path relative to the working directory, so autotest can be run from anywhere.
+target_compile_definitions(autotest PRIVATE
+    EXOTIC_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/exotic")
+
 target_link_libraries(autotest PRIVATE samurai::samurai)
 
 set_target_properties(autotest PROPERTIES
@@ -119,9 +124,6 @@ set_target_properties(autotest PROPERTIES
 add_test(NAME exotic COMMAND autotest)
 
 set_tests_properties(exotic PROPERTIES
-    # file.tcc opens "data/file1" by relative path, so the suite has to run
-    # from the directory holding it.
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/exotic
     # Some tests bind listening sockets and resolve names on the loopback
     # interface; give them room on a loaded machine.
     TIMEOUT 300)
