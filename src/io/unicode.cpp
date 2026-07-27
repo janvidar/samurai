@@ -5,6 +5,7 @@
 
 #include <errno.h>
 #include <samurai/io/unicode.h>
+#include <samurai/error.h>
 
 #ifdef HAVE_ICONV
 
@@ -76,3 +77,16 @@ bool Samurai::IO::Unicode::exec(char* in, size_t& inlen, char* out, size_t& outl
 	return cvt->convert(in, inlen, out, outlen);
 }
 
+bool Samurai::IO::Unicode::exec(char* in, size_t& inlen, char* out, size_t& outlen,
+                                std::error_code& ec)
+{
+	ec.clear();
+	errno = 0;
+	if (cvt->convert(in, inlen, out, outlen)) return true;
+
+	/* iconv sets EILSEQ for invalid input, EINVAL for a truncated multibyte
+	   sequence and E2BIG for a full output buffer; all three used to arrive
+	   as a bare false. */
+	ec = Samurai::system_error(errno ? errno : EIO);
+	return false;
+}

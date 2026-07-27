@@ -111,7 +111,9 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		 * when we shutdown until we can restart a server at the same address again.
 		 */
 		bool setReuseAddress(bool toggle);
+		bool setReuseAddress(bool toggle, std::error_code& ec);
 		bool setReusePort(bool toggle);
+		bool setReusePort(bool toggle, std::error_code& ec);
 
 		/**
 		 * Get the local address part of the socket.
@@ -137,12 +139,14 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		 * Toggle keepalive for a TCP socket.
 		 */
 		bool setKeepAlive(bool toggle);
+		bool setKeepAlive(bool toggle, std::error_code& ec);
 
 		/**
 		 * Set the send buffer size.
 		 * @return true if success.
 		 */
 		bool setSendBufferSize(size_t size);
+		bool setSendBufferSize(size_t size, std::error_code& ec);
 		
 		/**
 		 * Get the send buffer size.
@@ -154,6 +158,7 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		 * @return true if success
 		 */
 		bool setReceiveBufferSize(size_t size);
+		bool setReceiveBufferSize(size_t size, std::error_code& ec);
 		
 		/**
 		 * Get the receive buffer size.
@@ -170,6 +175,7 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		 * Specifies an IP layer time to live for the given socket descriptor.
 		 */
 		bool setTimeToLive(uint8_t ttl);
+		bool setTimeToLive(uint8_t ttl, std::error_code& ec);
 
 		/**
 		 * Close the socket.

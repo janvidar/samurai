@@ -20,6 +20,7 @@ class Unicode : public Codec
 		Unicode(const char* to, const char* from);
 		virtual ~Unicode();
 		virtual bool exec(char* input, size_t& input_len, char* output, size_t& output_len);
+		virtual bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec);
 
 	protected:
 		UnicodePrivate* cvt;
