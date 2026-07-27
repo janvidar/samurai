@@ -40,27 +40,18 @@ class Thread
 		virtual ~Thread();
 		
 		void wait();
-		void setPriority(enum Priority);
-		enum Priority getPriority() const;
+		void setPriority(enum Priority); /* no-op */
 		void start(enum Priority = Priority_Normal);
 		void terminate();
-		bool running() const;
-		bool finished() const;
 		virtual void run() = 0;
-		
+
 	protected:
-		static Thread* currentThread();
-		static void exit();
-		static void sleep(time_t seconds);
-		static void msleep(time_t msecs);
-		static void usleep(useconds_t usecs);
-		static void add(Thread* thread);
-		static void remove(Thread* thread);
-		static std::vector<Thread*> threads;
-		
 		static void* startFunc(void*);
-		
+
 	private:
+		Thread(const Thread&);
+		Thread& operator=(const Thread&);
+
 		ThreadPriv* d;
 };
 

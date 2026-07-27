@@ -6,6 +6,8 @@
 #include <samurai/samurai.h>
 #include <samurai/thread/thread.h>
 
+#include <string.h>
+
 #ifdef SAMURAI_POSIX
 #include <pthread.h>
 #include <sys/resource.h>
@@ -28,7 +30,10 @@ typedef size_t useconds_t;
 class ThreadPriv
 {
 	public:
+		ThreadPriv() : started(false) { }
+
 		THREAD_HANDLE(handle);
+		bool started;
 };
 
 
@@ -36,7 +41,6 @@ Thread::Thread(size_t stackSize) : d(0)
 {
 	(void) stackSize;
 	d = new ThreadPriv();
-	d->handle = 0;
 }
 
 
@@ -50,12 +54,15 @@ Thread::~Thread()
 void Thread::terminate()
 {
 #ifdef USE_PTHREADS
+	if (!d->started)
+		return;
+
 	int rc = pthread_cancel(d->handle);
 	if (rc)
 	{
-		QERR("Unable to cancel thread");
+		QERR("Unable to cancel thread: %s", strerror(rc));
 	}
-	d->handle = 0;
+	d->started = false;
 #endif
 }
 
@@ -71,11 +78,20 @@ void* Thread::startFunc(void* ptr)
 void Thread::start(Priority priority)
 {
 #ifdef USE_PTHREADS
-	int rc = pthread_create(&d->handle, NULL, Thread::startFunc, this);
-	if (rc == -1)
+	if (d->started)
 	{
-		QERR("Unable to start thread!");
+		QERR("Thread is already running");
+		return;
 	}
+
+	int rc = pthread_create(&d->handle, NULL, Thread::startFunc, this);
+	if (rc != 0)
+	{
+		QERR("Unable to start thread: %s", strerror(rc));
+		return;
+	}
+
+	d->started = true;
 #endif
 	setPriority(priority);
 }
@@ -83,27 +99,24 @@ void Thread::start(Priority priority)
 
 void Thread::setPriority(Priority priority)
 {
-	int p;
-	switch (priority)
-	{
-		case Priority_Idle:     p = 20;  break;
-		case Priority_Lowest:   p = 10;  break;
-		case Priority_Low:      p = 5;   break;
-		case Priority_Normal:   p = 0;   break;
-		case Priority_High:     p = -5;  break;
-		case Priority_Highest:  p = -10; break;
-		case Priority_Critical: p = -20; break;
-	}
-#ifdef USE_PTHREADS
-	setpriority(PRIO_PROCESS, 0, p);
-#endif
+	(void) priority; /* no-op: setpriority() renices the process, not the thread */
 }
 
 
 void Thread::wait()
 {
 #ifdef USE_PTHREADS
-	pthread_join(d->handle, NULL);
+	if (!d->started)
+		return;
+
+	int rc = pthread_join(d->handle, NULL);
+	if (rc != 0)
+	{
+		QERR("Unable to join thread: %s", strerror(rc));
+		return;
+	}
+
+	d->started = false;
 #endif
 }
 
