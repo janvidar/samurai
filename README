@@ -3,7 +3,7 @@ Samurai
 
 A portable C++ platform abstraction library: buffers, files and directories,
 unicode, compression, sockets (TCP/UDP/multicast) with four socket-monitor
-backends, a DNS resolver, threads, and Tiger/TigerTree hashing.
+backends, a DNS resolver, and Tiger/TigerTree hashing.
 
 
 Building
