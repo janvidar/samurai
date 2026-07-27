@@ -5,6 +5,7 @@
 
 #include <samurai/samurai.h>
 #include <stdio.h>
+#include <string.h>
 #include <samurai/io/net/dns/resolver.h>
 #include <samurai/io/net/dns/resolver-blocking.h>
 #include <samurai/io/net/socketevent.h>
@@ -24,39 +25,65 @@ Samurai::IO::Net::DNS::BlockingResolver::~BlockingResolver() {
 
 }
 
+/*
+ * NOTE: This used gethostbyname(), which returns a pointer into a static
+ * buffer (so two concurrent lookups corrupt each other), reports errors
+ * through the equally shared h_errno, resolves IPv4 only, and was
+ * dereferenced here as h_addr_list[0] without checking the list was
+ * non-empty. getaddrinfo() is reentrant and returns both families.
+ */
 void Samurai::IO::Net::DNS::BlockingResolver::lookup(const char* address) {
-	struct hostent* host = gethostbyname(address);
-	
-	if (!host) {
-		switch (h_errno) {
-			case HOST_NOT_FOUND:
-				eventHandler->EventHostError(NotFound);
-				break;
+	if (!eventHandler) return;
 
-			// case NO_DATA:
-			case NO_ADDRESS:
-				eventHandler->EventHostError(NoAddress);
-				break;
+	if (!address || !*address) {
+		eventHandler->EventHostError(NotFound);
+		return;
+	}
 
-			case NO_RECOVERY:
-				eventHandler->EventHostError(ServerError);
-				break;
-			
-			case TRY_AGAIN:
-				eventHandler->EventHostError(TryAgain);
-				break;
-				
-			default:
-				eventHandler->EventHostError(Unknown);
+	struct addrinfo hints;
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family   = AF_UNSPEC;   /* IPv4 and IPv6 */
+	hints.ai_socktype = SOCK_STREAM;
+
+	struct addrinfo* result = 0;
+	const int rc = ::getaddrinfo(address, 0, &hints, &result);
+
+	if (rc != 0) {
+		switch (rc) {
+			case EAI_NONAME:  eventHandler->EventHostError(NotFound);    break;
+			case EAI_AGAIN:   eventHandler->EventHostError(TryAgain);    break;
+			case EAI_FAIL:    eventHandler->EventHostError(ServerError); break;
+#if defined(EAI_NODATA) && EAI_NODATA != EAI_NONAME
+			case EAI_NODATA:  eventHandler->EventHostError(NoAddress);   break;
+#endif
+			case EAI_MEMORY:  eventHandler->EventHostError(ServerError); break;
+			default:          eventHandler->EventHostError(Unknown);
 		}
 		return;
 	}
-	
+
 	Samurai::IO::Net::InetAddress inet_addr;
-	inet_addr.setRawAddress(host->h_addr_list[0], host->h_length, host->h_addrtype == AF_INET ? Samurai::IO::Net::InetAddress::IPv4 : Samurai::IO::Net::InetAddress::IPv6);
-	if (host)
+	bool found = false;
+
+	/* getaddrinfo() returns candidates in the order the platform prefers
+	   (RFC 6724 on a current system), so the first usable one is the one to
+	   take. */
+	for (struct addrinfo* ai = result; ai && !found; ai = ai->ai_next) {
+		if (ai->ai_family == AF_INET && ai->ai_addrlen >= sizeof(struct sockaddr_in)) {
+			struct sockaddr_in* sin = (struct sockaddr_in*) ai->ai_addr;
+			found = inet_addr.setRawAddress(&sin->sin_addr, sizeof(sin->sin_addr),
+			                                Samurai::IO::Net::InetAddress::IPv4);
+		} else if (ai->ai_family == AF_INET6 && ai->ai_addrlen >= sizeof(struct sockaddr_in6)) {
+			struct sockaddr_in6* sin6 = (struct sockaddr_in6*) ai->ai_addr;
+			found = inet_addr.setRawAddress(&sin6->sin6_addr, sizeof(sin6->sin6_addr),
+			                                Samurai::IO::Net::InetAddress::IPv6);
+		}
+	}
+
+	::freeaddrinfo(result);
+
+	if (found)
 		eventHandler->EventHostFound(&inet_addr);
 	else
-		eventHandler->EventHostError(Unknown);
+		eventHandler->EventHostError(NoAddress);
 }
-
