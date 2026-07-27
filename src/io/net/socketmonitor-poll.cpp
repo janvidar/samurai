@@ -143,10 +143,15 @@ void Samurai::IO::Net::PollSocketMonitor::wait(int time_ms)
 		if (!sock) continue;
 		
 		int trig = 0;
-		uint16_t f = list[n].revents;
+		const short f = list[n].revents;
 		if (f & POLLOUT) trig |= MWrite;
 		if (f & POLLIN)  trig |= MRead;
-		
+
+		if (f & (POLLERR | POLLNVAL)) trig |= MError;
+		if (f & POLLHUP)              trig |= MClose;
+
+		if (!trig) continue;
+
 		act[act_num].sock = sock;
 		act[act_num].trig = trig;
 		act_num++;

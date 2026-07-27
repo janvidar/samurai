@@ -156,7 +156,6 @@ void Samurai::IO::Net::SocketMonitor::handleSocketEvent(Samurai::IO::Net::Socket
 	
 	if (trig & MWrite)
 	{
-		Samurai::IO::Net::Socket* socket = dynamic_cast<Samurai::IO::Net::Socket*>((Samurai::IO::Net::SocketBase*) sock);
 		if (socket)
 		{
 			switch (socket->state)
@@ -164,22 +163,57 @@ void Samurai::IO::Net::SocketMonitor::handleSocketEvent(Samurai::IO::Net::Socket
 				case Connecting:
 					socket->internal_connected();
 					break;
-						
+
 				case SSLBye:
 				case SSLHandshake:
 				case Connected:
 				case SSLConnected:
 					socket->internal_canWrite();
 					break;
-						
+
 				default:
 					// ERROR!
 					break;
 			}
 		}
-		return;
 	}
-	
+
+	/* NOTE: Handled last, so that data still buffered on a socket that has
+	   also errored is delivered before the connection is torn down. */
+	if (trig & (MError | MClose))
+	{
+		if (socket)
+		{
+			/* The MRead path may already have torn this down; do not report twice. */
+			const bool live = (socket->state != Invalid &&
+			                   socket->state != Disconnected);
+
+			if (live)
+			{
+				if (trig & MError)
+				{
+					int value = 0;
+					socklen_t valsize = sizeof(value);
+					if (SAMURAI_GETSOCKOPT(socket->sd, SOL_SOCKET, SO_ERROR, &value, &valsize) != 0)
+						value = 0;
+					socket->internal_error(value);
+				}
+				else
+				{
+					socket->internal_closed();
+				}
+			}
+		}
+		else if (udp)
+		{
+			udp->internal_error();
+		}
+		else if (server)
+		{
+			QERR("Listening socket signalled error/hangup, disabling monitor");
+			server->disableMonitor();
+		}
+	}
 }
 
 Samurai::IO::Net::SocketMonitor* Samurai::IO::Net::SocketMonitor::socket_monitor = 0;

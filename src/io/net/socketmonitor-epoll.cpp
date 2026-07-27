@@ -70,7 +70,7 @@ static void set_poll_events(struct epoll_event* handle, int trigger)
 
 static int get_poll_events(struct epoll_event* handle)
 {
-	short trig = handle->events;
+	uint32_t trig = handle->events;
 	int evt  = 0;
 
 	if (trig & EPOLLIN)
