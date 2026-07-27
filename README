@@ -15,7 +15,8 @@ Samurai builds with CMake (3.16 or newer):
     cmake --build build -j
     ctest --test-dir build
 
-Requirements: a C++11 compiler, zlib, bzip2, and OpenSSL 1.0.2 or newer.
+Requirements: a C++11 compiler, zlib, bzip2, and OpenSSL 1.0.2 or newer
+(TLS is mandatory).
 
 
 Configuration
@@ -27,10 +28,12 @@ Configuration
     -DSAMURAI_BUILD_STATIC=ON|OFF         Build libsamurai.a. Default ON.
                                           Both flavours share one compile pass.
     -DSAMURAI_BUILD_TESTS=ON|OFF          Build the test programs. Default ON.
-    -DSAMURAI_TLS_PROVIDER=OPENSSL|GNUTLS|NONE
-                                          TLS backend. Default OPENSSL.
-                                          GNUTLS is unmaintained and is not
-                                          expected to compile.
+    -DSAMURAI_TLS_PROVIDER=OPENSSL|GNUTLS TLS backend. Default OPENSSL. TLS is
+                                          mandatory: SSL_SUPPORT changes the
+                                          layout of Socket, so a build without
+                                          it is not ABI compatible with one
+                                          that has it. GNUTLS is unmaintained
+                                          and is not expected to compile.
     -DSAMURAI_DNS_PROVIDER=BLOCKING|FORKED|BUILTIN
                                           DNS resolver. Default BLOCKING,
                                           which is the only working backend.
@@ -50,10 +53,10 @@ Configuration
                                           /proc/sys/kernel/yama/ptrace_scope is
                                           not 0.
 
-For example, an optimised static-only build without TLS:
+For example, an optimised static-only build:
 
     cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-        -DSAMURAI_BUILD_SHARED=OFF -DSAMURAI_TLS_PROVIDER=NONE
+        -DSAMURAI_BUILD_SHARED=OFF
 
 Or an instrumented build for running the tests under the sanitizers:
 

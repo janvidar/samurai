@@ -57,9 +57,14 @@ if(NOT SAMURAI_BUILD_SHARED AND NOT SAMURAI_BUILD_STATIC)
         "SAMURAI_BUILD_STATIC.")
 endif()
 
+# TLS is mandatory. SSL_SUPPORT is a PUBLIC compile definition that gates a
+# member of Samurai::IO::Net::Socket in the public header, so a consumer built
+# without it disagrees with the library about object layout - a mismatch that
+# shows up as heap corruption rather than a link error. Removing the option to
+# build without it removes that failure mode.
 set(SAMURAI_TLS_PROVIDER "OPENSSL" CACHE STRING
-    "TLS backend to use: OPENSSL, GNUTLS or NONE")
-set_property(CACHE SAMURAI_TLS_PROVIDER PROPERTY STRINGS OPENSSL GNUTLS NONE)
+    "TLS backend to use: OPENSSL or GNUTLS")
+set_property(CACHE SAMURAI_TLS_PROVIDER PROPERTY STRINGS OPENSSL GNUTLS)
 
 set(SAMURAI_DNS_PROVIDER "BLOCKING" CACHE STRING
     "DNS resolver to use: BLOCKING, FORKED or BUILTIN")
@@ -90,12 +95,10 @@ elseif(SAMURAI_TLS_PROVIDER STREQUAL "GNUTLS")
         "it returns a TLS_STATUS_RETRY that is not in the TlsStatus enum and "
         "uses gnutls_*_set_priority() APIs removed in GnuTLS 3.x. "
         "Use SAMURAI_TLS_PROVIDER=OPENSSL unless you are porting it.")
-elseif(SAMURAI_TLS_PROVIDER STREQUAL "NONE")
-    message(STATUS "Samurai: building without TLS support")
 else()
     message(FATAL_ERROR
         "Invalid SAMURAI_TLS_PROVIDER '${SAMURAI_TLS_PROVIDER}' "
-        "(expected OPENSSL, GNUTLS or NONE)")
+        "(expected OPENSSL or GNUTLS). TLS is mandatory.")
 endif()
 
 if(NOT SAMURAI_DNS_PROVIDER MATCHES "^(BLOCKING|FORKED|BUILTIN)$")
