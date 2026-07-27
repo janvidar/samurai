@@ -1,3 +1,4 @@
+#include <memory>
 
 #include <samurai/messagehandler.h>
 #include <samurai/io/net/socketbase.h>
@@ -38,14 +39,14 @@ class SocketListener :
 		char* udp_msg;
 		char* udp_error;
 		const char* client_error;
-		Samurai::IO::Net::Socket* accepted;
+		std::shared_ptr<Samurai::IO::Net::Socket> accepted;
 		char* message;
 		bool debug_enabled;
 
 	public:
 		SocketListener() {
 			reset_flags();
-			accepted = 0;
+			accepted.reset();
 			message = 0;
 			debug_enabled = false;
 		}
@@ -83,7 +84,7 @@ class SocketListener :
 			debug(__PRETTY_FUNCTION__);
 		}
 		
-		void EventAcceptSocket(const Samurai::IO::Net::ServerSocket*, Samurai::IO::Net::Socket* socket)
+		void EventAcceptSocket(const Samurai::IO::Net::ServerSocket*, std::shared_ptr<Samurai::IO::Net::Socket> socket)
 		{
 			flag_accept_socket = true;
 			accepted = socket;
@@ -199,7 +200,7 @@ class SocketVariables
 			listener = new SocketListener();
 			monitor = Samurai::IO::Net::SocketMonitor::getInstance();
 			server_address = 0;
-			server = 0;
+			server.reset();
 			mh = Samurai::MessageHandler::getInstance();
 		}
 		
@@ -215,10 +216,10 @@ class SocketVariables
 		SocketListener* listener;
 		Samurai::IO::Net::SocketAddress* server_address;
 		
-		Samurai::IO::Net::Socket* client;
-		Samurai::IO::Net::ServerSocket* server;
-		Samurai::IO::Net::DatagramSocket* server_udp;
-		Samurai::IO::Net::DatagramSocket* client_udp;
+		std::shared_ptr<Samurai::IO::Net::Socket> client;
+		std::shared_ptr<Samurai::IO::Net::ServerSocket> server;
+		std::shared_ptr<Samurai::IO::Net::DatagramSocket> server_udp;
+		std::shared_ptr<Samurai::IO::Net::DatagramSocket> client_udp;
 		Samurai::IO::Net::SocketMonitor* monitor;
 		Samurai::MessageHandler* mh;
 		
@@ -257,7 +258,7 @@ EXO_TEST(sockets_create_server, {
 	SocketVariables* vars = socket_tests_create();
 	if (!vars) return false;
 	vars->server_address = new Samurai::IO::Net::InetSocketAddress(LOCALPORT);
-	vars->server = new Samurai::IO::Net::ServerSocket(vars->listener, *vars->server_address);
+	vars->server = Samurai::IO::Net::ServerSocket::create(vars->listener, *vars->server_address);
 	return vars->server->getFD() != -1;
 });
 
@@ -276,7 +277,7 @@ EXO_TEST(sockets_monitor_count_1, {
 EXO_TEST(sockets_client_create, {
 	SocketVariables* vars = socket_tests_create();
 	if (!vars) return false;
-	vars->client = new Samurai::IO::Net::Socket(0, "localhost", LOCALPORT);
+	vars->client = Samurai::IO::Net::Socket::create((Samurai::IO::Net::SocketEventHandler*) 0, std::string("localhost"), (uint16_t) LOCALPORT);
 	vars->client->setEventHandler(vars->listener);
 	return vars->client != 0;
 });
@@ -373,7 +374,7 @@ EXO_TEST(sockets_client_read_2, {
 EXO_TEST(sockets_server_udp_create, {
 	SocketVariables* vars = socket_tests_create();
 	if (!vars) return false;
-	vars->server_udp = new Samurai::IO::Net::DatagramSocket(vars->listener, LOCALPORT);
+	vars->server_udp = Samurai::IO::Net::DatagramSocket::create(vars->listener, (uint16_t) LOCALPORT);
 	return vars->server_udp && vars->server_udp->listen();
 });
 
@@ -387,7 +388,7 @@ EXO_TEST(sockets_monitor_count_3, {
 EXO_TEST(sockets_client_udp_create, {
 	SocketVariables* vars = socket_tests_create();
 	if (!vars) return false;
-	vars->client_udp = new Samurai::IO::Net::DatagramSocket(vars->listener, Samurai::IO::Net::InetAddress::IPv4);
+	vars->client_udp = Samurai::IO::Net::DatagramSocket::create(vars->listener, Samurai::IO::Net::InetAddress::IPv4);
 	return vars->client_udp != 0;
 });
 
@@ -403,8 +404,8 @@ EXO_TEST(sockets_monitor_count_4, {
 EXO_TEST(sockets_client_disconnect, {
 	SocketVariables* vars = socket_tests_create();
 	if (!vars) return false;
-	delete vars->listener->accepted;
-	vars->listener->accepted = 0;
+	vars->listener->accepted.reset();
+	vars->listener->accepted.reset();
 	vars->listener->reset_flags();
 	vars->monitor->wait(25);
 	return vars->listener->flag_disconnected;
@@ -413,8 +414,8 @@ EXO_TEST(sockets_client_disconnect, {
 EXO_TEST(sockets_monitor_count_5, {
 	SocketVariables* vars = socket_tests_create();
 	if (!vars) return false;
-	delete vars->client;
-	vars->client = 0;
+	vars->client.reset();
+	vars->client.reset();
 	vars->listener->reset_flags();
 	vars->monitor->wait(25);
 	return vars->monitor->size() == 3;
@@ -446,9 +447,9 @@ EXO_TEST(sockets_monitor_count_6, {
 	SocketVariables* vars = socket_tests_create();
 	if (!vars) return false;
 	
-	delete vars->server;
+	vars->server.reset();
 	delete vars->server_address;
-	vars->server = 0;
+	vars->server.reset();
 	vars->server_address = 0;
 	vars->listener->reset_flags();
 	
@@ -461,7 +462,7 @@ EXO_TEST(sockets_monitor_count_7, {
 	SocketVariables* vars = socket_tests_create();
 	if (!vars) return false;
 	
-	delete vars->server_udp;
+	vars->server_udp.reset();
 	vars->server_udp = 0;
 	vars->listener->reset_flags();
 	
@@ -474,7 +475,7 @@ EXO_TEST(sockets_monitor_count_8, {
 	SocketVariables* vars = socket_tests_create();
 	if (!vars) return false;
 	
-	delete vars->client_udp;
+	vars->client_udp.reset();
 	vars->client_udp = 0;
 	vars->listener->reset_flags();
 	

@@ -25,6 +25,20 @@ struct timezone;
  */
 class ServerSocket : public SocketBase {
 	public:
+		/**
+		 * Construct a ServerSocket owned by a shared_ptr. The constructors are
+		 * protected: the socket monitor holds weak references, which requires
+		 * that every socket be owned by a shared_ptr from the start.
+		 */
+		template<typename... Args>
+		static std::shared_ptr<ServerSocket> create(Args&&... args)
+		{
+			std::shared_ptr<ServerSocket> self(new ServerSocket(std::forward<Args>(args)...));
+			self->initialize();
+			return self;
+		}
+
+	protected:
 	
 		/**
 		 * Set up a socket and bind to the specified address.
@@ -41,6 +55,7 @@ class ServerSocket : public SocketBase {
 		 */
 		ServerSocket(Samurai::IO::Net::ServerSocketEventHandler* eh, const Samurai::IO::Net::InetAddress& addr, uint16_t port);
 		
+	public:
 		virtual ~ServerSocket();
 
 		virtual bool listen(size_t backlog = 5);

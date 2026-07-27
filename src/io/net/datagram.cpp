@@ -81,8 +81,7 @@ Samurai::IO::Buffer* Samurai::IO::Net::DatagramPacket::getBuffer() {
 Samurai::IO::Net::DatagramSocket::DatagramSocket(DatagramEventHandler* eh, enum InetAddress::Version version) : SocketBase(Datagram), eventHandler(eh), myPacket(0)
 {
 	int af = (version == InetAddress::IPv4 ? AF_INET : version == InetAddress::IPv6 ? AF_INET6 : AF_UNSPEC);
-	create(af);
-	setMonitor(Samurai::IO::Net::SocketMonitor::MRead);
+	createDescriptor(af);
 }
 
 Samurai::IO::Net::DatagramSocket::DatagramSocket() : SocketBase(Datagram), eventHandler(0), myPacket(0) {
@@ -94,27 +93,30 @@ Samurai::IO::Net::DatagramSocket::DatagramSocket(Samurai::IO::Net::DatagramEvent
 	: SocketBase(bindAddr, Datagram), eventHandler(eh), myPacket(0)
 {
 	internal_create();
-	setMonitor(Samurai::IO::Net::SocketMonitor::MRead);
 }
 
 Samurai::IO::Net::DatagramSocket::DatagramSocket(DatagramEventHandler* eh, const Samurai::IO::Net::InetAddress& bindaddr, uint16_t bindport)
 	: SocketBase(bindaddr, bindport, Datagram), eventHandler(eh), myPacket(0)
 {
 	internal_create();
-	setMonitor(Samurai::IO::Net::SocketMonitor::MRead);
 }
 
 Samurai::IO::Net::DatagramSocket::DatagramSocket(DatagramEventHandler* eh, uint16_t bindport)
 	: SocketBase(Samurai::IO::Net::InetAddress("0.0.0.0"), bindport, Datagram), eventHandler(eh), myPacket(0)
 {
 	internal_create();
-	setMonitor(Samurai::IO::Net::SocketMonitor::MRead);
 }
 
 
 void Samurai::IO::Net::DatagramSocket::internal_create() {
-	create(addr->getSockAddrFamily());
-	setMonitor(Samurai::IO::Net::SocketMonitor::MRead);
+	if (addr) createDescriptor(addr->getSockAddrFamily());
+}
+
+/* Registering with the monitor needs shared_from_this(), so it cannot happen
+   in a constructor. */
+void Samurai::IO::Net::DatagramSocket::initialize() {
+	if (sd != INVALID_SOCKET)
+		setMonitor(Samurai::IO::Net::SocketMonitor::MRead);
 }
 
 
@@ -133,7 +135,6 @@ bool Samurai::IO::Net::DatagramSocket::listen() {
 	if (!setReuseAddress(true)) return false;
 	if (!setNonBlocking(true)) return false;
 	if (!bind(addr)) return false;
-	setMonitor(Samurai::IO::Net::SocketMonitor::MRead);
 	return true;
 }
 

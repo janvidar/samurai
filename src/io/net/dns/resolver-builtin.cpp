@@ -37,7 +37,7 @@ Samurai::IO::Net::DNS::BuiltinResolver::BuiltinResolver(Samurai::IO::Net::Resolv
 
 Samurai::IO::Net::DNS::BuiltinResolver::~BuiltinResolver()
 {
-	delete sock;
+	sock.reset();
 	delete rrname;
 	free(hostname);
 	delete timer;
@@ -101,11 +101,11 @@ void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 
 #if 0
 	/* Use TCP */
-	sock = new Samurai::IO::Net::Socket(this, &addr);
+	sock = Samurai::IO::Net::Socket::create(this, &addr);
 	sock->connect();
 #endif
-	sock = new Samurai::IO::Net::DatagramSocket(this, server->getType());
-	dynamic_cast<Samurai::IO::Net::DatagramSocket*>(sock)->send(packet);
+	sock = Samurai::IO::Net::DatagramSocket::create(this, server->getType());
+	std::dynamic_pointer_cast<Samurai::IO::Net::DatagramSocket>(sock)->send(packet);
 	
 	if (timer) delete timer;
 	timer = new Samurai::Timer(this, RES_TIMEOUT, true);

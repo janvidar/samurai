@@ -6,8 +6,11 @@
 #ifndef HAVE_SAMURAI_SOCKETMONITOR_H
 #define HAVE_SAMURAI_SOCKETMONITOR_H
 
+#include <map>
+#include <memory>
 #include <vector>
 #include <samurai/samurai.h>
+#include <samurai/io/net/socketglue.h>
 
 namespace Samurai {
 namespace IO {
@@ -121,11 +124,26 @@ class SocketMonitor
 		 * @param trig see enum Triggers (ORed)
 		 */
 		virtual void handleSocketEvent(SocketBase* socket, int trig);
-	
+
+		/**
+		 * Deliver an event for the socket registered on the given descriptor.
+		 *
+		 * Backends call this rather than handleSocketEvent() directly, and key
+		 * their bookkeeping on the descriptor rather than on a SocketBase*: a
+		 * raw pointer collected before dispatch is worthless once a handler
+		 * has released the socket it belongs to. The weak reference recorded
+		 * here is locked for the duration of the callback, so a socket that
+		 * its owner drops mid-dispatch stays alive until the callback returns,
+		 * and one that was already released is skipped instead of followed.
+		 */
+		void dispatch(socket_t fd, int trig);
+
 	protected:
 		SocketMonitor(const char* name);
 		static SocketMonitor* socket_monitor;
 		const char* name;
+
+		std::map<socket_t, std::weak_ptr<SocketBase> > registry;
 };
 
 }

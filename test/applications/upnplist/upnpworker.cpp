@@ -10,7 +10,7 @@ UPnP::Worker::Worker(Samurai::IO::Net::NetworkInterface* iface, const Samurai::I
 	: m_socket(0)
 	, m_addr(address)
 {
-	m_socket = new Samurai::IO::Net::MulticastSocket(this, m_addr.getPort());
+	m_socket = Samurai::IO::Net::MulticastSocket::create(this, m_addr.getPort());
 	m_socket->listen();
 	m_socket->setTimeToLive(5);
 	m_socket->setLoopbackMode(true);
@@ -19,14 +19,14 @@ UPnP::Worker::Worker(Samurai::IO::Net::NetworkInterface* iface, const Samurai::I
 	// FIXME: API: Should also accept InetSocketAddress
 	if (!m_socket->join(m_addr.getAddress(), m_addr.getPort()))
 	{
-		delete m_socket;
-		m_socket = 0;
+		m_socket.reset();
+		m_socket.reset();
 	}
 }
 
 UPnP::Worker::~Worker()
 {
-	delete m_socket;
+	m_socket.reset();
 }
 
 void UPnP::Worker::locateServices()

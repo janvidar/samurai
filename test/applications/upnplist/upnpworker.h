@@ -43,7 +43,7 @@ namespace UPnP
 			void EventDatagramError(const Samurai::IO::Net::DatagramSocket*, const char*);
 
 		private:
-			Samurai::IO::Net::MulticastSocket* m_socket;
+			std::shared_ptr<Samurai::IO::Net::MulticastSocket> m_socket;
 			Samurai::IO::Net::InetSocketAddress m_addr;
 	};
 

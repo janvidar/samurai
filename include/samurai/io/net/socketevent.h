@@ -7,6 +7,7 @@
 #define HAVE_QUICKDC_SOCKETEVENT_H
 
 #include <samurai/samurai.h>
+#include <memory>
 #include <samurai/io/net/dns/resolver.h>
 #include <samurai/io/net/socketbase.h>
 
@@ -108,7 +109,9 @@ class ServerSocketEventHandler : public EventHandler {
 		
 	protected:
 		virtual void EventAcceptError(const ServerSocket*, const char* msg) = 0;
-		virtual void EventAcceptSocket(const ServerSocket*, Socket* socket) = 0;
+		/* The accepted socket is handed over as a shared_ptr: the handler
+		   takes ownership by keeping it, or lets it go by not. */
+		virtual void EventAcceptSocket(const ServerSocket*, std::shared_ptr<Socket> socket) = 0;
 	
 	friend class ServerSocket;
 };

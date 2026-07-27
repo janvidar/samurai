@@ -6,6 +6,7 @@
 #ifndef HAVE_QUICKDC_DNSRESOLVER_BUILTIN_H
 #define HAVE_QUICKDC_DNSRESOLVER_BUILTIN_H
 
+#include <memory>
 #include <samurai/io/net/dns/resolver.h>
 #include <samurai/io/net/socketevent.h>
 #include <samurai/timer.h>
@@ -52,7 +53,7 @@ class BuiltinResolver :
 
 	protected:
 		uint16_t jobId;
-		SocketBase* sock;
+		std::shared_ptr<SocketBase> sock;
 		char* hostname;
 		Samurai::IO::Net::DNS::Name* rrname;
 		int numTries;

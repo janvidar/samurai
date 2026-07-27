@@ -56,7 +56,21 @@ class DatagramPacket {
  */
 class DatagramSocket : public SocketBase {
 	public:
-	
+		/**
+		 * Construct a DatagramSocket owned by a shared_ptr. The constructors are
+		 * protected: the socket monitor holds weak references, which requires
+		 * that every socket be owned by a shared_ptr from the start.
+		 */
+		template<typename... Args>
+		static std::shared_ptr<DatagramSocket> create(Args&&... args)
+		{
+			std::shared_ptr<DatagramSocket> self(new DatagramSocket(std::forward<Args>(args)...));
+			self->initialize();
+			return self;
+		}
+
+	protected:
+
 		DatagramSocket(DatagramEventHandler* eh, const SocketAddress& bindAddr);
 	
 		/**
@@ -74,6 +88,7 @@ class DatagramSocket : public SocketBase {
 		 * any available OS-assigned port.
 		 */
 		DatagramSocket(DatagramEventHandler* eh, enum Samurai::IO::Net::InetAddress::Version version);
+	public:
 		virtual ~DatagramSocket();
 
 		bool listen();
@@ -90,6 +105,8 @@ class DatagramSocket : public SocketBase {
 		DatagramPacket* myPacket;
 
 	protected:
+		void initialize();
+
 		DatagramSocket();
 		DatagramSocket(SocketAddress*);
 		

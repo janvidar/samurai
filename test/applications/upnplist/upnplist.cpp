@@ -62,7 +62,7 @@ class UPnPHandler
 			puts("Accept error");
 		}
 		
-		void EventAcceptSocket(const Samurai::IO::Net::ServerSocket*, Samurai::IO::Net::Socket* socket)
+		void EventAcceptSocket(const Samurai::IO::Net::ServerSocket*, std::shared_ptr<Samurai::IO::Net::Socket> socket)
 		{
 			puts("Accepted socket");
 			(void) socket;

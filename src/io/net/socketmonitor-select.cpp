@@ -24,7 +24,7 @@ Samurai::IO::Net::SelectSocketMonitor::SelectSocketMonitor() : Samurai::IO::Net:
 	act = new struct poll_act[max];
 	for (size_t n = 0; n < max; n++)
 	{
-		act[n].sock = 0;
+		act[n].fd = INVALID_SOCKET;
 		act[n].trig = 0;
 	}
 }
@@ -116,13 +116,16 @@ void Samurai::IO::Net::SelectSocketMonitor::wait(int time_ms) {
 		if (FD_ISSET(sock->getFD(), &wfds)) trig |= MWrite;
 		if (FD_ISSET(sock->getFD(), &rfds)) trig |= MRead;
 		
-		act[act_num].sock = sock;
+		if (!trig) continue;
+
+		if (act_num == max) break;
+		act[act_num].fd = sock->getFD();
 		act[act_num].trig = trig;
 		act_num++;
 	}
 	
 	for (size_t n = 0; n < act_num; n++)
-		handleSocketEvent(act[n].sock, act[n].trig);
+		dispatch(act[n].fd, act[n].trig);
 }
 
 #endif // SOCKET_NOTIFY_SELECT
