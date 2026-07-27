@@ -23,6 +23,11 @@ class Unicode : public Codec
 
 	protected:
 		UnicodePrivate* cvt;
+
+	private:
+		/* Owns an iconv descriptor: copying would close it twice. */
+		Unicode(const Unicode&);
+		Unicode& operator=(const Unicode&);
 };
 	
 

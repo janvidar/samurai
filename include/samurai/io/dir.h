@@ -55,6 +55,11 @@ class Directory {
 		struct _finddata_t* dir;
 #endif
 
+
+	private:
+		/* Owns 'file' and 'iterator': copying would double free both. */
+		Directory(const Directory&);
+		Directory& operator=(const Directory&);
 };
 
 }

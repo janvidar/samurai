@@ -8,9 +8,9 @@
 
 #include <samurai/samurai.h>
 #include <samurai/timestamp.h>
+#include <sys/stat.h>
 #include <string>
 
-struct stat;
 
 namespace Samurai {
 namespace IO {
@@ -156,7 +156,11 @@ class File {
 	public:
 		
 	protected:
-		mutable struct stat* info;
+		/* NOTE: was a mutable struct stat* with no assignment operator, so
+		   assigning one File to another double freed it. Held by value with a
+		   validity flag instead. */
+		mutable bool info_valid;
+		mutable struct stat info;
 		std::string filename;
 		mutable std::string baseName;
 		mutable std::string temp;

@@ -66,57 +66,42 @@ class FileBase
 
 #define RETURN_IF_NOT_OPEN(X, VAL) if (X == -1) return VAL;
 
-Samurai::IO::File::File(const char* path) : info(0), temp(""), fd(-1)
+Samurai::IO::File::File(const char* path) : info_valid(false), temp(""), fd(-1)
 {
 	filename = resolvePath(std::string(path));
 }
 
 
-Samurai::IO::File::File(const std::string& path) : info(0), temp(""), fd(-1)
+Samurai::IO::File::File(const std::string& path) : info_valid(false), temp(""), fd(-1)
 {
 	filename = resolvePath(path);
 }
 
 
-Samurai::IO::File::File(const Samurai::IO::File& copy) : info(0), temp(""), fd(-1)
+Samurai::IO::File::File(const Samurai::IO::File& copy) : info_valid(false), temp(""), fd(-1)
 {
 	filename = std::string(copy.filename);
-	if (copy.info)
-	{
-		info = new struct stat;
-		memcpy(info, copy.info, sizeof(struct stat));
-	}
+	info_valid = copy.info_valid;
+	if (info_valid) info = copy.info;
 }
 
 
-Samurai::IO::File::File(const Samurai::IO::File* copy) : info(0), temp(""), fd(-1)
+Samurai::IO::File::File(const Samurai::IO::File* copy) : info_valid(false), temp(""), fd(-1)
 {
 	filename = std::string(copy->filename);
-	if (copy->info)
-	{
-		info = new struct stat;
-		memcpy(info, copy->info, sizeof(struct stat));
-	}
+	info_valid = copy->info_valid;
+	if (info_valid) info = copy->info;
 }
 
 
 Samurai::IO::File::~File()
 {
 	close();
-	delete info;
-	info = 0;
 }
 
 
 void Samurai::IO::File::getInfo() const {
-	delete info;
-	info = 0;
-	info = new struct stat;
-	int retval = stat(filename.c_str(), info);
-	if (retval == -1) {
-		delete info;
-		info = 0;
-	}
+	info_valid = (stat(filename.c_str(), &info) == 0);
 }
 
 
@@ -284,31 +269,31 @@ ssize_t Samurai::IO::File::write(Samurai::IO::Buffer* data, size_t length, bool 
 
 off_t Samurai::IO::File::size() const
 {
-	if (!info) getInfo();
-	if (!info) return 0;
-	return info->st_size;
+	if (!info_valid) getInfo();
+	if (!info_valid) return 0;
+	return info.st_size;
 }
 
 mode_t Samurai::IO::File::getPermissions() const
 {
-	if (!info) getInfo();
-	if (!info) return 0;
-	return info->st_mode;
+	if (!info_valid) getInfo();
+	if (!info_valid) return 0;
+	return info.st_mode;
 }
 
 // This is Unix-specific
 gid_t Samurai::IO::File::getOwner() const
 {
-	if (!info) getInfo();
-	if (!info) return 0;
-	return info->st_uid;
+	if (!info_valid) getInfo();
+	if (!info_valid) return 0;
+	return info.st_uid;
 }
 
 uid_t Samurai::IO::File::getGroup() const
 {
-	if (!info) getInfo();
-	if (!info) return 0;
-	return info->st_gid;
+	if (!info_valid) getInfo();
+	if (!info_valid) return 0;
+	return info.st_gid;
 }
 
 bool Samurai::IO::File::isReadable() const
@@ -323,7 +308,6 @@ bool Samurai::IO::File::isWritable() const
 
 bool Samurai::IO::File::isDeleteable() const
 {
-	if (!info) return 0;
 	return false;
 }
 
@@ -358,17 +342,17 @@ bool Samurai::IO::File::matchExtension(const std::string& other) const
 
 bool Samurai::IO::File::isRegular() const
 {
-	if (!info) getInfo();
-	if (!info) return 0;
-	return (S_ISREG(info->st_mode) == 1);
+	if (!info_valid) getInfo();
+	if (!info_valid) return 0;
+	return (S_ISREG(info.st_mode) == 1);
 }
 
 bool Samurai::IO::File::isSymlink() const
 {
 #ifndef SAMURAI_WINDOWS
-	if (!info) getInfo();
-	if (!info) return 0;
-	return (S_ISLNK(info->st_mode) == 1);
+	if (!info_valid) getInfo();
+	if (!info_valid) return 0;
+	return (S_ISLNK(info.st_mode) == 1);
 #else
 	return false;
 #endif
@@ -376,9 +360,9 @@ bool Samurai::IO::File::isSymlink() const
 
 bool Samurai::IO::File::isDirectory() const
 {
-	if (!info) getInfo();
-	if (!info) return 0;
-	return (S_ISDIR(info->st_mode) == 1);
+	if (!info_valid) getInfo();
+	if (!info_valid) return 0;
+	return (S_ISDIR(info.st_mode) == 1);
 }
 
 bool Samurai::IO::File::exists(const char* path)
@@ -390,11 +374,8 @@ bool Samurai::IO::File::exists(const char* path)
 
 bool Samurai::IO::File::exists() const
 {
-	if (!info)
-	{
-		getInfo();
-	}
-	return (info != 0);
+	if (!info_valid) getInfo();
+	return info_valid;
 }
 
 bool Samurai::IO::File::remove() {
@@ -410,25 +391,25 @@ bool Samurai::IO::File::remove(const char* path)
 
 Samurai::TimeStamp Samurai::IO::File::getTimeCreated() const
 {
-	if (!info) getInfo();
-	if (!info) return 0;
-	return Samurai::TimeStamp(info->st_ctime);
+	if (!info_valid) getInfo();
+	if (!info_valid) return 0;
+	return Samurai::TimeStamp(info.st_ctime);
 }
 
 
 Samurai::TimeStamp Samurai::IO::File::getTimeModified() const
 {
-	if (!info) getInfo();
-	if (!info) return 0;
-	return Samurai::TimeStamp(info->st_mtime);
+	if (!info_valid) getInfo();
+	if (!info_valid) return 0;
+	return Samurai::TimeStamp(info.st_mtime);
 }
 
 
 Samurai::TimeStamp Samurai::IO::File::getTimeAccessed() const
 {
-	if (!info) getInfo();
-	if (!info) return 0;
-	return Samurai::TimeStamp(info->st_atime);
+	if (!info_valid) getInfo();
+	if (!info_valid) return 0;
+	return Samurai::TimeStamp(info.st_atime);
 }
 
 
