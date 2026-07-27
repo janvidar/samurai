@@ -91,12 +91,12 @@ const char*  Samurai::IO::Net::InetSocketAddress::toString()
 	if (addr->getType() == Samurai::IO::Net::InetAddress::IPv4) {
 		strcat(string, addr->toString());
 		strcat(string, ":");
-		strcat(string, quickdc_itoa(port, 10));
+		strcat(string, std::to_string(port).c_str());
 	} else if (addr->getType() == Samurai::IO::Net::InetAddress::IPv6) {
 		strcat(string, "[");
 		strcat(string, addr->toString());
 		strcat(string, "]:");
-		strcat(string, quickdc_itoa(port, 10));
+		strcat(string, std::to_string(port).c_str());
 	} else {
 		return 0;
 	}

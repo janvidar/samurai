@@ -74,48 +74,6 @@ int quickdc_atoi(const char* value) {
 	return (int) val;
 }
 
-/**
- * Works with radix 2..16.
- */
-const char* quickdc_itoa(int value, int radix) {
-	static char buf[36] = { 0 };
-
-	if (radix < 2 || radix > 16) return "";
-	if (value == 0) return "0";
-
-	const bool negative = (value < 0);
-	unsigned int val = negative ? (0u - (unsigned int) value)
-	                            : (unsigned int) value;
-
-	size_t i = sizeof(buf) - 1;
-	buf[i] = '\0';
-
-	while (val && i) {
-		buf[--i] = "0123456789abcdef"[val % (unsigned int) radix];
-		val /= (unsigned int) radix;
-	}
-
-	if (negative && i) buf[--i] = '-';
-
-	return &buf[i];
-}
-
-const char* quickdc_ulltoa(uint64_t value) {
-	static char buf[24] = { 0 };
-
-	if (value == 0) return "0";
-
-	size_t i = sizeof(buf) - 1;
-	buf[i] = '\0';
-
-	while (value && i) {
-		buf[--i] = "0123456789"[value % 10];
-		value /= 10;
-	}
-
-	return &buf[i];
-}
-
 unsigned int quickdc_abs(int n) {
 	return (n < 0) ? (0u - (unsigned int) n) : (unsigned int) n;
 }

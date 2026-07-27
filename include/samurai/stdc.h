@@ -28,8 +28,6 @@ extern "C" uint64_t quickdc_atoull(const char* value);
 extern "C" int quickdc_atoi(const char* value);
 
 extern "C" unsigned int quickdc_abs(int n);
-extern "C" const char* quickdc_itoa(int value, int radix);
-extern "C" const char* quickdc_ulltoa(uint64_t value);
 
 namespace Samurai {
 namespace Util {
