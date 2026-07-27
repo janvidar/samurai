@@ -14,32 +14,29 @@
 
 Samurai::IO::Directory::Directory(const Samurai::IO::File* file_) {
 	file = new Samurai::IO::File(*file_);
-	iterator = 0;
 
 #ifdef SAMURAI_UNIX
 	dir = 0;
-	entry = 0;
+	entry_data = 0;
 #endif
 }
 
 
 Samurai::IO::Directory::Directory(const std::string& path) {
 	file = new Samurai::IO::File(path);
-	iterator = 0;
 
 #ifdef SAMURAI_UNIX
 	dir = 0;
-	entry = 0;
+	entry_data = 0;
 #endif
 }
 
 Samurai::IO::Directory::Directory(const char* path) {
 	file = new Samurai::IO::File(path);
-	iterator = 0;
 
 #ifdef SAMURAI_UNIX
 	dir = 0;
-	entry = 0;
+	entry_data = 0;
 #endif
 }
 
@@ -70,9 +67,6 @@ void Samurai::IO::Directory::close() {
 	if (dir)
 		::closedir(dir);
 	dir = 0;
-
-	delete iterator;
-	iterator = 0;
 #endif
 
 #ifdef SAMURAI_OS_WINDOWS
@@ -80,29 +74,36 @@ void Samurai::IO::Directory::close() {
 #endif
 }
 
-Samurai::IO::File* Samurai::IO::Directory::first() {
-	return next();
+bool Samurai::IO::Directory::first(Samurai::IO::File& entry) {
+#ifdef SAMURAI_UNIX
+	if (!dir) return false;
+	::rewinddir(dir);
+	return next(entry);
+#else
+	(void) entry;
+	return false;
+#endif
 }
 
-Samurai::IO::File* Samurai::IO::Directory::next() {
+bool Samurai::IO::Directory::next(Samurai::IO::File& entry) {
 #ifdef SAMURAI_UNIX
-	delete iterator; iterator = 0;	
-	if (!dir) return 0;
+	if (!dir) return false;
+
 	for (;;) {
-		entry = readdir(dir);
-		if (!entry) return 0;
-		if ((strcmp(entry->d_name, ".") == 0) || (strcmp(entry->d_name, "..") == 0))
+		entry_data = readdir(dir);
+		if (!entry_data) return false;
+
+		if ((strcmp(entry_data->d_name, ".") == 0) || (strcmp(entry_data->d_name, "..") == 0))
 			continue;
 
-		const std::string child = file->getName() + "/" + entry->d_name;
-
-		iterator = new Samurai::IO::File(child);
-		return iterator;
+		entry = Samurai::IO::File(file->getName() + "/" + entry_data->d_name);
+		return true;
 	}
 #endif
 
 #ifdef SAMURAI_OS_WINDOWS
 	// FIXME: Not implemented
-	return 0;
+	(void) entry;
+	return false;
 #endif
 }

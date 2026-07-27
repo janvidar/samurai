@@ -38,17 +38,27 @@ class Directory {
 		bool open();
 		void close();
 	
-		/* Returns the first file entry of the directory */
-		Samurai::IO::File* first();
-		/* Returns the last file entry of the directory */
-		Samurai::IO::File* next();
+		/**
+		 * Rewind and read the first entry into 'entry'.
+		 * @return false if the directory is not open or is empty.
+		 */
+		bool first(Samurai::IO::File& entry);
+
+		/**
+		 * Read the next entry into 'entry'.
+		 * @return false when the directory is exhausted.
+		 *
+		 * NOTE: these used to return a File* that the Directory owned and
+		 * deleted on the following call, so the caller's pointer was
+		 * invalidated by the act of continuing to iterate.
+		 */
+		bool next(Samurai::IO::File& entry);
 
 	protected:
 		Samurai::IO::File* file;
-		Samurai::IO::File* iterator;
 #ifdef 	SAMURAI_UNIX
 		DIR* dir;
-		struct dirent* entry;
+		struct dirent* entry_data;
 #endif
 
 #ifdef SAMURAI_OS_WINDOWS
