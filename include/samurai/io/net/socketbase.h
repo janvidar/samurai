@@ -178,6 +178,14 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		bool setTimeToLive(uint8_t ttl, std::error_code& ec);
 
 		/**
+		 * Restrict an IPv6 socket to IPv6, or allow it to accept IPv4-mapped
+		 * connections as well. Without this the behaviour is whatever the
+		 * platform defaults to, which differs between Linux and the BSDs.
+		 */
+		bool setIPv6Only(bool toggle);
+		bool setIPv6Only(bool toggle, std::error_code& ec);
+
+		/**
 		 * Close the socket.
 		 */
 		void close();
@@ -204,6 +212,7 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		 * otherwise udp is assumed.
 		 */
 		bool createDescriptor(int af);
+		bool isIPv6() const;
 		
 		void setState(enum SocketState state);
 

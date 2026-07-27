@@ -319,11 +319,23 @@ size_t Samurai::IO::Net::SocketBase::getReceiveBufferSize() const {
 	return (size_t) (value < 0 ? 0 : value);
 }
 
+/* NOTE: IP_TTL is meaningless on an IPv6 socket; the hop limit lives behind
+   IPV6_UNICAST_HOPS. Both of these used IP_TTL unconditionally. */
+bool Samurai::IO::Net::SocketBase::isIPv6() const
+{
+	InetSocketAddress* isa = dynamic_cast<InetSocketAddress*>(addr);
+	return isa && isa->getAddress() &&
+	       isa->getAddress()->getType() == Samurai::IO::Net::InetAddress::IPv6;
+}
+
+
 uint8_t Samurai::IO::Net::SocketBase::getTimeToLive() const
 {
 	int value = 0;
 	socklen_t sz = sizeof(value);
-	int ret = SAMURAI_GETSOCKOPT(sd, IPPROTO_IP, IP_TTL, &value, &sz);
+	int ret = isIPv6()
+		? SAMURAI_GETSOCKOPT(sd, IPPROTO_IPV6, IPV6_UNICAST_HOPS, &value, &sz)
+		: SAMURAI_GETSOCKOPT(sd, IPPROTO_IP, IP_TTL, &value, &sz);
 	if (ret == SOCKET_ERROR) {
 		QERR("ERROR: getsockopt failed");
 	}
@@ -342,7 +354,10 @@ bool Samurai::IO::Net::SocketBase::setTimeToLive(uint8_t ttl, std::error_code& e
 	ec.clear();
 	int value = ttl;
 
-	if (SAMURAI_SETSOCKOPT(sd, IPPROTO_IP, IP_TTL, &value, sizeof(value)) == SOCKET_ERROR) {
+	const int level  = isIPv6() ? IPPROTO_IPV6 : IPPROTO_IP;
+	const int option = isIPv6() ? IPV6_UNICAST_HOPS : IP_TTL;
+
+	if (SAMURAI_SETSOCKOPT(sd, level, option, &value, sizeof(value)) == SOCKET_ERROR) {
 		ec = Samurai::system_error(NETERROR);
 		return false;
 	}
@@ -411,3 +426,29 @@ void Samurai::IO::Net::SocketBase::setState(enum SocketState newState)
 	state = newState;
 }
 
+
+bool Samurai::IO::Net::SocketBase::setIPv6Only(bool toggle)
+{
+	std::error_code ec;
+	return setIPv6Only(toggle, ec);
+}
+
+
+bool Samurai::IO::Net::SocketBase::setIPv6Only(bool toggle, std::error_code& ec)
+{
+	ec.clear();
+
+#ifdef IPV6_V6ONLY
+	int on = toggle ? 1 : 0;
+	if (SAMURAI_SETSOCKOPT(sd, IPPROTO_IPV6, IPV6_V6ONLY, &on, sizeof(on)) == SOCKET_ERROR)
+	{
+		ec = Samurai::system_error(NETERROR);
+		return false;
+	}
+	return true;
+#else
+	(void) toggle;
+	ec = Samurai::system_error(ENOPROTOOPT);
+	return false;
+#endif
+}
