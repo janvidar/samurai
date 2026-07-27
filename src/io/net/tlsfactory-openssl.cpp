@@ -8,7 +8,7 @@
 #include <samurai/io/net/tlsfactory-openssl.h>
 #include <samurai/io/file.h>
 
-#if defined(SSL_SUPPORT) && defined(SSL_OPENSSL)
+#ifdef SSL_OPENSSL
 
 #include <openssl/ssl.h>
 #include <openssl/crypto.h>
@@ -508,4 +508,4 @@ ssize_t Samurai::IO::Net::OpenSSL::write(const char* data, size_t length, enum S
 	}
 }
 
-#endif // SSL_SUPPORT && SSL_OPENSSL
+#endif // SSL_OPENSSL

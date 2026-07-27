@@ -29,9 +29,7 @@ Samurai::IO::Net::Socket::Socket(Samurai::IO::Net::SocketEventHandler* eh, const
 	eventHandler(eh),
 	timer(0),
 	outbound(true)
-#ifdef SSL_SUPPORT
 	,tls(0)
-#endif
 {
 	address = new InetAddress(address_);
 }
@@ -44,9 +42,7 @@ Samurai::IO::Net::Socket::Socket(SocketEventHandler* eh, const InetAddress& addr
 	eventHandler(eh),
 	timer(0),
 	outbound(false)
-#ifdef SSL_SUPPORT
 	,tls(0)
-#endif
 {
 	address = new InetAddress(addr_);
 }
@@ -59,9 +55,7 @@ Samurai::IO::Net::Socket::Socket(socket_t sd_, const Samurai::IO::Net::SocketAdd
 	eventHandler(0),
 	timer(0),
 	outbound(false)
-#ifdef SSL_SUPPORT
 	,tls(0)
-#endif
 {
 
 }
@@ -96,15 +90,12 @@ void Samurai::IO::Net::Socket::lookup() {
 void Samurai::IO::Net::Socket::internal_canRead()
 {
 	if (state == Connected
-#ifdef SSL_SUPPORT
 		|| state == SSLConnected
-#endif
 	) {
 		if (eventHandler)
 			eventHandler->EventDataAvailable(this);
 	}
 
-#ifdef SSL_SUPPORT
 	if (state == SSLHandshake)
 	{
 		TLSsendHandshake();
@@ -114,22 +105,18 @@ void Samurai::IO::Net::Socket::internal_canRead()
 	{
 		TLSsendGoodbye();
 	}
-#endif
 }
 
 void Samurai::IO::Net::Socket::internal_canWrite()
 {
 	if (state == Connected
-#ifdef SSL_SUPPORT
 		|| state == SSLConnected
-#endif
 	)
 	{
 		if (eventHandler)
 			eventHandler->EventCanWrite(this);	
 	}
 
-#ifdef SSL_SUPPORT
 	if (state == SSLHandshake)
 	{
 		TLSsendHandshake();
@@ -139,7 +126,6 @@ void Samurai::IO::Net::Socket::internal_canWrite()
 	{
 		TLSsendGoodbye();
 	}
-#endif
 }
 
 void Samurai::IO::Net::Socket::internal_error(int socket_error) {
@@ -266,9 +252,7 @@ void Samurai::IO::Net::Socket::disconnect() {
 
 ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 	if (state != Connected
-#ifdef SSL_SUPPORT
 	 && state != SSLConnected
-#endif
 		)
 	{
 		if (eventHandler) eventHandler->EventError(this, SocketWrite, "Not connected");
@@ -277,7 +261,6 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 
 	ssize_t ret = 0;
 
-#ifdef SSL_SUPPORT
 	if (state == SSLConnected && tls)
 	{
 		enum Samurai::IO::Net::TlsFactory::TlsStatus status;
@@ -308,7 +291,6 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 		}
 	}
 	else
-#endif
 	{
 		ret = ::send(sd, data, length, SAMURAI_SENDFLAGS);
 		if (ret == -1) {
@@ -336,16 +318,13 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 
 ssize_t Samurai::IO::Net::Socket::read(char* data, size_t length) {
 	if (state != Connected
-#ifdef SSL_SUPPORT
 	 && state != SSLConnected
-#endif
 		)
 	{
 		if (eventHandler) eventHandler->EventError(this, SocketRead, "Not connected");
 		return 0; // nothing was read.
 	}
 	ssize_t ret = 0;
-#ifdef SSL_SUPPORT
 	if (state == SSLConnected && tls)
 	{
 		enum Samurai::IO::Net::TlsFactory::TlsStatus status;
@@ -372,7 +351,6 @@ ssize_t Samurai::IO::Net::Socket::read(char* data, size_t length) {
 		}
 	}
 	else
-#endif
 	{
 		ret = ::recv(sd, data, length, 0);
 		if (ret == -1) {
@@ -395,16 +373,13 @@ ssize_t Samurai::IO::Net::Socket::read(char* data, size_t length) {
 
 ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
 	if (state != Connected
-#ifdef SSL_SUPPORT
 	 && state != SSLConnected
-#endif
 		)
 	{
 		if (eventHandler) eventHandler->EventError(this, SocketRead, "Not connected");
 		return 0;
 	}
 
-#ifdef SSL_SUPPORT
 	if (state == SSLConnected && tls)
 	{
 		enum Samurai::IO::Net::TlsFactory::TlsStatus status;
@@ -430,7 +405,6 @@ ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
 				return 0;
 		}
 	}
-#endif
 
 	ssize_t ret = ::recv(sd, data, length, MSG_PEEK);
 	if (ret == -1) {
@@ -484,7 +458,6 @@ void Samurai::IO::Net::Socket::toggleWriteNotifier(bool toggle) {
 }
 
 
-#ifdef SSL_SUPPORT
 
 
 bool Samurai::IO::Net::Socket::TLSInitialize(bool server) {
@@ -599,12 +572,6 @@ void Samurai::IO::Net::Socket::TLSsendGoodbye() {
 }
 
 
-#else
-bool Samurai::IO::Net::Socket::TLSInitialize(bool) { return false; }
-void Samurai::IO::Net::Socket::TLSDeinitialize() { }
-void Samurai::IO::Net::Socket::TLSsendHandshake()  { }
-void Samurai::IO::Net::Socket::TLSsendGoodbye()  { }
-#endif
 
 
 // eof

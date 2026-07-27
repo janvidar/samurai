@@ -249,10 +249,9 @@ foreach(target IN ITEMS samurai_objects ${SAMURAI_LIBRARIES})
         CXX_EXTENSIONS OFF
         POSITION_INDEPENDENT_CODE ON)
 
-    # NOTE: These have to be PUBLIC, not PRIVATE. SSL_SUPPORT gates a member of
-    # Samurai::IO::Net::Socket in the public header, and _FILE_OFFSET_BITS
-    # changes off_t, so a consumer compiled without them would disagree with
-    # the library about object layout.
+    # NOTE: These have to be PUBLIC, not PRIVATE. _FILE_OFFSET_BITS changes
+    # off_t, so a consumer compiled without it would disagree with the library
+    # about object layout.
     target_compile_definitions(${target}
         PUBLIC
             _FILE_OFFSET_BITS=64
@@ -271,10 +270,10 @@ foreach(target IN ITEMS samurai_objects ${SAMURAI_LIBRARIES})
     if(SAMURAI_TLS_PROVIDER STREQUAL "OPENSSL")
         # PUBLIC: tlsfactory-openssl.h is a public header and includes
         # <openssl/ssl.h>.
-        target_compile_definitions(${target} PUBLIC SSL_SUPPORT SSL_OPENSSL)
+        target_compile_definitions(${target} PUBLIC SSL_OPENSSL)
         target_link_libraries(${target} PUBLIC OpenSSL::SSL OpenSSL::Crypto)
     elseif(SAMURAI_TLS_PROVIDER STREQUAL "GNUTLS")
-        target_compile_definitions(${target} PUBLIC SSL_SUPPORT SSL_GNUTLS)
+        target_compile_definitions(${target} PUBLIC SSL_GNUTLS)
         target_link_libraries(${target} PUBLIC PkgConfig::GNUTLS)
     endif()
 

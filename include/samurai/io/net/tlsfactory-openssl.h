@@ -3,7 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
-#if defined(SSL_SUPPORT) && defined(SSL_OPENSSL)
+#ifdef SSL_OPENSSL
 
 #ifndef HAVE_SSL_SOCKET_OPENSSL_H___
 #define HAVE_SSL_SOCKET_OPENSSL_H___
@@ -41,5 +41,5 @@ class OpenSSL : public TlsFactory {
 
 #endif // HAVE_SSL_SOCKET_OPENSSL_H___
 
-#endif // SSL_SUPPORT && SSL_OPENSSL
+#endif // SSL_OPENSSL
 

@@ -13,13 +13,11 @@
 
 #include "socketmonitor-backend.h"
 
-#ifdef SSL_SUPPORT
 #include <samurai/io/net/tlsfactory.h>
 #if !defined(SSL_GNUTLS) && !defined(SSL_OPENSSL)
 bool Samurai::IO::Net::TlsFactory::global_init() { return false; }
 bool Samurai::IO::Net::TlsFactory::global_deinit() {return false; }
 #endif
-#endif // SSL_SUPPORT
 
 /* FIXME: Must not initialize SSL and WSA for each SocketMonitor created! */
 
@@ -34,17 +32,13 @@ Samurai::IO::Net::SocketMonitor::SocketMonitor(const char* name_) : name(name_)
 	}
 #endif
 
-#ifdef SSL_SUPPORT
 	Samurai::IO::Net::TlsFactory::global_init();
-#endif // SSL_SUPPORT
 }
 
 
 Samurai::IO::Net::SocketMonitor::~SocketMonitor()
 {
-#ifdef SSL_SUPPORT
 	Samurai::IO::Net::TlsFactory::global_deinit();
-#endif // SSL_SUPPORT
 
 #ifdef WINSOCK
 	WSACleanup();
