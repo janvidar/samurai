@@ -100,7 +100,25 @@ bool Samurai::Crypto::Digest::HashValue::getFormattedString(enum Format format, 
 
 Samurai::Crypto::Digest::HashValue& Samurai::Crypto::Digest::HashValue::operator=(const HashValue& copy)
 {
-	memcpy(m_data, copy.m_data, m_size);
+	/* NOTE: This used to memcpy m_size bytes without copying m_size and
+	   without checking m_data, so assigning to a default-constructed value
+	   wrote through a null pointer and assigning between different digest
+	   sizes silently copied the wrong length. */
+	if (this == &copy) return *this;
+
+	if (m_size != copy.m_size)
+	{
+		delete[] m_data;
+		m_data = 0;
+		m_size = copy.m_size;
+	}
+
+	if (!m_data && m_size)
+		m_data = new uint8_t[m_size];
+
+	if (m_size)
+		memcpy(m_data, copy.m_data, m_size);
+
 	return *this;
 }
 

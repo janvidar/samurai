@@ -8,6 +8,7 @@
 
 #include <samurai/samurai.h>
 #include <string>
+#include <vector>
 
 #define INITBUFSIZE 8192
 
@@ -22,6 +23,7 @@ class Buffer {
 		Buffer(size_t bufsize = INITBUFSIZE);
 		Buffer(const Buffer* copy);
 		Buffer(const Buffer& copy);
+		Buffer& operator=(const Buffer& copy);
 		virtual ~Buffer();
 	
 		enum BinaryMode { BigEndian, LittleEndian, NativeEndian };
@@ -101,7 +103,7 @@ class Buffer {
 		 * The buffer is automatically resized, so this might not be very
 		 * important.
 		 */
-		size_t capasity() const { return bufsize; }
+		size_t capasity() const { return buf.size(); }
 		
 		/**
 		 * Return the initial capasity of the buffer.
@@ -127,9 +129,11 @@ class Buffer {
 		bool resize(size_t needed = 0);
 		
 	protected:
-		char* buf;
+		/* NOTE: was a malloc'd char* with no assignment operator, so assigning
+		   one Buffer to another double freed. The vector owns the storage and
+		   supplies the copy and move semantics. */
+		std::vector<char> buf;
 		size_t len;             // bytes stored in the buffer
-		size_t bufsize;         // the buffer capasity
 		size_t initialCapasity; // the buffer's initial capasity
 };
 

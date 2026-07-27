@@ -61,6 +61,7 @@ class Name {
 	public:
 		Name();
 		Name(const Name& copy);
+		Name& operator=(const Name& copy);
 		Name(const char* hostname);
 		virtual ~Name();
 

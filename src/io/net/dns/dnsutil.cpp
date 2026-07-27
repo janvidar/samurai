@@ -53,13 +53,15 @@ Samurai::IO::Net::DNS::Label::Label(const char* val, uint8_t sz) {
 	}
 }
 
+/* NOTE: These copied DNS_LABEL_SIZE of the DNS_LABEL_SIZE+1 byte array, so a
+   full length label lost its terminator and the copy was not a valid string. */
 Samurai::IO::Net::DNS::Label::Label(const Samurai::IO::Net::DNS::Label& copy) {
-	memcpy(name, copy.name, DNS_LABEL_SIZE);
+	memcpy(name, copy.name, sizeof(name));
 	size = copy.size;
 }
 
 Samurai::IO::Net::DNS::Label::Label(Samurai::IO::Net::DNS::Label* copy) {
-	memcpy(name, copy->name, DNS_LABEL_SIZE);
+	memcpy(name, copy->name, sizeof(name));
 	size = copy->size;
 }
 
@@ -128,8 +130,21 @@ Samurai::IO::Net::DNS::Name::~Name()
 	clear();
 }
 
+Samurai::IO::Net::DNS::Name& Samurai::IO::Net::DNS::Name::operator=(const Name& copy) {
+	if (this == &copy) return *this;
+
+	clear();
+	memcpy(name, copy.name, sizeof(name));
+	size = copy.size;
+	offset = copy.offset;
+	for (std::vector<Label*>::const_iterator it = copy.parts.begin(); it != copy.parts.end(); it++)
+		parts.push_back(new Label(*it));
+
+	return *this;
+}
+
 Samurai::IO::Net::DNS::Name::Name(const Name& copy) {
-	memcpy(name, copy.name, DNS_NAME_SIZE);
+	memcpy(name, copy.name, sizeof(name));
 	size = copy.size;
 	offset = copy.offset;
 	for (std::vector<Label*>::iterator it = copy.parts.begin(); it != copy.parts.end(); it++) {

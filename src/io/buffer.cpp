@@ -9,6 +9,7 @@
 #include <string>
 #include <samurai/io/device.h>
 #include <stdlib.h>
+#include <new>
 
 /*
  * memrchr() and memmem() are glibc extensions. g++ defines _GNU_SOURCE on
@@ -19,39 +20,30 @@
 #define SAMURAI_HAVE_GNU_MEMSEARCH
 #endif
 
-Samurai::IO::Buffer::Buffer(size_t bufsize_) :  buf(0), len(0), bufsize(bufsize_), initialCapasity(bufsize_) {
-	buf = (char*) malloc(bufsize);
-	if (!buf) bufsize = 0;
+Samurai::IO::Buffer::Buffer(size_t bufsize_) : buf(bufsize_), len(0), initialCapasity(bufsize_) {
 }
 
-Samurai::IO::Buffer::Buffer(const Samurai::IO::Buffer& copy) : buf(0), len(copy.len), bufsize(copy.bufsize), initialCapasity(copy.initialCapasity) {
-	buf = (char*) malloc(bufsize);
-	if (!buf) {
-		bufsize = 0;
-		len = 0;
-		return;
-	}
-	memcpy(buf, copy.buf, len);
+Samurai::IO::Buffer::Buffer(const Samurai::IO::Buffer& copy) : buf(copy.buf), len(copy.len), initialCapasity(copy.initialCapasity) {
 }
 
 
-Samurai::IO::Buffer::Buffer(const Samurai::IO::Buffer* copy) : buf(0), len(copy->len), bufsize(copy->bufsize), initialCapasity(copy->initialCapasity) {
-	buf = (char*) malloc(bufsize);
-	if (!buf) {
-		bufsize = 0;
-		len = 0;
-		return;
-	}
-	memcpy(buf, copy->buf, len);
+Samurai::IO::Buffer::Buffer(const Samurai::IO::Buffer* copy) : buf(copy->buf), len(copy->len), initialCapasity(copy->initialCapasity) {
+}
+
+Samurai::IO::Buffer& Samurai::IO::Buffer::operator=(const Samurai::IO::Buffer& copy) {
+	if (this == &copy) return *this;
+	buf = copy.buf;
+	len = copy.len;
+	initialCapasity = copy.initialCapasity;
+	return *this;
 }
 
 
 Samurai::IO::Buffer::~Buffer() {
-	free(buf);
 }
 
 void Samurai::IO::Buffer::append(const char* data, size_t len_) {
-	if (len + len_ > bufsize && !resize(len_)) {
+	if (len + len_ > buf.size() && !resize(len_)) {
 		QERR("Buffer::append: unable to grow buffer, dropping %lu bytes", (unsigned long) len_);
 		return;
 	}
@@ -70,7 +62,7 @@ void Samurai::IO::Buffer::append(const char* string) {
 }
 
 void Samurai::IO::Buffer::append(char c) {
-	if (len + 1 > bufsize && !resize(1)) {
+	if (len + 1 > buf.size() && !resize(1)) {
 		QERR("Buffer::append: unable to grow buffer, dropping 1 byte");
 		return;
 	}
@@ -89,25 +81,25 @@ void Samurai::IO::Buffer::append(uint64_t n) {
 
 void Samurai::IO::Buffer::append(Samurai::IO::Buffer* buffer, size_t len) {
 	size_t mylen = (len > buffer->size()) ? buffer->size() : len;
-	append(buffer->buf, mylen);
+	if (mylen) append(&buffer->buf[0], mylen);
 }
 
 void Samurai::IO::Buffer::append(const Buffer& buffer)
 {
-	append(buffer.buf, buffer.size());
+	if (buffer.size()) append(&buffer.buf[0], buffer.size());
 }
 
 void Samurai::IO::Buffer::append(const Buffer& buffer, size_t len)
 {
 	size_t mylen = (len > buffer.size()) ? buffer.size() : len;
-	append(buffer.buf, mylen);
+	if (mylen) append(&buffer.buf[0], mylen);
 }
 
 
 void Samurai::IO::Buffer::pop(char* data, size_t len_) {
 	if (len == 0) return;
 	size_t mylen = (len_ > len) ? len : len_;
-	memcpy(data, buf, mylen);
+	memcpy(data, &buf[0], mylen);
 }
 
 void Samurai::IO::Buffer::pop(char* data, size_t offset, size_t len_) {
@@ -138,21 +130,21 @@ char* Samurai::IO::Buffer::memdup(size_t offset, size_t end) {
 std::string Samurai::IO::Buffer::pop(size_t len_) {
 	if (len == 0) return std::string("");
 	size_t mylen = (len_ > len) ? len : len_;
-	return std::string((char*) buf, mylen);
+	return std::string(&buf[0], mylen);
 }
 
 void Samurai::IO::Buffer::remove(size_t count) {
 	size_t cnt = (count > len) ? len : count;
-	memmove(buf, &buf[cnt], len-cnt);
+	if (len > cnt) memmove(&buf[0], &buf[cnt], len-cnt);
 	len -= cnt;
 }
 
 bool Samurai::IO::Buffer::resize(size_t needed) {
 	size_t required = len + needed;
 	if (required < len) return false; /* size_t overflow */
-	if (required <= bufsize) return true;
+	if (required <= buf.size()) return true;
 
-	size_t nsize = (bufsize > 0) ? bufsize : INITBUFSIZE;
+	size_t nsize = buf.size() ? buf.size() : INITBUFSIZE;
 	while (nsize < required) {
 		size_t next = nsize * 2;
 		if (next <= nsize) { /* size_t overflow */
@@ -162,20 +154,16 @@ bool Samurai::IO::Buffer::resize(size_t needed) {
 		nsize = next;
 	}
 
-	char* ptr = (char*) realloc(buf, nsize);
-	if (!ptr) return false;
-
-	buf = ptr;
-	bufsize = nsize;
+	try {
+		buf.resize(nsize);
+	} catch (const std::bad_alloc&) {
+		return false;
+	}
 	return true;
 }
 
 void Samurai::IO::Buffer::clear() {
-	char* ptr = (char*) realloc(buf, initialCapasity);
-	if (ptr) {
-		buf = ptr;
-		bufsize = initialCapasity;
-	}
+	buf.assign(initialCapasity, 0);
 	len = 0;
 }
 
@@ -184,16 +172,16 @@ int Samurai::IO::Buffer::find(char achar, size_t offset) {
 
 	char* pos = (char*) memchr(&buf[offset], achar, len - offset);
 	if (!pos) return -1;
-	return (int) (pos - buf);
+	return (int) (pos - &buf[0]);
 }
 
 int Samurai::IO::Buffer::rfind(char achar) {
 	if (len == 0) return -1;
 
 #ifdef SAMURAI_HAVE_GNU_MEMSEARCH
-	char* pos = (char*) memrchr(buf, achar, len);
+	char* pos = (char*) memrchr(&buf[0], achar, len);
 	if (!pos) return -1;
-	return (int) (pos - buf);
+	return (int) (pos - &buf[0]);
 #else
 	/* NOTE: x is unsigned - 'x-- > 0' walks len-1 down to 0 inclusive. */
 	for (size_t x = len; x-- > 0; )
@@ -212,7 +200,7 @@ int Samurai::IO::Buffer::find(const char* str, size_t offset) {
 #ifdef SAMURAI_HAVE_GNU_MEMSEARCH
 	char* pos = (char*) memmem(&buf[offset], len - offset, str, n);
 	if (!pos) return -1;
-	return (int) (pos - buf);
+	return (int) (pos - &buf[0]);
 #else
 	size_t p = offset;
 	for (;;) {
@@ -231,7 +219,7 @@ int Samurai::IO::Buffer::find(const char* str, size_t offset) {
 
 char* Samurai::IO::Buffer::ptr()
 {
-	return buf;
+	return buf.empty() ? 0 : &buf[0];
 }
 
 char Samurai::IO::Buffer::operator[](size_t offset) const {

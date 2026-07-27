@@ -21,6 +21,11 @@ class BZip2Compressor : public Samurai::IO::Codec {
 		bool exec(char* input, size_t& input_len, char* output, size_t& output_len);
 	protected:
 		Bz2Private* d;
+
+	private:
+		/* Owns a zlib/bzip2 stream: copying would free it twice. */
+		BZip2Compressor(const BZip2Compressor&);
+		BZip2Compressor& operator=(const BZip2Compressor&);
 };
 
 class BZip2Decompressor : public Samurai::IO::Codec {
@@ -30,6 +35,11 @@ class BZip2Decompressor : public Samurai::IO::Codec {
 		bool exec(char* input, size_t& input_len, char* output, size_t& output_len);
 	protected:
 		Bz2Private* d;
+
+	private:
+		/* Owns a zlib/bzip2 stream: copying would free it twice. */
+		BZip2Decompressor(const BZip2Decompressor&);
+		BZip2Decompressor& operator=(const BZip2Decompressor&);
 };
 
 class GzipCompressor : public Samurai::IO::Codec {
@@ -39,6 +49,11 @@ class GzipCompressor : public Samurai::IO::Codec {
 		bool exec(char* input, size_t& input_len, char* output, size_t& output_len);
 	protected:
 		GzPrivate* d;
+
+	private:
+		/* Owns a zlib/bzip2 stream: copying would free it twice. */
+		GzipCompressor(const GzipCompressor&);
+		GzipCompressor& operator=(const GzipCompressor&);
 };
 
 class GzipDecompressor : public Samurai::IO::Codec {
@@ -48,6 +63,11 @@ class GzipDecompressor : public Samurai::IO::Codec {
 		bool exec(char* input, size_t& input_len, char* output, size_t& output_len);
 	protected:
 		GzPrivate* d;
+
+	private:
+		/* Owns a zlib/bzip2 stream: copying would free it twice. */
+		GzipDecompressor(const GzipDecompressor&);
+		GzipDecompressor& operator=(const GzipDecompressor&);
 };
 
 }
