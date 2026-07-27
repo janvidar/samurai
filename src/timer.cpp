@@ -53,11 +53,24 @@ Samurai::TimerManager::~TimerManager() {
 }
 
 // TODO: Optimize this somewhat.
+bool Samurai::TimerManager::isPendingRemoval(const Samurai::Timer* timer) const {
+	for (size_t n = 0; n < pending_remove.size(); n++)
+		if (pending_remove[n] == timer) return true;
+	return false;
+}
+
 void Samurai::TimerManager::process() {
 	locked = true;
-	std::vector<Samurai::Timer*>::iterator it;
-	for (it = timers.begin(); it != timers.end(); it++) {
-		(*it)->internal_evaluate();
+
+	/* NOTE: Indexed rather than iterated, and checked against pending_remove
+	   before each dispatch. A callback is free to delete another timer - the
+	   socket connect timeout does exactly that - and the destructor can only
+	   record the removal while the pass is locked. Dispatching to a slot whose
+	   timer has already been freed was a use-after-free. */
+	for (size_t n = 0; n < timers.size(); n++) {
+		Samurai::Timer* timer = timers[n];
+		if (isPendingRemoval(timer)) continue;
+		timer->internal_evaluate();
 	}
 	
 	// Add any timers that were added during lock.
@@ -92,17 +105,20 @@ void Samurai::TimerManager::add(Samurai::Timer* timer) {
 }
 
 void Samurai::TimerManager::remove(Samurai::Timer* timer) {
-	if (!locked) {
-		std::vector<Samurai::Timer*>::iterator it;
-		for (it = timers.begin(); it != timers.end(); it++) {
-			if (*it == timer) {
-				timers.erase(it);
-				return;	
-			}
+	if (locked) {
+		pending_remove.push_back(timer);
+		return;
+	}
+
+	/* NOTE: The unlocked path used to fall through to pending_remove when the
+	   timer was not found, queueing a stale pointer for the next pass. */
+	std::vector<Samurai::Timer*>::iterator it;
+	for (it = timers.begin(); it != timers.end(); it++) {
+		if (*it == timer) {
+			timers.erase(it);
+			return;
 		}
 	}
-	
-	pending_remove.push_back(timer);
 }
 
 Samurai::TimerManager* Samurai::TimerManager::getInstance()
