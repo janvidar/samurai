@@ -104,7 +104,8 @@ class KQueueSocketMonitor : public SocketMonitor
 	
 	protected:
 		struct kevent* getChangeEventSlot();
-	
+		void internal_set(SocketBase* socket);
+
 	private:
 		std::vector<SocketBase*> sockets;
 		struct kevent* events;
