@@ -39,7 +39,7 @@ class NetworkInterfaceUnix : public NetworkInterface
 		virtual int getMtu() const;
 
 	private:
-		bool getInfo(int info, int af = AF_INET);
+		bool getInfo(unsigned long info, int af = AF_INET);
 		void extractHardwareAddress();
 		void extractAddresses();
 		void extractFlags();
@@ -47,6 +47,7 @@ class NetworkInterfaceUnix : public NetworkInterface
 	private:
 		int m_mtu;
 		interface_t m_ifnumber;
+		char m_name[IFNAMSIZ];
 		struct ifreq m_ifr;
 };
 
@@ -82,8 +83,8 @@ Samurai::IO::Net::NetworkInterfaceUnix::NetworkInterfaceUnix(const char* name)
 	, m_ifnumber(0)
 {
 	memset(&m_ifr, 0, sizeof(m_ifr));
-	m_ifr.ifr_addr.sa_family = AF_INET;
-	strcpy(m_ifr.ifr_name, name); // FIXME: Buffer overflow potential
+	memset(m_name, 0, sizeof(m_name));
+	strncpy(m_name, name, sizeof(m_name) - 1);
 
 	m_ifnumber = if_nametoindex(name);
 	if (getInfo(SIOCGIFMTU))
@@ -94,10 +95,15 @@ Samurai::IO::Net::NetworkInterfaceUnix::NetworkInterfaceUnix(const char* name)
 	extractAddresses();
 }
 
-bool Samurai::IO::Net::NetworkInterfaceUnix::getInfo(int info, int af)
+bool Samurai::IO::Net::NetworkInterfaceUnix::getInfo(unsigned long info, int af)
 {
 	int sock = socket(af, SOCK_DGRAM, 0);
 	if (sock == -1) return false;
+
+	memset(&m_ifr, 0, sizeof(m_ifr));
+	strncpy(m_ifr.ifr_name, m_name, sizeof(m_ifr.ifr_name) - 1);
+	m_ifr.ifr_addr.sa_family = af;
+
 	if (ioctl(sock, info, &m_ifr) < 0)
 	{
 		close(sock);
@@ -123,9 +129,12 @@ void Samurai::IO::Net::NetworkInterfaceUnix::extractHardwareAddress()
 	{
 		for (struct ifaddrs* iface = first; iface; iface = iface->ifa_next)
 		{
+			if (!iface->ifa_addr)
+				continue;
+
 			if (iface->ifa_addr->sa_family == AF_LINK)
 			{
-				if (strcmp(iface->ifa_name, m_ifr.ifr_name) == 0 && iface->ifa_addr)
+				if (strcmp(iface->ifa_name, m_name) == 0)
 				{
 					link = (struct sockaddr_dl*) iface->ifa_addr;
 					if (link->sdl_alen == 6)
@@ -154,11 +163,13 @@ void Samurai::IO::Net::NetworkInterfaceUnix::extractAddresses()
 	if (getInfo(SIOCGIFNETMASK))
 		m_netmask = new Samurai::IO::Net::InetAddress(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_addr)->sin_addr));
 
-	if (getInfo(SIOCGIFBRDADDR))
-		m_broadcast = new Samurai::IO::Net::InetAddress(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_addr)->sin_addr));
+	if ((m_flags & InterfaceBroadcast) && getInfo(SIOCGIFBRDADDR))
+		m_broadcast = new Samurai::IO::Net::InetAddress(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_broadaddr)->sin_addr));
 
-	if (getInfo(SIOCGIFBRDADDR))
-		m_destination = new Samurai::IO::Net::InetAddress(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_addr)->sin_addr));
+#ifdef SIOCGIFDSTADDR
+	if ((m_flags & InterfacePointToPoint) && getInfo(SIOCGIFDSTADDR))
+		m_destination = new Samurai::IO::Net::InetAddress(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_dstaddr)->sin_addr));
+#endif
 }
 
 void Samurai::IO::Net::NetworkInterfaceUnix::extractFlags()
@@ -196,7 +207,7 @@ void Samurai::IO::Net::NetworkInterfaceUnix::extractFlags()
 
 const char* Samurai::IO::Net::NetworkInterfaceUnix::getName() const
 {
-	return m_ifr.ifr_name;
+	return m_name;
 }
 
 int Samurai::IO::Net::NetworkInterfaceUnix::getMtu() const
