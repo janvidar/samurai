@@ -19,6 +19,7 @@
 #endif
 
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <samurai/os.h>
 
@@ -84,15 +85,34 @@ class OSWindows : public OSBase
 #define MAXHOSTNAMELEN 256
 #endif
 
+#define SAMURAI_FD_LIMIT_FALLBACK 1024
+#define SAMURAI_FD_LIMIT_MIN        64
+#define SAMURAI_FD_LIMIT_MAX     65536
+
 Samurai::OSUnix::OSUnix()
 {
-	getrlimit(RLIMIT_NOFILE, &limits);
+	memset(&limits, 0, sizeof(limits));
+	if (getrlimit(RLIMIT_NOFILE, &limits) != 0)
+	{
+		limits.rlim_cur = SAMURAI_FD_LIMIT_FALLBACK;
+		limits.rlim_max = SAMURAI_FD_LIMIT_FALLBACK;
+	}
+
+	memset(&info, 0, sizeof(info));
 	uname(&info);
 }
 
 size_t Samurai::OSUnix::getMaxOpenSockets()
 {
-	return (size_t) limits.rlim_max;
+	rlim_t soft = limits.rlim_cur;
+
+	if (soft == RLIM_INFINITY || soft == 0)
+		soft = SAMURAI_FD_LIMIT_FALLBACK;
+
+	if (soft < SAMURAI_FD_LIMIT_MIN) soft = SAMURAI_FD_LIMIT_MIN;
+	if (soft > SAMURAI_FD_LIMIT_MAX) soft = SAMURAI_FD_LIMIT_MAX;
+
+	return (size_t) soft;
 }
 
 time_t Samurai::OSUnix::getUptime()
