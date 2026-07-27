@@ -3,10 +3,10 @@
  * See the file "COPYING" for licensing details.
  */
 
-#define MAX_FILE_NAME 1024
-
 #include <samurai/io/dir.h>
 #include <samurai/io/file.h>
+
+#include <string>
 
 #ifdef SAMURAI_OS_WINDOWS
 #include <io.h>
@@ -91,20 +91,12 @@ Samurai::IO::File* Samurai::IO::Directory::next() {
 	for (;;) {
 		entry = readdir(dir);
 		if (!entry) return 0;
-		if (
-#if !defined(SAMURAI_OS_SOLARIS)
-			(entry->d_type == DT_DIR) &&
-#endif
-			((strcmp(entry->d_name, ".") == 0) || (strcmp(entry->d_name, "..") == 0))
-			)
+		if ((strcmp(entry->d_name, ".") == 0) || (strcmp(entry->d_name, "..") == 0))
 			continue;
 
-		char temp_filename[MAX_FILE_NAME + 1] = { 0, };
-		strcat(temp_filename, file->getName().c_str());
-		strcat(temp_filename, "/");
-		strcat(temp_filename, entry->d_name);
+		const std::string child = file->getName() + "/" + entry->d_name;
 
-		iterator = new Samurai::IO::File(temp_filename);
+		iterator = new Samurai::IO::File(child);
 		return iterator;
 	}
 #endif
