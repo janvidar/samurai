@@ -7,20 +7,19 @@
 #define HAVE_QUICKDC_TIMER_H
 
 #include <time.h>
+
+#include <chrono>
+#include <unordered_set>
 #include <vector>
 
-#include <samurai/timestamp.h>
-
 namespace Samurai {
-	
-	class TimeStamp;
-	class Timer;
 
+	class Timer;
 
 class TimerListener {
 	public:
 		virtual ~TimerListener() { }
-		
+
 		/**
 		 * Implement this to receive the timer events.
 		 * @param timer pointer to the timer that fired.
@@ -28,32 +27,48 @@ class TimerListener {
 		virtual void EventTimeout(Timer* timer) = 0;
 };
 
+/**
+ * NOTE: timing is on std::chrono::steady_clock rather than wall-clock
+ * TimeStamps. A wall-clock jump - NTP stepping the clock, or the operator
+ * changing the timezone - used to move every deadline with it, firing timers
+ * early or hanging them for the length of the jump.
+ */
 class Timer {
 
 	public:
+		typedef std::chrono::steady_clock clock;
+
+		/** Second granularity, kept for source compatibility. */
 		Timer(TimerListener* listener, time_t timeout_seconds, bool single_shot);
+
+		/** Sub-second granularity. */
+		Timer(TimerListener* listener, std::chrono::milliseconds timeout, bool single_shot);
+
 		virtual ~Timer();
-		
-/*
-		void reset(time_t timeout_seconds, bool single_shot);
-		void stop();
-*/
+
+		/** When this timer is next due. */
+		clock::time_point deadline() const { return due; }
+
+		/** Restart the interval from now. */
+		void reset();
 
 	protected:
-		void internal_evaluate();
-		void internal_timeout();
-		
+		void internal_fire(clock::time_point now);
+
 	private:
+		Timer(const Timer&);
+		Timer& operator=(const Timer&);
+
 		TimerListener* callback;
 		bool single_shot;
-		Samurai::TimeStamp start;
-		time_t timeout;
-		
+		std::chrono::milliseconds interval;
+		clock::time_point due;
+
 		friend class TimerManager;
 };
 
 /**
- * Don't interface with this class directly, 
+ * Don't interface with this class directly,
  * constructing a Timer, or destructing it will automatically
  * handle registrations.
  */
@@ -65,26 +80,44 @@ class TimerManager {
 		static TimerManager* getInstance();
 
 	public:
+		/** Fire every timer whose deadline has passed. */
 		void process();
-		
+
+		/**
+		 * Milliseconds until the next deadline, or -1 if no timer is armed.
+		 * Suitable as a socket monitor timeout, so an idle loop can block
+		 * until there is something to do rather than spinning on a fixed tick.
+		 */
+		int timeToNext() const;
+
+		size_t size() const { return live.size(); }
+
 	protected:
 		void add(Timer* timer);
 		void remove(Timer* timer);
+		void schedule(Timer* timer);
 
-		/**
-		 * True if the timer has been destroyed during the current process()
-		 * pass. Compares pointer values only - the object it names may
-		 * already be freed.
+		/*
+		 * NOTE: this replaces a std::vector scanned end to end on every tick,
+		 * which made process() O(n) in the number of registered timers whether
+		 * or not any had expired.
+		 *
+		 * The heap is ordered by deadline and holds entries, not timers: an
+		 * entry whose timer has since been removed is skipped when it
+		 * surfaces, which avoids having to erase from the middle of a heap.
+		 * 'live' is the authority on what still exists, so a callback that
+		 * destroys another timer cannot leave a dangling pointer behind.
 		 */
-		bool isPendingRemoval(const Timer* timer) const;
-		
-		std::vector<Timer*> timers;
-		std::vector<Timer*> pending_remove;
-		std::vector<Timer*> pending_add;
-		
-		Samurai::TimeStamp next;
-		bool locked;
-		
+		struct Entry {
+			Timer::clock::time_point due;
+			Timer* timer;
+			/* Greater-than, so push_heap/pop_heap give a min-heap by deadline. */
+			bool operator<(const Entry& other) const { return due > other.due; }
+		};
+
+		std::vector<Entry> heap;
+		std::unordered_set<Timer*> live;
+
 	friend class Timer;
 };
 
