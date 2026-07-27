@@ -14,16 +14,16 @@ class MyThread : public Thread
 	public:
 		MyThread(int data_) : Thread(0), data(data_)
 		{
-		
+
 		}
-		
+
 		~MyThread()
 		{
-		
+
 		}
-		
+
 		void run();
-		
+
 	private:
 		int data;
 };
@@ -44,8 +44,8 @@ void MyThread::run()
 			}
 		}
 	}
-	
-	printf("Ended thread\n");
+
+	printf("Ended thread, v=%d\n", v);
 }
 
 
@@ -55,7 +55,7 @@ int main(int , char** ) {
 	MyThread b(10);
 	a.start();
 	b.start();
-	
+
 	a.wait();
 	b.wait();
 }

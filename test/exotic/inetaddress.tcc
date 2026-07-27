@@ -220,7 +220,8 @@ EXO_TEST(inet_addr_ipv6_loopback_3,
 {
 	Samurai::IO::Net::InetAddress addr("::1", Samurai::IO::Net::InetAddress::IPv6);
 	if (addr.toString())
-	return strcmp(addr.toString(), "::1") == 0;
+	    return strcmp(addr.toString(), "::1") == 0;
+	return false;
 });
 
 EXO_TEST(inet_addr_ipv6_loopback_4,
@@ -436,4 +437,3 @@ EXO_TEST(inet_addr_ipv6_compare_8,
 	Samurai::IO::Net::InetAddress addr2("::ffff:0f10:121f");
 	return addr1 == addr2;
 });
-

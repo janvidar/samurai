@@ -31,8 +31,8 @@ Samurai::IO::Net::KQueueSocketMonitor::KQueueSocketMonitor() : Samurai::IO::Net:
 	change = new struct kevent[MAXCHANGES];
 
 	memset(events, 0, sizeof(struct kevent) * max);
-	memset(change, 0, sizeof(struct kevent) * max);
-	
+	memset(change, 0, sizeof(struct kevent) * MAXCHANGES);
+
 	kfd = kqueue();
 	if (kfd == -1)
 	{
@@ -53,10 +53,10 @@ bool Samurai::IO::Net::KQueueSocketMonitor::isValid()
 	{
 		return false;
 	}
-	
+
 	if (kfd == -1)
 		return false;
-	
+
 	return true;
 }
 
@@ -94,7 +94,7 @@ struct kevent* Samurai::IO::Net::KQueueSocketMonitor::getChangeEventSlot()
 		kevent(kfd, change, numChanges, events, 0, &timeout);
 		numChanges = 0;
 	}
-	
+
 	struct kevent* ev = &change[numChanges++];
 	memset(ev, 0, sizeof(struct kevent));
 	return ev;
@@ -104,10 +104,11 @@ static void print_kevent(struct kevent* event)
 {
 	if (!event)
 		return;
-	
-	char* filter = new char[50]; filter[0] = 0;
-	char* flags = new char[50]; flags[0] = 0;
-	
+
+	/* Large enough to hold every EV_* name concatenated with " | " separators. */
+	char filter[128]; filter[0] = 0;
+	char flags[128]; flags[0] = 0;
+
 	switch (event->filter)
 	{
 		case EVFILT_READ:     strcat(filter, "EVFILT_READ");     break;
@@ -121,10 +122,10 @@ static void print_kevent(struct kevent* event)
 		case EVFILT_FS:       strcat(filter, "EVFILT_FS");       break;
 		case EVFILT_SYSCOUNT: strcat(filter, "EVFILT_SYSCOUNT"); break;
 		default:
-			sprintf(filter, "%d", event->filter);
+			snprintf(filter, sizeof(filter), "%d", event->filter);
 			break;
 	}
-	
+
 	if (event->flags & EV_ADD)  strcat(flags, "EV_ADD");
 	if (event->flags & EV_DELETE)  { if (strlen(flags)) strcat(flags, " | "); strcat(flags, "EV_DELETE"); }
 	if (event->flags & EV_ENABLE)  { if (strlen(flags)) strcat(flags, " | "); strcat(flags, "EV_ENABLE"); }
@@ -135,16 +136,13 @@ static void print_kevent(struct kevent* event)
 	if (event->flags & EV_EOF)     { if (strlen(flags)) strcat(flags, " | "); strcat(flags, "EV_EOF"); }
 	if (event->flags & EV_ERROR)   { if (strlen(flags)) strcat(flags, " | "); strcat(flags, "EV_ERROR"); }
 	if (event->flags & EV_OOBAND)  { if (strlen(flags)) strcat(flags, " | "); strcat(flags, "EV_OOBAND"); }
-	
+
 	if (!strlen(flags))
 	{
-		sprintf(flags, "%d", (int) event->flags);
+		snprintf(flags, sizeof(flags), "%d", (int) event->flags);
 	}
 
 	QDBG("print_kevent: ev=%p, { %d, %s, %s, %u, %d, %p }", event, (int) event->ident, filter, flags, (unsigned int) event->fflags, (int) event->data, (void*) event->udata);
-	
-	delete[] filter;
-	delete[] flags;
 }
 
 
@@ -161,11 +159,11 @@ void Samurai::IO::Net::KQueueSocketMonitor::internal_add(Samurai::IO::Net::Socke
 		filter |= EVFILT_READ;
 	if (socket->getMonitorTrigger() & Samurai::IO::Net::SocketMonitor::MWrite)
 		filter |= EVFILT_WRITE;
-	
+
 	short flags = EV_ADD | EV_ENABLE;
 	if (socket->getMonitorTrigger() & Samurai::IO::Net::SocketMonitor::MUrgent)
 		flags |= EV_OOBAND;
-	
+
 	EV_SET(ev, socket->getFD(), filter, flags, 0, 0, socket);
 	print_kevent(ev);
 	num++;
@@ -195,7 +193,7 @@ void Samurai::IO::Net::KQueueSocketMonitor::internal_modify(Samurai::IO::Net::So
 		filter |= EVFILT_READ;
 	if (socket->getMonitorTrigger() & Samurai::IO::Net::SocketMonitor::MWrite)
 		filter |= EVFILT_WRITE;
-	
+
 	short flags = EV_ADD | EV_ENABLE;
 	if (socket->getMonitorTrigger() & Samurai::IO::Net::SocketMonitor::MUrgent)
 		flags |= EV_OOBAND;
@@ -209,7 +207,7 @@ void Samurai::IO::Net::KQueueSocketMonitor::wait(int time_ms)
 	struct timespec timeout;
 	timeout.tv_sec  = time_ms / 1000;
 	timeout.tv_nsec = (time_ms % 1000) * 1000;
-	
+
 	int ret = kevent(kfd, change, numChanges, events, max, &timeout);
 	QDBG("kqueue - run changes=%d, max=%d, ret=%d", numChanges, max, ret);
 	numChanges = 0;
@@ -222,7 +220,7 @@ void Samurai::IO::Net::KQueueSocketMonitor::wait(int time_ms)
 		}
 		return;
 	}
-	
+
 	for (int n = 0; n < ret; n++)
 	{
 		struct kevent* ev = &events[n];

@@ -21,7 +21,7 @@ A Merkle tree is built by sending in data which is split into chunks 1024 bytes 
      /        \
 A=LH(S1) + B=LH(S2)
 
-So, sending in data, when the first 1024 bytes are reached you will have block S1, which 
+So, sending in data, when the first 1024 bytes are reached you will have block S1, which
 should be hashed as a leaf hash.
 
 A=LH(S1)
@@ -108,7 +108,7 @@ class MerkleNode : public Samurai::Crypto::Digest::HashValue
 	public:
 		MerkleNode(Samurai::Crypto::Digest::HashValue* value);
 		~MerkleNode();
-		
+
 	private:
 		MerkleNode();
 };
@@ -118,33 +118,33 @@ class MerkleWorkStack
 	public:
 		MerkleWorkStack(size_t capacity);
 		~MerkleWorkStack();
-	
+
 		uint64_t getSize()   { return size; }
 		size_t getPosition() { return pos; }
 		size_t getCapacity() { return capacity; }
 		bool isFull() const;
-		
+
 		void clear();
-		
+
 		void add(MerkleNode* node);
-		
+
 		void set(MerkleNode* node, size_t position);
 		void setPosition(size_t position);
-		
+
 		MerkleNode* get(size_t pos);
 		MerkleNode* getFirst();
 		MerkleNode* getLast();
-		
+
 		void removeLast();
-		
+
 		void grow();
-		
+
 	private:
 		MerkleNode** nodes;
 		uint64_t size;
 		size_t pos;
 		size_t capacity;
-		
+
 };
 
 
@@ -155,33 +155,33 @@ class MerkleTree : public Samurai::Crypto::Digest::Hash
 		 * Create a Merkle tree using the given hasher for hashing.
 		 */
 		MerkleTree(Samurai::Crypto::Digest::Hash* hasher, size_t block_size = 1024, size_t max_levels = 7);
-		
+
 		virtual ~MerkleTree();
-		
+
 		virtual size_t size() const
 		{
 			return m_hasher->size();
 		}
-		
+
 		virtual void reset();
 
 		virtual void finalize();
-		
+
 		virtual Samurai::Crypto::Digest::HashValue* digest();
-		
+
 		size_t countLeaves();
 		size_t maxLeaves();
-		
+
 		/**
 		 * Copy the leaf node data to this buffer.
 		 */
 		void copyLeavesLTR(Samurai::IO::Buffer& buffer);
-		
+
 		/**
 		 * Copy leaves right to left.
 		 */
 		void copyLeavesRTL(Samurai::IO::Buffer& buffer);
-		
+
 		/**
 		 * This will reset everything, and set a new set of leaves.
 		 */
@@ -190,28 +190,28 @@ class MerkleTree : public Samurai::Crypto::Digest::Hash
 		 * This will reset everything, and set a new set of leaves.
 		 */
 		void setLeavesRTL(Samurai::IO::Buffer& buffer, size_t leaves, uint64_t file_size);
-		
+
 		/**
 		 * Returns the maximun number of levels
 		 * that will be kept in the tree ("tree depth").
 		 */
 		size_t getMaxLevels() const { return m_max_levels; }
-	
+
 		/**
 		 * Returns the block size used for a single leaf node.
 		 */
 		size_t getBlockSize() const { return m_block_size; }
-	
+
 		/**
 		 * Returns the number of levels (or the tree depth).
 		 */
 		size_t getLevels();
-		
+
 	protected:
-		
+
 		void compact(MerkleWorkStack* stack);
 		void compact_all(MerkleWorkStack* stack);
-		
+
 		/**
 		 * Combines two hashes and produces a new node of the internal hash of the two.
 		 */
@@ -231,7 +231,7 @@ class MerkleTree : public Samurai::Crypto::Digest::Hash
 		 * length is always block_size, except for the last leaf which may be shorter.
 		 */
 		virtual void hash(uint8_t* data, size_t length);
-		
+
 	private:
 		Samurai::Crypto::Digest::Hash* m_hasher;
 		MerkleWorkStack* m_nodes;
@@ -239,7 +239,6 @@ class MerkleTree : public Samurai::Crypto::Digest::Hash
 		uint64_t m_count;
 		size_t   m_max_levels;
 		size_t   m_max_leaves;
-		size_t   m_leaf_block_size;
 		size_t   m_blocks_per_leaf;
 };
 
