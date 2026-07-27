@@ -23,7 +23,10 @@ bool Samurai::IO::Net::TlsFactory::global_deinit() {return false; }
 
 Samurai::IO::Net::SocketMonitor::SocketMonitor(const char* name_) : name(name_)
 {
-#ifdef WINSOCK
+/* NOTE: this was #ifdef WINSOCK, a macro defined nowhere in the tree - the
+   rest of the sources use SAMURAI_WINSOCK from socketglue.h. WSAStartup()
+   therefore never ran, and no socket call works on Windows until it has. */
+#ifdef SAMURAI_WINSOCK
 	QDBG("Initializing Winsock library...");
 	WSAData wsa;
 	if (WSAStartup(MAKEWORD(2, 2), &wsa) != NO_ERROR) {
@@ -40,7 +43,7 @@ Samurai::IO::Net::SocketMonitor::~SocketMonitor()
 {
 	Samurai::IO::Net::TlsFactory::global_deinit();
 
-#ifdef WINSOCK
+#ifdef SAMURAI_WINSOCK
 	WSACleanup();
 #endif
 }
