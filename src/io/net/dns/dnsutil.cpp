@@ -12,7 +12,7 @@ bool Samurai::IO::Net::DNS::Validator::isValidLabel(const char* buf, size_t len)
 	if (!buf || !len) return false;
 
 	for (size_t n = 0; n < len; n++)
-		if (!(isalnum(buf[n]) || buf[n] == '_' || buf[n] == '-'))
+		if (!(isalnum((unsigned char) buf[n]) || buf[n] == '_' || buf[n] == '-'))
 			return false;
 	return true;
 }
@@ -26,12 +26,13 @@ bool Samurai::IO::Net::DNS::Validator::isValidName(const char* buf, size_t len)
 	for (size_t n = 0; n < len; n++) {
 		if (buf[n] == '.') {
 			if (period) return false; // check for double periods.
-			else period = true;
-		} else {
-			period = false;
+			period = true;
+			continue;
 		}
-		
-		if (!(isalnum(buf[n]) || buf[n] == '_' || buf[n] == '-'))
+
+		period = false;
+
+		if (!(isalnum((unsigned char) buf[n]) || buf[n] == '_' || buf[n] == '-'))
 			return false;
 	}
 
@@ -177,13 +178,24 @@ void Samurai::IO::Net::DNS::Name::addPart(Label* label) {
 
 
 char* Samurai::IO::Net::DNS::Name::toString() {
-	//if (!strlen(name)) {
+	size_t used = 0;
 	name[0] = 0;
+
 	for (std::vector<Label*>::iterator it = parts.begin(); it != parts.end(); it++) {
-		strcat(name, (*it)->getName());
-		strcat(name, ".");
+		const char* part = (*it)->getName();
+		if (!part) continue;
+
+		const size_t plen = strlen(part);
+
+		if (plen + 1 > DNS_NAME_SIZE - used)
+			break;
+
+		memcpy(&name[used], part, plen);
+		used += plen;
+		name[used++] = '.';
 	}
-	// }
+
+	name[used] = 0;
 	return name;
 }
 
