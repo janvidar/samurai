@@ -60,37 +60,41 @@ bool Samurai::IO::Net::KQueueSocketMonitor::isValid()
 	return true;
 }
 
+/* ev->filter names the single filter that fired; it is an identifier (a small
+   negative number), not a bitmask, so it has to be compared and not masked.
+   The EV_* conditions live in ev->flags. */
 static int get_poll_events(struct kevent* handle)
 {
-        short trig = handle->filter;
-        int evt  = 0;
+	int evt = 0;
 
-        if (trig & EVFILT_READ)
-                evt |= Samurai::IO::Net::SocketMonitor::MRead;
+	switch (handle->filter)
+	{
+		case EVFILT_READ:
+			evt |= Samurai::IO::Net::SocketMonitor::MRead;
+			break;
 
-        if (trig & EVFILT_WRITE)
-                evt |= Samurai::IO::Net::SocketMonitor::MWrite;
+		case EVFILT_WRITE:
+			evt |= Samurai::IO::Net::SocketMonitor::MWrite;
+			break;
 
-        if (trig & EV_EOF)
-                evt |= Samurai::IO::Net::SocketMonitor::MClose;
+		default:
+			break;
+	}
 
-        if (trig & EV_ERROR)
-                evt |= Samurai::IO::Net::SocketMonitor::MError;
+	if (handle->flags & EV_EOF)
+		evt |= Samurai::IO::Net::SocketMonitor::MClose;
 
-        return evt;
+	return evt;
 }
 
 struct kevent* Samurai::IO::Net::KQueueSocketMonitor::getChangeEventSlot()
 {
 	// If change buffer is full, commit it to the kqueue.
-	if (numChanges + 1 == MAXCHANGES)
+	if (numChanges == MAXCHANGES)
 	{
 		struct timespec timeout;
 		timeout.tv_sec  = 0;
 		timeout.tv_nsec = 0;
-		struct kevent* ev = &change[numChanges++];
-		memset(ev, 0, sizeof(struct kevent));
-		ev->filter = EV_RECEIPT;
 		kevent(kfd, change, numChanges, events, 0, &timeout);
 		numChanges = 0;
 	}
@@ -146,26 +150,40 @@ static void print_kevent(struct kevent* event)
 }
 
 
+/* Because a filter is an identifier rather than a bit, a socket that wants both
+   readability and writability needs one kevent per filter -- ORing the two
+   together yields EVFILT_READ (-1 | -2 == -1) and silently drops the write
+   interest, so a connecting socket never learns that its connect() completed.
+
+   Both filters are always registered and only enabled or disabled, which keeps
+   EV_DELETE off the modify path: deleting a filter that was never registered
+   fails with ENOENT. */
+void Samurai::IO::Net::KQueueSocketMonitor::internal_set(Samurai::IO::Net::SocketBase* socket)
+{
+	int trigger = socket->getMonitorTrigger();
+
+	bool want_read = (trigger & (MRead | MAccept | MClose | MUrgent)) != 0;
+	bool want_write = (trigger & MWrite) != 0;
+
+	short flags = EV_ADD;
+	if (trigger & MUrgent)
+		flags |= EV_OOBAND;
+
+	struct kevent* ev = getChangeEventSlot();
+	EV_SET(ev, socket->getFD(), EVFILT_READ,
+		flags | (want_read ? EV_ENABLE : EV_DISABLE), 0, 0, socket);
+	print_kevent(ev);
+
+	ev = getChangeEventSlot();
+	EV_SET(ev, socket->getFD(), EVFILT_WRITE,
+		flags | (want_write ? EV_ENABLE : EV_DISABLE), 0, 0, socket);
+	print_kevent(ev);
+}
+
 void Samurai::IO::Net::KQueueSocketMonitor::internal_add(Samurai::IO::Net::SocketBase* socket)
 {
 	QDBG("kqueue - add (ptr=%p, sd=%d)", socket, socket->getFD());
-	struct kevent* ev = getChangeEventSlot();
-	short filter = 0;
-	if (socket->getMonitorTrigger() & Samurai::IO::Net::SocketMonitor::MRead
-			|| socket->getMonitorTrigger() & Samurai::IO::Net::SocketMonitor::MAccept
-			|| socket->getMonitorTrigger() & Samurai::IO::Net::SocketMonitor::MClose
-			|| socket->getMonitorTrigger() & Samurai::IO::Net::SocketMonitor::MUrgent
-		)
-		filter |= EVFILT_READ;
-	if (socket->getMonitorTrigger() & Samurai::IO::Net::SocketMonitor::MWrite)
-		filter |= EVFILT_WRITE;
-
-	short flags = EV_ADD | EV_ENABLE;
-	if (socket->getMonitorTrigger() & Samurai::IO::Net::SocketMonitor::MUrgent)
-		flags |= EV_OOBAND;
-
-	EV_SET(ev, socket->getFD(), filter, flags, 0, 0, socket);
-	print_kevent(ev);
+	internal_set(socket);
 	num++;
 }
 
@@ -173,40 +191,32 @@ void Samurai::IO::Net::KQueueSocketMonitor::internal_add(Samurai::IO::Net::Socke
 void Samurai::IO::Net::KQueueSocketMonitor::internal_remove(Samurai::IO::Net::SocketBase* socket)
 {
 	QDBG("kqueue - del (ptr=%p, sd=%d)", socket, socket->getFD());
+
+	/* udata is left null so that the EV_ERROR entries kqueue reports for a
+	   descriptor that has already been closed are not mistaken for readiness
+	   events on a dangling socket. */
 	struct kevent* ev = getChangeEventSlot();
-	EV_SET(ev, socket->getFD(), 0, EV_DELETE | EV_DISABLE, 0, 0, 0);
+	EV_SET(ev, socket->getFD(), EVFILT_READ, EV_DELETE, 0, 0, 0);
 	print_kevent(ev);
+
+	ev = getChangeEventSlot();
+	EV_SET(ev, socket->getFD(), EVFILT_WRITE, EV_DELETE, 0, 0, 0);
+	print_kevent(ev);
+
 	num--;
 }
 
 void Samurai::IO::Net::KQueueSocketMonitor::internal_modify(Samurai::IO::Net::SocketBase* socket)
 {
 	QDBG("kqueue - mod (ptr=%p, sd=%d)", socket, socket->getFD());
-	struct kevent* ev = getChangeEventSlot();
-
-	short filter = 0;
-	if (socket->getMonitorTrigger() & Samurai::IO::Net::SocketMonitor::MRead
-			|| socket->getMonitorTrigger() & Samurai::IO::Net::SocketMonitor::MAccept
-			|| socket->getMonitorTrigger() & Samurai::IO::Net::SocketMonitor::MClose
-			|| socket->getMonitorTrigger() & Samurai::IO::Net::SocketMonitor::MUrgent
-		)
-		filter |= EVFILT_READ;
-	if (socket->getMonitorTrigger() & Samurai::IO::Net::SocketMonitor::MWrite)
-		filter |= EVFILT_WRITE;
-
-	short flags = EV_ADD | EV_ENABLE;
-	if (socket->getMonitorTrigger() & Samurai::IO::Net::SocketMonitor::MUrgent)
-		flags |= EV_OOBAND;
-
-	EV_SET(ev, socket->getFD(), filter, flags, 0, 0, socket);
-	print_kevent(ev);
+	internal_set(socket);
 }
 
 void Samurai::IO::Net::KQueueSocketMonitor::wait(int time_ms)
 {
 	struct timespec timeout;
 	timeout.tv_sec  = time_ms / 1000;
-	timeout.tv_nsec = (time_ms % 1000) * 1000;
+	timeout.tv_nsec = (time_ms % 1000) * 1000000;
 
 	int ret = kevent(kfd, change, numChanges, events, max, &timeout);
 	QDBG("kqueue - run changes=%d, max=%d, ret=%d", numChanges, max, ret);
@@ -227,6 +237,17 @@ void Samurai::IO::Net::KQueueSocketMonitor::wait(int time_ms)
 		SocketBase* sock = (SocketBase*) ev->udata;
 		print_kevent(ev);
 		if (!sock) continue;
+
+		/* EV_ERROR in the event list reports a rejected *change*, with errno in
+		   ev->data - not a condition on the socket. Dispatching it as readiness
+		   would fabricate a read or write event. */
+		if (ev->flags & EV_ERROR)
+		{
+			QDBG("kqueue - change rejected (sd=%d, filter=%d): %s",
+				(int) ev->ident, (int) ev->filter, strerror((int) ev->data));
+			continue;
+		}
+
 		int trig = get_poll_events(ev);
 		QDBG("kqueue - SIG (ptr=%p, sd=%d) trigger=%x (%d/%d) ev={%d, %d, %d, %p}", sock, sock ? sock->getFD() : -1, trig, n+1, ret, ev->ident, ev->filter, ev->fflags, ev->udata);
 		handleSocketEvent(sock, trig);
