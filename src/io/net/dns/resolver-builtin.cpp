@@ -80,7 +80,7 @@ void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 	buffer->appendBinary((uint16_t) 0x0000,    Samurai::IO::Buffer::BigEndian);
 	buffer->appendBinary((uint16_t) 0x0000,    Samurai::IO::Buffer::BigEndian);
 
-	printf("Adding request for: '%s'\n", rrname->toString());
+	printf("Adding request for: '%s'\n", rrname->toString().c_str());
 
 	// Write hostname.
 	for (size_t n = 0; n < rrname->countParts(); n++) {
@@ -143,16 +143,16 @@ void Samurai::IO::Net::DNS::BuiltinResolver::EventGotDatagram(DatagramSocket*, D
 			if (dynamic_cast<Samurai::IO::Net::DNS::RR_A*>(rr->rr)) {
 				
 				Samurai::IO::Net::DNS::RR_A* tmp = dynamic_cast<Samurai::IO::Net::DNS::RR_A*>(rr->rr);
-				printf("hostname='%s', resolved_rra='%s'\n", hostname, tmp->getAddress()->toString());
+				printf("hostname='%s', resolved_rra='%s'\n", hostname, tmp->getAddress()->toString().c_str());
 				eventHandler->EventHostFound(tmp->getAddress());
 				found = true;
 				break;
 				
 			} else if (dynamic_cast<Samurai::IO::Net::DNS::RR_CNAME*>(rr->rr)) {
 				Samurai::IO::Net::DNS::RR_CNAME* tmp = dynamic_cast<Samurai::IO::Net::DNS::RR_CNAME*>(rr->rr);
-				printf("hostname='%s', resolved_rra='%s' (cname)\n", hostname, tmp->getName()->toString());
+				printf("hostname='%s', resolved_rra='%s' (cname)\n", hostname, tmp->getName()->toString().c_str());
 				
-				printf("rrname='%s', cname='%s'\n", rrname->toString(), tmp->getName()->toString());
+				printf("rrname='%s', cname='%s'\n", rrname->toString().c_str(), tmp->getName()->toString().c_str());
 				
 				delete rrname;
 				rrname = new Samurai::IO::Net::DNS::Name(*tmp->getName());
@@ -167,7 +167,7 @@ void Samurai::IO::Net::DNS::BuiltinResolver::EventGotDatagram(DatagramSocket*, D
 		
 		if (!found)
 		{
-			printf("Need to query again for %s\n", rrname->toString());
+			printf("Need to query again for %s\n", rrname->toString().c_str());
 		}
 		
 		

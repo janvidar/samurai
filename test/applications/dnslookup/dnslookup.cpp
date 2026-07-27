@@ -24,9 +24,9 @@ class DNSResolver : public ResolveEventHandler {
 		}
 	
 		void EventHostFound(InetAddress* addr) {
-			const char* str = addr->toString();
-			if (str) {
-				printf("%s\n", str);
+			const std::string str = addr->toString();
+			if (!str.empty()) {
+				printf("%s\n", str.c_str());
 			} else {
 				printf("error: str is null\n");
 			}

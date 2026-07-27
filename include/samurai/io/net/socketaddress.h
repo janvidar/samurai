@@ -24,7 +24,7 @@ namespace Samurai {
 					virtual struct sockaddr* getSockAddr() = 0;
 					virtual size_t getSockAddrSize() = 0;
 
-					virtual const char*  toString() = 0;
+					virtual std::string  toString() = 0;
 					
 					virtual bool isLinkLocal() = 0;
 			};
@@ -42,7 +42,7 @@ namespace Samurai {
 					void setRawSocketAddress(void* sockaddr_data, size_t sockaddr_len, uint16_t port, enum Samurai::IO::Net::InetAddress::Version version);
 					InetAddress* getAddress() const;
 					uint16_t     getPort();
-					const char*  toString();
+					std::string  toString();
 					bool isLinkLocal();
 
 					int getSockAddrFamily();
@@ -53,7 +53,6 @@ namespace Samurai {
 					struct sockaddr* data;
 					InetAddress* addr;
 					uint16_t port;
-					char* string;
 			};
 			
 #if 0
@@ -65,7 +64,7 @@ namespace Samurai {
 					UnixSocketAddress(const char* filename);
 					
 					const char*  getFileName();
-					const char*  toString();
+					std::string  toString();
 			};
 			
 #endif // 0

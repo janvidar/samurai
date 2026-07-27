@@ -32,7 +32,7 @@ Samurai::IO::Net::MulticastSocket::~MulticastSocket()
 bool Samurai::IO::Net::MulticastSocket::join(const Samurai::IO::Net::InetAddress& maddr, uint16_t port)
 {
 	Samurai::IO::Net::InetSocketAddress* address = new Samurai::IO::Net::InetSocketAddress(maddr, port);
-	QDBG("Join multicast address: %s", address->toString());
+	QDBG("Join multicast address: %s", address->toString().c_str());
 	
 	// FIXME: Use specified Interface?
 	// int actual_interface = netif;
@@ -59,7 +59,7 @@ bool Samurai::IO::Net::MulticastSocket::join(const Samurai::IO::Net::InetAddress
 bool Samurai::IO::Net::MulticastSocket::leave(const Samurai::IO::Net::InetAddress& maddr, uint16_t port)
 {
 	Samurai::IO::Net::InetSocketAddress* address = new Samurai::IO::Net::InetSocketAddress(maddr, port);
-	QDBG("Leave multicast address: %s", address->toString());
+	QDBG("Leave multicast address: %s", address->toString().c_str());
 	delete address;
 	return false;
 }

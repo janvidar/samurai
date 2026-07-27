@@ -1,3 +1,4 @@
+#include <string>
 #include <samurai/stdc.h>
 #include <samurai/io/net/inetaddress.h>
 #include <samurai/io/net/socketmonitor.h>
@@ -92,13 +93,13 @@ EXO_TEST(inet_addr_ipv4_basic_8,
 EXO_TEST(inet_addr_ipv4_string_compare_1,
 {
 	Samurai::IO::Net::InetAddress addr("1.2.3.4");
-	return strcmp(addr.toString(), "1.2.3.4") == 0;
+	return addr.toString() == std::string("1.2.3.4");
 });
 
 EXO_TEST(inet_addr_ipv4_string_compare_2,
 {
 	Samurai::IO::Net::InetAddress addr("10.20.30.40");
-	return strcmp(addr.toString(), "10.20.30.40") == 0;
+	return addr.toString() == std::string("10.20.30.40");
 });
 
 
@@ -186,7 +187,7 @@ EXO_TEST(inet_addr_ipv4_loopback_2,
 EXO_TEST(inet_addr_ipv4_loopback_3,
 {
 	Samurai::IO::Net::InetAddress addr("127.0.0.1", Samurai::IO::Net::InetAddress::IPv4);
-	return strcmp(addr.toString(), "127.0.0.1") == 0;
+	return addr.toString() == std::string("127.0.0.1");
 });
 
 EXO_TEST(inet_addr_ipv4_loopback_4,
@@ -219,8 +220,8 @@ EXO_TEST(inet_addr_ipv6_loopback_2,
 EXO_TEST(inet_addr_ipv6_loopback_3,
 {
 	Samurai::IO::Net::InetAddress addr("::1", Samurai::IO::Net::InetAddress::IPv6);
-	if (addr.toString())
-	    return strcmp(addr.toString(), "::1") == 0;
+	if (!addr.toString().empty())
+	    return addr.toString() == std::string("::1");
 	return false;
 });
 
