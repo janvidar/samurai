@@ -265,7 +265,7 @@ class Connection :
 			if (arg_verbose)
 			{
 				char buf[100];
-				snprintf(buf, sizeof(buf), "Accepted connection from: %s", sock->getAddress()->toString());
+				snprintf(buf, sizeof(buf), "Accepted connection from: %s", sock->getAddress()->toString().c_str());
 				status(buf);
 			}
 
@@ -298,7 +298,7 @@ class Connection :
 		{
 			if (arg_verbose)
 			{
-				printf("Got datagram from: %s\n", packet->getAddress()->toString());
+				printf("Got datagram from: %s\n", packet->getAddress()->toString().c_str());
 			}
 
 			char* buffer = new char[packet->size()+1];

@@ -12,7 +12,6 @@ Samurai::IO::Net::InetSocketAddress::InetSocketAddress()
 	data = 0;
 	addr = new Samurai::IO::Net::InetAddress();
 	port = 0;
-	string = 0;
 }
 
 
@@ -21,7 +20,6 @@ Samurai::IO::Net::InetSocketAddress::InetSocketAddress(const Samurai::IO::Net::I
 	data = 0;
 	addr = new Samurai::IO::Net::InetAddress(isa.addr);
 	port = isa.port;
-	string = 0;
 }
 
 
@@ -30,7 +28,6 @@ Samurai::IO::Net::InetSocketAddress::InetSocketAddress(const Samurai::IO::Net::I
 	data = 0;
 	addr = new Samurai::IO::Net::InetAddress(isa->addr);
 	port = isa->port;
-	string = 0;
 }
 
 
@@ -39,7 +36,6 @@ Samurai::IO::Net::InetSocketAddress::InetSocketAddress(const Samurai::IO::Net::I
 	data = 0;
 	addr = new Samurai::IO::Net::InetAddress(addr_);
 	port = port_;
-	string = 0;
 }
 
 
@@ -48,7 +44,6 @@ Samurai::IO::Net::InetSocketAddress::InetSocketAddress(uint16_t port_)
 	data = 0;
 	addr = new Samurai::IO::Net::InetAddress("0.0.0.0");
 	port = port_;
-	string = 0;
 }
 
 
@@ -57,7 +52,6 @@ Samurai::IO::Net::InetSocketAddress::InetSocketAddress(const char* ip, uint16_t 
 	data = 0;
 	addr = new Samurai::IO::Net::InetAddress(ip, version);
 	port = port_;
-	string = 0;
 }
 
 
@@ -65,7 +59,6 @@ Samurai::IO::Net::InetSocketAddress::~InetSocketAddress()
 {
 	delete addr;
 	delete data;
-	delete[] string;
 }
 
 
@@ -81,36 +74,32 @@ uint16_t     Samurai::IO::Net::InetSocketAddress::getPort()
 }
 
 
-const char*  Samurai::IO::Net::InetSocketAddress::toString()
+/* NOTE: This used to strcat() into a fixed heap buffer sized for a formatted
+   IP, while addr->toString() could return an arbitrary length hostname or a
+   null pointer. Both hazards go away with std::string. */
+std::string  Samurai::IO::Net::InetSocketAddress::toString()
 {
-	if (string) return string;
-	
-	string = new char[INET6_ADDRSTRLEN+9];
-	memset(string, 0, INET6_ADDRSTRLEN+9);
+	const std::string address = addr->toString();
+	const std::string portstr = std::to_string(port);
 
-	if (addr->getType() == Samurai::IO::Net::InetAddress::IPv4) {
-		strcat(string, addr->toString());
-		strcat(string, ":");
-		strcat(string, std::to_string(port).c_str());
-	} else if (addr->getType() == Samurai::IO::Net::InetAddress::IPv6) {
-		strcat(string, "[");
-		strcat(string, addr->toString());
-		strcat(string, "]:");
-		strcat(string, std::to_string(port).c_str());
-	} else {
-		return 0;
-	}
+	if (addr->getType() == Samurai::IO::Net::InetAddress::IPv4)
+		return address + ":" + portstr;
 
-	return string;
+	if (addr->getType() == Samurai::IO::Net::InetAddress::IPv6)
+		return "[" + address + "]:" + portstr;
+
+	return std::string();
 }
 
 
 bool Samurai::IO::Net::InetSocketAddress::isLinkLocal() {
-	if (addr->getType() == Samurai::IO::Net::InetAddress::IPv4) {
-		return (strncmp(toString(), "127.", 4) == 0);
-	} else if (addr->getType() == Samurai::IO::Net::InetAddress::IPv6) {
-		return (strncmp(toString(), "[::1]:", 6) == 0);
-	}
+	/* FIXME: 127/8 and ::1 are loopback, not link local (169.254/16, fe80::/10),
+	   and this should test bits rather than formatted text. See TODO.md #32. */
+	const std::string s = toString();
+	if (addr->getType() == Samurai::IO::Net::InetAddress::IPv4)
+		return s.compare(0, 4, "127.") == 0;
+	if (addr->getType() == Samurai::IO::Net::InetAddress::IPv6)
+		return s.compare(0, 6, "[::1]:") == 0;
 	return false;
 }
 
@@ -168,7 +157,6 @@ size_t Samurai::IO::Net::InetSocketAddress::getSockAddrSize()
 
 void Samurai::IO::Net::InetSocketAddress::setRawSocketAddress(void* sockaddr_data, size_t sockaddr_len, uint16_t port_, enum Samurai::IO::Net::InetAddress::Version version_)
 {
-	if (string) { delete[] string; string = 0; }
 	if (addr) delete addr;
 	addr = new InetAddress();
 	addr->setRawAddress(sockaddr_data, sockaddr_len, version_);

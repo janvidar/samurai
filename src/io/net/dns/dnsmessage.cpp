@@ -191,7 +191,7 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 		 return DNS_STATUS_FORMAT_ERROR;
 
 #ifdef DATADUMP
-		printf("name='%s', type=%d, class=%d\n", question.name.toString(), (int) (uint16_t) question.type_class.rr_type, (int) (uint16_t) question.type_class.rr_class);
+		printf("name='%s', type=%d, class=%d\n", question.name.toString().c_str(), (int) (uint16_t) question.type_class.rr_type, (int) (uint16_t) question.type_class.rr_class);
 #endif
 	}
 	
@@ -295,14 +295,14 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 
 Samurai::IO::Net::DNS::ResourceRecord* Samurai::IO::Net::DNS::Message::getRecord(Samurai::IO::Net::DNS::Name* name)
 {
-	QDBG("getRecord(%p) = '%s'\n", name, name ? name->toString() : "");
+	QDBG("getRecord(%p) = '%s'\n", name, name ? name->toString().c_str() : "");
 	
 	if (!name) return 0;
 	
 	QDBG("Records: %d\n", (int) records.size());
 	for (std::vector<Samurai::IO::Net::DNS::ResourceRecord*>::iterator it = records.begin(); it != records.end(); it++) {
 		Samurai::IO::Net::DNS::ResourceRecord* record = (*it);
-		QDBG("Record: '%s' == '%s', %d\n", record->name->toString(), name->toString(), (int) (uint16_t) record->type_class.rr_type);
+		QDBG("Record: '%s' == '%s', %d\n", record->name->toString().c_str(), name->toString().c_str(), (int) (uint16_t) record->type_class.rr_type);
 		if ((*record->name) == *name /*&& record->type_class.rr_type == (uint16_t) Type_A*/)
 		{
 			QDBG("Match!\n");

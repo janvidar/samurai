@@ -5,6 +5,7 @@
 
 #include <samurai/samurai.h>
 #include <samurai/io/net/dns/dnsutil.h>
+#include <string>
 
 // FIXME: Handle "_" (underscore) correctly.
 bool Samurai::IO::Net::DNS::Validator::isValidLabel(const char* buf, size_t len)
@@ -177,26 +178,20 @@ void Samurai::IO::Net::DNS::Name::addPart(Label* label) {
 }
 
 
-char* Samurai::IO::Net::DNS::Name::toString() {
-	size_t used = 0;
-	name[0] = 0;
+std::string Samurai::IO::Net::DNS::Name::toString() const {
+	/* NOTE: This used to strcat() into the name[] member with no bound, from
+	   wire data, and destroyed the member's contents as a side effect of being
+	   asked for a formatted value. */
+	std::string out;
 
-	for (std::vector<Label*>::iterator it = parts.begin(); it != parts.end(); it++) {
+	for (std::vector<Label*>::const_iterator it = parts.begin(); it != parts.end(); it++) {
 		const char* part = (*it)->getName();
 		if (!part) continue;
-
-		const size_t plen = strlen(part);
-
-		if (plen + 1 > DNS_NAME_SIZE - used)
-			break;
-
-		memcpy(&name[used], part, plen);
-		used += plen;
-		name[used++] = '.';
+		out += part;
+		out += '.';
 	}
 
-	name[used] = 0;
-	return name;
+	return out;
 }
 
 void Samurai::IO::Net::DNS::Name::clear() {

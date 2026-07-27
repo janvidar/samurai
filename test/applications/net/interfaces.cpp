@@ -57,17 +57,17 @@ int main(int argc, char** argv)
 			printf("        MTU:          %d\n", iface->getMtu());
 			
 			if (iface->getAddress())
-				printf("        Address:      %s\n", iface->getAddress()->toString());
+				printf("        Address:      %s\n", iface->getAddress()->toString().c_str());
 			
 			if (iface->getNetmask())
-				printf("        Netmask:      %s\n", iface->getNetmask()->toString());
+				printf("        Netmask:      %s\n", iface->getNetmask()->toString().c_str());
 			
 			if (iface->isBroadcast() && iface->getBroadcastAddress())
-				printf("        Broadcast:    %s\n", iface->getBroadcastAddress()->toString());
+				printf("        Broadcast:    %s\n", iface->getBroadcastAddress()->toString().c_str());
 			
 			
 			if (iface->isPointToPoint() && iface->getDestinationAddress())
-				printf("        Destination:  %s\n", iface->getDestinationAddress()->toString());
+				printf("        Destination:  %s\n", iface->getDestinationAddress()->toString().c_str());
 			
 			if (hwaddr)
 				printf("        HW-address:   %s\n", hwaddr->getAddress());

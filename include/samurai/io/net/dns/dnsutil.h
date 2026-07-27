@@ -69,7 +69,7 @@ class Name {
 		bool join();
 		uint8_t countParts() const;
 		void addPart(Label* label);
-		char* toString();
+		std::string toString() const;
 		void clear();
 		
 		bool operator==(const Name& name);

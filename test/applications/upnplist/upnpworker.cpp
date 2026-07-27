@@ -55,7 +55,7 @@ void UPnP::Worker::send(UPnP::Packet& packet)
 void UPnP::Worker::EventGotDatagram(Samurai::IO::Net::DatagramSocket*, Samurai::IO::Net::DatagramPacket* packet)
 {
 	Samurai::IO::Buffer* buffer = packet->getBuffer();
-	printf("Got a packet (%d bytes) from %s:\n", (int) buffer->size(), packet->getAddress() ? packet->getAddress()->toString() : "'wtf?'");
+	printf("Got a packet (%d bytes) from %s:\n", (int) buffer->size(), packet->getAddress() ? packet->getAddress()->toString().c_str() : "'wtf?'");
 	char* buf = buffer->memdup(0, buffer->size());
 	printf("[%s]\n", buf);
 	free(buf);

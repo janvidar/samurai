@@ -92,19 +92,19 @@ static int net_string_to_address(int af, const char* src, void* dst)
 }
 
 
-Samurai::IO::Net::InetAddress::InetAddress() : version(Unspecified), data(0), resolver(0), resolveState(Unresolved), dnsevent(0), string(0)
+Samurai::IO::Net::InetAddress::InetAddress() : version(Unspecified), data(0), resolver(0), resolveState(Unresolved), dnsevent(0)
 {
 	data = new Samurai::IO::Net::__InternalAddress();
 	memset(data, 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
 }
 
-Samurai::IO::Net::InetAddress::InetAddress(enum Version ip_version) : version(ip_version), data(0), resolver(0), resolveState(Unresolved), dnsevent(0), string(0)
+Samurai::IO::Net::InetAddress::InetAddress(enum Version ip_version) : version(ip_version), data(0), resolver(0), resolveState(Unresolved), dnsevent(0)
 {
 	data = new Samurai::IO::Net::__InternalAddress();
 	memset(data, 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
 }
 
-Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Version ip_version) : version(Unspecified), data(0), resolver(0), resolveState(Unresolved), dnsevent(0), string(0)
+Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Version ip_version) : version(Unspecified), data(0), resolver(0), resolveState(Unresolved), dnsevent(0)
 {
 	version = ip_version;
 	data = new Samurai::IO::Net::__InternalAddress();
@@ -178,7 +178,7 @@ Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Vers
 }
 
 
-Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress& address) : ResolveEventHandler(), version(Unspecified), data(0), resolver(0), resolveState(Unresolved), dnsevent(0), string(0)
+Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress& address) : ResolveEventHandler(), version(Unspecified), data(0), resolver(0), resolveState(Unresolved), dnsevent(0)
 {
 	version = address.version;
 	data = new Samurai::IO::Net::__InternalAddress();
@@ -188,7 +188,7 @@ Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress& 
 }
 
 
-Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress* address) : version(Unspecified), data(0), resolver(0), resolveState(Unresolved), dnsevent(0), string(0)
+Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress* address) : version(Unspecified), data(0), resolver(0), resolveState(Unresolved), dnsevent(0)
 {
 	version = address->version;
 	data = new Samurai::IO::Net::__InternalAddress();
@@ -202,7 +202,6 @@ Samurai::IO::Net::InetAddress::~InetAddress()
 {
 	delete data;
 	delete resolver;
-	delete[] string;
 }
 
 
@@ -210,8 +209,6 @@ bool Samurai::IO::Net::InetAddress::setRawAddress(void* data_, size_t length, en
 {
 	if (ip_version == Samurai::IO::Net::InetAddress::IPv4 && length < sizeof(struct in_addr)) return false;
 	if (ip_version == Samurai::IO::Net::InetAddress::IPv6 && length < sizeof(struct in6_addr)) return false;
-	
-	if (string) { delete[] string; string = 0; }
 	
  	version = ip_version;
 	memset(data, 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
@@ -289,38 +286,33 @@ bool Samurai::IO::Net::InetAddress::isLoopback() const
 }
 
 
-const char* Samurai::IO::Net::InetAddress::getAddress() const
+/* NOTE: This used to cache the formatted address in a mutable char* member
+   and hand out a pointer to it, so the result went stale when the address
+   changed and dangled once the object died. Formatted on demand instead. */
+std::string Samurai::IO::Net::InetAddress::getAddress() const
 {
 	if (resolveState != Resolved)
-	{
-		return hostname.c_str();
-	}
-	
-	if (string) return string;
-	
-	string = new char[INET6_ADDRSTRLEN+1];
-	memset(string, 0, INET6_ADDRSTRLEN);
-	
+		return hostname;
+
+	char buf[INET6_ADDRSTRLEN+1] = { 0, };
 	const char* ret = 0;
 
 	if (version == IPv4) {
-		ret = net_address_to_string(AF_INET, (void*) &data->internal.in, string, INET_ADDRSTRLEN);
+		ret = net_address_to_string(AF_INET, (void*) &data->internal.in, buf, INET_ADDRSTRLEN);
 	} else if (version == IPv6) {
-		ret = net_address_to_string(AF_INET6, (void*) &data->internal.in6, string, INET6_ADDRSTRLEN);
+		ret = net_address_to_string(AF_INET6, (void*) &data->internal.in6, buf, INET6_ADDRSTRLEN);
 	}
 
 	if (!ret)
-	{
-		fprintf(stderr, "Unable to convert to string!\n");
-		return 0;
-	}
-	return string;
+		return std::string();
+
+	return std::string(buf);
 }
 
 
-const char* Samurai::IO::Net::InetAddress::toString() const
+std::string Samurai::IO::Net::InetAddress::toString() const
 {
-	const char* string = getAddress();
+	const std::string string = getAddress();
 /*
 	QDBG("toString: '%s'", string);
 */
@@ -359,7 +351,6 @@ Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const st
 {
 	delete data; data = 0;
 	delete resolver; resolver = 0;
-	delete[] string; string = 0;
 	
 	version = Unspecified;
 	data = new Samurai::IO::Net::__InternalAddress();
@@ -409,7 +400,6 @@ Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const Sa
 {
 	delete data; data = 0;
 	delete resolver; resolver = 0;
-	delete[] string; string = 0;
 
 
 	version = copy.version;
@@ -431,7 +421,6 @@ bool Samurai::IO::Net::InetAddress::isResolved()
 
 void Samurai::IO::Net::InetAddress::EventHostFound(Samurai::IO::Net::InetAddress* address)
 {
-	if (string) { delete[] string; string = 0; }
 	version = address->version;
 	data = new Samurai::IO::Net::__InternalAddress();
 	memcpy(data, address->data, sizeof(struct Samurai::IO::Net::__InternalAddress));

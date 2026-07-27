@@ -69,8 +69,8 @@ namespace Samurai {
 					 */
 					virtual bool isLoopback() const;
 					
-					virtual const char* getAddress() const;
-					virtual const char* toString() const;
+					virtual std::string getAddress() const;
+					virtual std::string toString() const;
 					
 					enum Version getType() const;
 					
@@ -104,7 +104,6 @@ namespace Samurai {
 					Samurai::IO::Net::DNS::Resolver* resolver;
 					enum ResolveState resolveState;
 					ResolveEventHandler* dnsevent;
-					mutable char* string;
 					
 				friend class InetSocketAddress;
 				friend class SocketBase;
