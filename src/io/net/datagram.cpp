@@ -151,11 +151,16 @@ int Samurai::IO::Net::DatagramSocket::send(DatagramPacket* packet) {
 	if (!packet || !packet->addr) return -1;
 
 
+	/* NOTE: this used to copy into a 64 KB stack array that was zero
+	   initialised on every call - a memset of the whole thing per packet, and
+	   a stack depth hazard on threads with a small stack. The packet's own
+	   buffer already holds the bytes contiguously. */
 	size_t length = packet->buffer->size();
-	uint8_t data[MAX_BUF_SIZE] = { 0, };
 	if (length > MAX_BUF_SIZE) length = MAX_BUF_SIZE;
+	if (!length) return 0;
 
-	packet->buffer->pop((char*) data, length);
+	const char* data = packet->buffer->ptr();
+	if (!data) return -1;
 
 	struct sockaddr* sa = packet->addr->getSockAddr();
 	size_t sa_len = packet->addr->getSockAddrSize();
@@ -181,8 +186,10 @@ int Samurai::IO::Net::DatagramSocket::send(DatagramPacket* packet) {
 }
 
 int Samurai::IO::Net::DatagramSocket::read(DatagramPacket* packet) {
-	size_t length = MAX_BUF_SIZE;
-	uint8_t data[MAX_BUF_SIZE] = { 0, };
+	/* NOTE: the receive buffer was a 64 KB stack array zeroed on every call.
+	   It is a member now, so the memset and the stack pressure are gone. */
+	size_t length = sizeof(readbuf);
+	uint8_t* data = readbuf;
 
 	/* NOTE: this used a struct sockaddr_in and always built an IPv4 source
 	   address, so the sender of any IPv6 datagram came out as garbage. It also
