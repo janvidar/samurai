@@ -8,6 +8,7 @@
 #include <samurai/io/net/bandwidth.h>
 #include <samurai/io/net/socketbase.h>
 #include <samurai/io/net/socket.h>
+#include <samurai/error.h>
 #include <samurai/io/net/socketaddress.h>
 #include <samurai/io/net/socketevent.h>
 #include <samurai/io/net/socketmonitor.h>
@@ -20,6 +21,7 @@
 #include <time.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 Samurai::IO::Net::Socket::Socket(Samurai::IO::Net::SocketEventHandler* eh, const std::string& address_, uint16_t port_) :
 	SocketBase(),
@@ -575,5 +577,125 @@ void Samurai::IO::Net::Socket::TLSsendGoodbye() {
 
 
 
+
+
+/*
+ * NOTE: The three functions below are the reporting API. The legacy
+ * ssize_t read()/peek()/write() above are kept for source compatibility and
+ * now delegate, discarding the detail.
+ */
+
+Samurai::IO::ReadResult Samurai::IO::Net::Socket::read(char* data, size_t length,
+                                                       size_t& transferred, std::error_code& ec)
+{
+	transferred = 0;
+	ec.clear();
+
+	if (state != Connected && state != SSLConnected)
+	{
+		ec = Samurai::system_error(ENOTCONN);
+		return Samurai::IO::ReadError;
+	}
+
+	if (state == SSLConnected && tls)
+	{
+		enum Samurai::IO::Net::TlsFactory::TlsStatus status;
+		ssize_t ret = tls->read(data, length, status);
+
+		switch (status) {
+			case Samurai::IO::Net::TlsFactory::TLS_STATUS_OK:
+				if (ret > 0) { transferred = (size_t) ret; return Samurai::IO::ReadOk; }
+				return Samurai::IO::ReadEndOfFile;
+
+			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE:
+				toggleWriteNotifier(true);
+				return Samurai::IO::ReadWouldBlock;
+
+			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_READ:
+				return Samurai::IO::ReadWouldBlock;
+
+			case Samurai::IO::Net::TlsFactory::TLS_STATUS_CLOSED:
+				return Samurai::IO::ReadEndOfFile;
+
+			case Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR:
+				ec = Samurai::system_error(EPROTO);
+				return Samurai::IO::ReadError;
+		}
+		return Samurai::IO::ReadWouldBlock;
+	}
+
+	ssize_t ret = ::recv(sd, data, length, 0);
+
+	if (ret > 0)
+	{
+		transferred = (size_t) ret;
+		if (bandwidthManager) bandwidthManager->dataRecvTCP(transferred);
+		return Samurai::IO::ReadOk;
+	}
+
+	/* recv() returning 0 on a stream socket is an orderly shutdown by the
+	   peer, which the ssize_t overload could not express. */
+	if (ret == 0)
+		return Samurai::IO::ReadEndOfFile;
+
+	if (NETERROR == EAGAIN || NETERROR == EWOULDBLOCK || NETERROR == EINTR)
+		return Samurai::IO::ReadWouldBlock;
+
+	ec = Samurai::system_error(NETERROR);
+	return Samurai::IO::ReadError;
+}
+
+
+Samurai::IO::ReadResult Samurai::IO::Net::Socket::peek(char* data, size_t length,
+                                                       size_t& transferred, std::error_code& ec)
+{
+	transferred = 0;
+	ec.clear();
+
+	if (state != Connected && state != SSLConnected)
+	{
+		ec = Samurai::system_error(ENOTCONN);
+		return Samurai::IO::ReadError;
+	}
+
+	ssize_t ret = ::recv(sd, data, length, MSG_PEEK);
+
+	if (ret > 0) { transferred = (size_t) ret; return Samurai::IO::ReadOk; }
+	if (ret == 0) return Samurai::IO::ReadEndOfFile;
+
+	if (NETERROR == EAGAIN || NETERROR == EWOULDBLOCK || NETERROR == EINTR)
+		return Samurai::IO::ReadWouldBlock;
+
+	ec = Samurai::system_error(NETERROR);
+	return Samurai::IO::ReadError;
+}
+
+
+ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length, std::error_code& ec)
+{
+	ec.clear();
+
+	if (state != Connected && state != SSLConnected)
+	{
+		ec = Samurai::system_error(ENOTCONN);
+		return -1;
+	}
+
+	if (state == SSLConnected && tls)
+		return write(data, length);
+
+	ssize_t ret = ::send(sd, data, length, SAMURAI_SENDFLAGS);
+	if (ret >= 0)
+	{
+		if (bandwidthManager) bandwidthManager->dataSendTCP((size_t) ret);
+		return ret;
+	}
+
+	if (NETERROR == EAGAIN || NETERROR == EWOULDBLOCK || NETERROR == EINTR)
+		return 0;
+
+	ec = Samurai::system_error(NETERROR);
+	return -1;
+}
 
 // eof

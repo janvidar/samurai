@@ -13,6 +13,7 @@
 
 #include <stdio.h>
 #include <samurai/io/file.h>
+#include <samurai/error.h>
 #include <samurai/io/buffer.h>
 
 #include <unistd.h>
@@ -107,6 +108,15 @@ void Samurai::IO::File::getInfo() const {
 
 bool Samurai::IO::File::open(int mode)
 {
+	std::error_code ec;
+	return open(mode, ec);
+}
+
+
+bool Samurai::IO::File::open(int mode, std::error_code& ec)
+{
+	ec.clear();
+
 	int flags = 0;
 	mode_t fmode = 0666;
 	
@@ -150,7 +160,14 @@ bool Samurai::IO::File::open(int mode)
 #endif
 
 	fd = ::open(filename.c_str(), flags, fmode);
-	RETURN_IF_NOT_OPEN(fd, false);
+	if (fd == -1)
+	{
+		ec = Samurai::system_error(errno);
+		return false;
+	}
+
+	/* A previous stat() no longer describes what is now open. */
+	info_valid = false;
 	return true;
 }
 
@@ -209,20 +226,42 @@ bool Samurai::IO::File::flush()
 
 ssize_t Samurai::IO::File::read(char* data, size_t length)
 {
-	RETURN_IF_NOT_OPEN(fd, -1);
-	int status = ::read(fd, data, length);
-	if (status == -1) return -1;
-	if (status == 0)  return 0;
+	std::error_code ec;
+	return read(data, length, ec);
+}
+
+
+ssize_t Samurai::IO::File::read(char* data, size_t length, std::error_code& ec)
+{
+	ec.clear();
+	if (fd == -1) { ec = Samurai::system_error(EBADF); return -1; }
+
+	/* NOTE: was 'int status', truncating a ssize_t result. */
+	ssize_t status = ::read(fd, data, length);
+	if (status == -1) { ec = Samurai::system_error(errno); return -1; }
 	return status;
 }
 
 
 ssize_t Samurai::IO::File::write(const char* data, size_t length)
 {
-	RETURN_IF_NOT_OPEN(fd, -1);
-	int status = ::write(fd, data, length);
-	if (status == -1) return (errno == EAGAIN) ? 0 : -1;
+	std::error_code ec;
+	return write(data, length, ec);
+}
 
+
+ssize_t Samurai::IO::File::write(const char* data, size_t length, std::error_code& ec)
+{
+	ec.clear();
+	if (fd == -1) { ec = Samurai::system_error(EBADF); return -1; }
+
+	ssize_t status = ::write(fd, data, length);
+	if (status == -1)
+	{
+		if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
+		ec = Samurai::system_error(errno);
+		return -1;
+	}
 	return status;
 }
 
