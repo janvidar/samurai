@@ -22,8 +22,17 @@ class Bz2Private
 			stream->bzfree = 0;
 			stream->opaque = 0;
 		}
-		
+
+		~Bz2Private()
+		{
+			delete stream;
+		}
+
 		bz_stream* stream;
+
+	private:
+		Bz2Private(const Bz2Private&);
+		Bz2Private& operator=(const Bz2Private&);
 };
 
 class GzPrivate
@@ -36,8 +45,17 @@ class GzPrivate
 			stream->zfree = 0;
 			stream->opaque = 0;
 		}
-		
+
+		~GzPrivate()
+		{
+			delete stream;
+		}
+
 		z_stream* stream;
+
+	private:
+		GzPrivate(const GzPrivate&);
+		GzPrivate& operator=(const GzPrivate&);
 };
 
 
@@ -54,7 +72,8 @@ Samurai::IO::BZip2Compressor::BZip2Compressor()
 Samurai::IO::BZip2Compressor::~BZip2Compressor()
 {
 #ifdef DATADUMP
-	printf("~BZ2_Compressor, %u/%u = %.04f\n", d->stream->total_out_lo32, d->stream->total_in_lo32,  (float) d->stream->total_out_lo32 / (float)(d->stream->total_in_lo32 + 1));
+	if (d && d->stream)
+		printf("~BZ2_Compressor, %u/%u = %.04f\n", d->stream->total_out_lo32, d->stream->total_in_lo32,  (float) d->stream->total_out_lo32 / (float)(d->stream->total_in_lo32 + 1));
 #endif
 	if (d && d->stream)
 		BZ2_bzCompressEnd(d->stream);
@@ -96,7 +115,8 @@ Samurai::IO::BZip2Decompressor::BZip2Decompressor()
 Samurai::IO::BZip2Decompressor::~BZip2Decompressor()
 {
 #ifdef DATADUMP
-	printf("~BZip2Decompressor, %u/%u = %.04f\n", d->stream->total_out_lo32, d->stream->total_in_lo32,  (float)d->stream->total_out_lo32 / (float)(d->stream->total_in_lo32 + 1));
+	if (d && d->stream)
+		printf("~BZip2Decompressor, %u/%u = %.04f\n", d->stream->total_out_lo32, d->stream->total_in_lo32,  (float)d->stream->total_out_lo32 / (float)(d->stream->total_in_lo32 + 1));
 #endif
 	if (d && d->stream)
 		BZ2_bzDecompressEnd(d->stream);
@@ -113,8 +133,8 @@ bool Samurai::IO::BZip2Decompressor::exec(char* input, size_t& input_len, char* 
 	d->stream->next_out = (char*) output;
 
 	int retval = BZ2_bzDecompress(d->stream);
-	
-	if (retval == BZ_OK)
+
+	if (retval == BZ_OK || retval == BZ_STREAM_END)
 	{
 		output_len -= d->stream->avail_out;
 		input_len -= d->stream->avail_in;
