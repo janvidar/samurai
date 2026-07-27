@@ -222,6 +222,11 @@ void Samurai::IO::Net::Socket::connect()
 	setMonitor(Samurai::IO::Net::SocketMonitor::MRead |  Samurai::IO::Net::SocketMonitor::MWrite);
 
 	// connect and reset connection timer.
+	/* NOTE: this used to assign over 'timer', leaking the previous one on
+	   every reconnect. */
+	delete timer;
+	timer = 0;
+
 	int ret = ::connect(sd, addr->getSockAddr(), addr->getSockAddrSize());
 	timer = new Samurai::Timer(this, CONNECT_TIMEOUT, true);
 	if (ret == -1) {
