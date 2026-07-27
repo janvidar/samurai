@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <samurai/io/net/url.h>
 #include <samurai/io/net/inetaddress.h>
 #include <algorithm>
@@ -63,74 +64,158 @@ std::string Samurai::IO::Net::URL::toString()
 }
 
 
+/*
+ * NOTE: The previous implementation had four separate defects:
+ *
+ *  - the IPv6 branch set the host start to the index *of* the ']', so
+ *    "http://[::1]/" produced a host of "]";
+ *  - the port search ran over the whole remaining string rather than the
+ *    authority, so "http://host/path:8080" found the colon in the path and
+ *    then computed substr(pos+1, split_end - (pos+1)) with split_end < pos+1,
+ *    underflowing size_t;
+ *  - there was no userinfo handling at all, so "http://user:pass@host/"
+ *    parsed "pass@host" as the port;
+ *  - a failed parse left the previous URL's fields in place, because nothing
+ *    was reset on entry.
+ *
+ * This follows the RFC 3986 shape instead:
+ *
+ *   scheme "://" [ userinfo "@" ] host [ ":" port ] path [ "?" query ] [ "#" frag ]
+ */
 void Samurai::IO::Net::URL::parse()
 {
-	valid = true;
-	std::string::size_type split = url.find_first_of(':');
-	
-	if (split == std::string::npos || split == 0)
+	/* Reset first: parse() is called from operator= as well as the
+	   constructors, and a rejected URL must not inherit the old one's host. */
+	scheme.clear();
+	host = Samurai::IO::Net::InetAddress();
+	port = 0;
+	path.clear();
+	query.clear();
+	username.clear();
+	password.clear();
+	file.clear();
+	valid = false;
+
+	/* scheme */
+	std::string::size_type pos = url.find(':');
+	if (pos == std::string::npos || pos == 0) return;
+
+	scheme = url.substr(0, pos);
+	for (std::string::size_type n = 0; n < scheme.size(); n++)
+		scheme[n] = (char) tolower((unsigned char) scheme[n]);
+
+	if (!isalpha((unsigned char) scheme[0])) return;
+	for (std::string::size_type n = 0; n < scheme.size(); n++)
 	{
-		valid = false;
-		return;
+		const unsigned char c = (unsigned char) scheme[n];
+		if (!(isalnum(c) || c == '+' || c == '-' || c == '.')) return;
 	}
 
-	scheme = url.substr(0, split);
-	int (*pf)(int)=tolower;
-	std::transform(scheme.begin(), scheme.end(), scheme.begin(), pf);
-	split++;
-	
-	if (split >= url.size() || url.compare(split, 2, "//") != 0)
+	pos++;
+	if (url.compare(pos, 2, "//") != 0) return;
+	pos += 2;
+
+	/* The authority runs to the first '/', '?' or '#'. Bounding it here is
+	   what stops a colon in the path being mistaken for a port separator. */
+	std::string::size_type auth_end = url.find_first_of("/?#", pos);
+	if (auth_end == std::string::npos) auth_end = url.size();
+
+	std::string authority = url.substr(pos, auth_end - pos);
+
+	/* userinfo: split on the last '@', since one may appear in a password. */
+	const std::string::size_type at = authority.rfind('@');
+	if (at != std::string::npos)
 	{
-		valid = false;
-		return;
+		const std::string userinfo = authority.substr(0, at);
+		authority.erase(0, at + 1);
+
+		const std::string::size_type colon = userinfo.find(':');
+		if (colon == std::string::npos)
+		{
+			username = userinfo;
+		}
+		else
+		{
+			username = userinfo.substr(0, colon);
+			password = userinfo.substr(colon + 1);
+		}
+	}
+
+	/* host [ ":" port ] */
+	std::string hostname;
+	std::string portstr;
+	bool have_port = false;
+
+	if (!authority.empty() && authority[0] == '[')
+	{
+		const std::string::size_type close = authority.find(']');
+		if (close == std::string::npos) return;
+
+		hostname = authority.substr(1, close - 1);
+
+		if (close + 1 < authority.size())
+		{
+			if (authority[close + 1] != ':') return;
+			portstr = authority.substr(close + 2);
+			have_port = true;
+		}
 	}
 	else
 	{
-		split += 2;
-	}
-
-	// Guess the end of the hostname area
-	std::string::size_type split_end = std::string::npos;
-	if (split_end == std::string::npos)
-		split_end = url.find_first_of('/', split);
-	if (split_end == std::string::npos)
-		split_end = url.find_first_of('?', split);
-	if (split_end == std::string::npos)
-		split_end = url.size();
-
-	std::string::size_type split_host_end = split_end;
-	
-	/* Check for IPv6 address packed in square brackets */
-	std::string::size_type split_ipv6 = std::string::npos;
-	if (url[split] == '[' && split+1 != split_host_end)
-	{
-		split_ipv6 = url.find_first_of(']', split);
-		if (split_ipv6 == std::string::npos || split_ipv6 > split_end)
+		const std::string::size_type colon = authority.find(':');
+		if (colon == std::string::npos)
 		{
-			valid = false;
+			hostname = authority;
 		}
 		else
 		{
-			split = split_ipv6;
-		}
-	}
-	
-	std::string::size_type split_port = url.find_first_of(':', split);
-	if (split_port != std::string::npos)
-	{
-		port = Samurai::Util::Convert::to_uint16(url.substr(split_port+1, split_end-(split_port+1)));
-		if (port == 0)
-		{
-			valid = false;
-		}
-		else
-		{
-			split_host_end = split_port;
+			hostname = authority.substr(0, colon);
+			portstr = authority.substr(colon + 1);
+			have_port = true;
+
+			/* A second colon means an IPv6 literal that was not bracketed. */
+			if (portstr.find(':') != std::string::npos) return;
 		}
 	}
 
-	host = url.substr(split, split_host_end-split);
-	file = url.substr(split_end);
+	if (have_port)
+	{
+		/* to_uint16() rejects anything that is not all digits, and returns 0
+		   for an empty string or an out-of-range value. Port 0 is not usable
+		   as a destination, so it is treated as a parse failure. */
+		port = Samurai::Util::Convert::to_uint16(portstr);
+		if (port == 0) return;
+	}
+
+	/* An empty host is legal: "http://" and "file:///path" both have one. */
+	if (!hostname.empty())
+		host = hostname;
+
+	/* path [ "?" query ] [ "#" fragment ] */
+	std::string rest = url.substr(auth_end);
+
+	const std::string::size_type frag = rest.find('#');
+	if (frag != std::string::npos) rest.erase(frag);
+
+	const std::string::size_type q = rest.find('?');
+	if (q != std::string::npos)
+	{
+		query = rest.substr(q + 1);
+		path  = rest.substr(0, q);
+	}
+	else
+	{
+		path = rest;
+	}
+
+	if (path.empty()) path = "/";
+
+	/* getFile() has always meant "everything after the authority", query
+	   included; it is the request target. */
+	file = url.substr(auth_end);
+	if (file.empty()) file = "/";
+
+	valid = true;
 }
 
 bool Samurai::IO::Net::URL::isValid() const

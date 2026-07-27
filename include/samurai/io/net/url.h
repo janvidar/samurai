@@ -26,6 +26,10 @@ class URL {
 		uint16_t getPort() const { return port; }
 		std::string getScheme() const { return scheme; }
 		std::string getFile() const { return file; }
+		std::string getPath() const { return path; }
+		std::string getQuery() const { return query; }
+		std::string getUsername() const { return username; }
+		std::string getPassword() const { return password; }
 		std::string toString();
 		URL& operator=(const URL& u);
 		
