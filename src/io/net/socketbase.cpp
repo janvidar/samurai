@@ -48,24 +48,37 @@ Samurai::IO::Net::SocketBase::~SocketBase() {
 }
 
 const Samurai::IO::Net::InetAddress* Samurai::IO::Net::SocketBase::getLocalAddress() const {
-	InetSocketAddress* isa = dynamic_cast<InetSocketAddress*>(addr);
-	if (isa) {
-		if (isa->getAddress()->getType() == Samurai::IO::Net::InetAddress::IPv4) {
-			sockaddr_in localaddr;
-			socklen_t len = sizeof(localaddr);
-			if (getsockname(sd, (sockaddr*) &localaddr, &len) != 0) return 0;
-			if (!ia) ia = new Samurai::IO::Net::InetAddress();
-			ia->setRawAddress((void*) &localaddr.sin_addr, sizeof(struct in_addr), Samurai::IO::Net::InetAddress::IPv4);
-			return ia;
-		} if (isa->getAddress()->getType() == Samurai::IO::Net::InetAddress::IPv6) {
-			sockaddr_in6 localaddr;
-			socklen_t len = sizeof(localaddr);
-			if (getsockname(sd, (sockaddr*) &localaddr, &len) != 0) return 0;
-			if (!ia) ia = new Samurai::IO::Net::InetAddress();
-			ia->setRawAddress((void*) &localaddr.sin6_addr, sizeof(struct in_addr), Samurai::IO::Net::InetAddress::IPv6);
-			return ia;
-		}
+	/*
+	 * NOTE: the IPv6 branch passed sizeof(struct in_addr) - four bytes - for a
+	 * sixteen byte address, and setRawAddress() rejects anything shorter than
+	 * the family requires, so this silently returned an all-zero address for
+	 * every IPv6 socket. It also chose the branch from the *remote* address's
+	 * family rather than from what getsockname() actually returned.
+	 */
+	if (sd == INVALID_SOCKET) return 0;
+
+	struct sockaddr_storage localaddr;
+	socklen_t len = sizeof(localaddr);
+	memset(&localaddr, 0, sizeof(localaddr));
+
+	if (getsockname(sd, (sockaddr*) &localaddr, &len) != 0) return 0;
+
+	if (!ia) ia = new Samurai::IO::Net::InetAddress();
+
+	if (localaddr.ss_family == AF_INET) {
+		struct sockaddr_in* sin = (struct sockaddr_in*) &localaddr;
+		if (!ia->setRawAddress(&sin->sin_addr, sizeof(sin->sin_addr),
+		                       Samurai::IO::Net::InetAddress::IPv4)) return 0;
+		return ia;
 	}
+
+	if (localaddr.ss_family == AF_INET6) {
+		struct sockaddr_in6* sin6 = (struct sockaddr_in6*) &localaddr;
+		if (!ia->setRawAddress(&sin6->sin6_addr, sizeof(sin6->sin6_addr),
+		                       Samurai::IO::Net::InetAddress::IPv6)) return 0;
+		return ia;
+	}
+
 	return 0;
 }
 

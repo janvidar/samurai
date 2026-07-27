@@ -30,7 +30,9 @@ Samurai::IO::Net::Socket::Socket(Samurai::IO::Net::SocketEventHandler* eh, const
 	autoConnectAfterLookup(false),
 	eventHandler(eh),
 	timer(0),
-	outbound(true)
+	outbound(true),
+	readable(0),
+	writable(false)
 	,tls(0)
 {
 	address = new InetAddress(address_);
@@ -43,7 +45,9 @@ Samurai::IO::Net::Socket::Socket(SocketEventHandler* eh, const InetAddress& addr
 	autoConnectAfterLookup(false),
 	eventHandler(eh),
 	timer(0),
-	outbound(false)
+	outbound(false),
+	readable(0),
+	writable(false)
 	,tls(0)
 {
 	address = new InetAddress(addr_);
@@ -56,7 +60,9 @@ Samurai::IO::Net::Socket::Socket(socket_t sd_, const Samurai::IO::Net::SocketAdd
 	autoConnectAfterLookup(false),
 	eventHandler(0),
 	timer(0),
-	outbound(false)
+	outbound(false),
+	readable(0),
+	writable(false)
 	,tls(0)
 {
 
