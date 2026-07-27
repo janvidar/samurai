@@ -13,6 +13,7 @@
 #include <samurai/io/net/socketmonitor.h>
 
 #include <stdio.h>
+#include <string.h>
 
 Samurai::IO::Net::ServerSocket::ServerSocket() : eventHandler(0) {}
 
@@ -63,31 +64,46 @@ bool Samurai::IO::Net::ServerSocket::listen(size_t backlog) {
 /** accept() will now have something to accept, if called from SocketMonitor at least. */
 void Samurai::IO::Net::ServerSocket::internal_accept() {
 
-	socket_t new_sd = INVALID_SOCKET;
-	Samurai::IO::Net::InetSocketAddress n_addr;
-	
-	if (addr->getSockAddrFamily() == AF_INET) {
-		struct sockaddr_in new_addr;
-		socklen_t addr_size = sizeof(struct sockaddr_in6);
-		new_sd = ::accept(sd, (sockaddr*) &new_addr, (socklen_t*) &addr_size);
-		((InetSocketAddress*)&n_addr)->setRawSocketAddress((void*) &new_addr.sin_addr, sizeof(struct in_addr), ntohs(new_addr.sin_port), Samurai::IO::Net::InetAddress::IPv4);
-		
-	} else if (addr->getSockAddrFamily() == AF_INET6) {
-		struct sockaddr_in6 new_addr;
-		socklen_t addr_size = sizeof(struct sockaddr_in6);
-		new_sd = ::accept(sd, (sockaddr*) &new_addr, (socklen_t*) &addr_size);
-		((InetSocketAddress*)&n_addr)->setRawSocketAddress((void*) &new_addr.sin6_addr, sizeof(struct in6_addr), ntohs(new_addr.sin6_port), Samurai::IO::Net::InetAddress::IPv6);
-		
-	}
-	
+	struct sockaddr_storage new_addr;
+	socklen_t addr_size = sizeof(new_addr);
+	memset(&new_addr, 0, sizeof(new_addr));
+
+	socket_t new_sd = ::accept(sd, (sockaddr*) &new_addr, &addr_size);
+
 	if (new_sd == INVALID_SOCKET) {
-		eventHandler->EventAcceptError(this, strerror(NETERROR));
+		// Transient: nothing to report to the event handler.
+		if (NETERROR == EAGAIN || NETERROR == EWOULDBLOCK ||
+		    NETERROR == EINTR  || NETERROR == ECONNABORTED)
+			return;
+
+		if (eventHandler) eventHandler->EventAcceptError(this, strerror(NETERROR));
 		return;
 	}
-	
-	// Create a new socket based on the connected client, 
+
+	Samurai::IO::Net::InetSocketAddress n_addr;
+
+	if (new_addr.ss_family == AF_INET) {
+		struct sockaddr_in* sin = (struct sockaddr_in*) &new_addr;
+		n_addr.setRawSocketAddress((void*) &sin->sin_addr, sizeof(struct in_addr), ntohs(sin->sin_port), Samurai::IO::Net::InetAddress::IPv4);
+
+	} else if (new_addr.ss_family == AF_INET6) {
+		struct sockaddr_in6* sin6 = (struct sockaddr_in6*) &new_addr;
+		n_addr.setRawSocketAddress((void*) &sin6->sin6_addr, sizeof(struct in6_addr), ntohs(sin6->sin6_port), Samurai::IO::Net::InetAddress::IPv6);
+	}
+
+	// Create a new socket based on the connected client,
 	// and hand it over to the eventHandler.
 	Socket* sock = new Socket(new_sd, n_addr);
-	eventHandler->EventAcceptSocket(this, sock);
+
+	// accept() does not inherit O_NONBLOCK from the listening socket.
+	if (!sock->setNonBlocking(true))
+	{
+		QERR("Unable to set accepted socket non-blocking: %s", strerror(NETERROR));
+	}
+
+	if (eventHandler)
+		eventHandler->EventAcceptSocket(this, sock);
+	else
+		delete sock;
 }
 
