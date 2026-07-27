@@ -19,8 +19,10 @@ class BZip2Compressor : public Samurai::IO::Codec {
 		BZip2Compressor();
 		virtual ~BZip2Compressor();
 		bool exec(char* input, size_t& input_len, char* output, size_t& output_len);
+		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec);
 	protected:
 		Bz2Private* d;
+		int m_last_status;
 
 	private:
 		/* Owns a zlib/bzip2 stream: copying would free it twice. */
@@ -33,8 +35,10 @@ class BZip2Decompressor : public Samurai::IO::Codec {
 		BZip2Decompressor();
 		virtual ~BZip2Decompressor();
 		bool exec(char* input, size_t& input_len, char* output, size_t& output_len);
+		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec);
 	protected:
 		Bz2Private* d;
+		int m_last_status;
 
 	private:
 		/* Owns a zlib/bzip2 stream: copying would free it twice. */
@@ -47,8 +51,10 @@ class GzipCompressor : public Samurai::IO::Codec {
 		GzipCompressor();
 		virtual ~GzipCompressor();
 		bool exec(char* input, size_t& input_len, char* output, size_t& output_len);
+		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec);
 	protected:
 		GzPrivate* d;
+		int m_last_status;
 
 	private:
 		/* Owns a zlib/bzip2 stream: copying would free it twice. */
@@ -61,8 +67,10 @@ class GzipDecompressor : public Samurai::IO::Codec {
 		GzipDecompressor();
 		virtual ~GzipDecompressor();
 		bool exec(char* input, size_t& input_len, char* output, size_t& output_len);
+		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec);
 	protected:
 		GzPrivate* d;
+		int m_last_status;
 
 	private:
 		/* Owns a zlib/bzip2 stream: copying would free it twice. */

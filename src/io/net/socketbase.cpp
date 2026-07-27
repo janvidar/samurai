@@ -150,13 +150,19 @@ uint16_t Samurai::IO::Net::SocketBase::getPort() const {
 
 
 bool Samurai::IO::Net::SocketBase::setKeepAlive(bool toggle) {
+	std::error_code ec;
+	return setKeepAlive(toggle, ec);
+}
+
+
+bool Samurai::IO::Net::SocketBase::setKeepAlive(bool toggle, std::error_code& ec) {
+	ec.clear();
 	int value = (toggle) ? 1 : 0;
-	socklen_t valsize = sizeof(value);
-	int ret = SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_KEEPALIVE, &value, valsize);
-	if (ret == SOCKET_ERROR) {
-		QERR(("ERROR: setsockopt failed"));
+	if (SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_KEEPALIVE, &value, sizeof(value)) == SOCKET_ERROR) {
+		ec = Samurai::system_error(NETERROR);
+		return false;
 	}
-	return ret != SOCKET_ERROR;
+	return true;
 }
 
 
@@ -201,10 +207,17 @@ bool Samurai::IO::Net::SocketBase::setNonBlocking(bool toggle, std::error_code& 
 }
 
 bool Samurai::IO::Net::SocketBase::setReuseAddress(bool toggle) {
+	std::error_code ec;
+	return setReuseAddress(toggle, ec);
+}
+
+
+bool Samurai::IO::Net::SocketBase::setReuseAddress(bool toggle, std::error_code& ec) {
+	ec.clear();
 	int on = toggle ? 1 : 0;
-	int ret = SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
-	if (ret == SOCKET_ERROR)
+	if (SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == SOCKET_ERROR)
 	{
+		ec = Samurai::system_error(NETERROR);
 		QERR("ERROR: setReuseAddress to %s failed", toggle ? "ON" : "OFF");
 		return false;
 	}
@@ -212,14 +225,21 @@ bool Samurai::IO::Net::SocketBase::setReuseAddress(bool toggle) {
 }
 
 bool Samurai::IO::Net::SocketBase::setReusePort(bool toggle) {
+	std::error_code ec;
+	return setReusePort(toggle, ec);
+}
+
+
+bool Samurai::IO::Net::SocketBase::setReusePort(bool toggle, std::error_code& ec) {
+	ec.clear();
 #ifndef SO_REUSEPORT
 	(void) toggle;
 	return true;
 #else
         int on = toggle ? 1 : 0;
-        int ret = SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
-        if (ret == SOCKET_ERROR)
+        if (SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on)) == SOCKET_ERROR)
         {
+                ec = Samurai::system_error(NETERROR);
                 QERR("ERROR: setReusePort to %s failed", toggle ? "ON" : "OFF");
                 return false;
         }
@@ -229,39 +249,61 @@ bool Samurai::IO::Net::SocketBase::setReusePort(bool toggle) {
 
 
 bool Samurai::IO::Net::SocketBase::setSendBufferSize(size_t size) {
-	int ret = SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_SNDBUF, &size, sizeof(size));
-	if (ret == SOCKET_ERROR) {
-		QERR("ERROR: setsockopt failed");
+	std::error_code ec;
+	return setSendBufferSize(size, ec);
+}
+
+
+bool Samurai::IO::Net::SocketBase::setSendBufferSize(size_t size, std::error_code& ec) {
+	ec.clear();
+
+	/* NOTE: this passed &size, a size_t*, where the kernel expects an int.
+	   It happened to work on little endian and was wrong on big endian. */
+	int value = (int) size;
+	if (SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_SNDBUF, &value, sizeof(value)) == SOCKET_ERROR) {
+		ec = Samurai::system_error(NETERROR);
+		return false;
 	}
-	return ret != SOCKET_ERROR;
+	return true;
 }
 
 size_t Samurai::IO::Net::SocketBase::getSendBufferSize() const {
-	size_t bufsize = 0;
-	socklen_t sz = sizeof(bufsize);
-	int ret = SAMURAI_GETSOCKOPT(sd, SOL_SOCKET, SO_SNDBUF, &bufsize, &sz);
-	if (ret == SOCKET_ERROR) {
+	int value = 0;
+	socklen_t sz = sizeof(value);
+	if (SAMURAI_GETSOCKOPT(sd, SOL_SOCKET, SO_SNDBUF, &value, &sz) == SOCKET_ERROR) {
 		QERR("ERROR: getsockopt failed");
+		return 0;
 	}
-	return bufsize;
+	return (size_t) (value < 0 ? 0 : value);
 }
 
 bool Samurai::IO::Net::SocketBase::setReceiveBufferSize(size_t size) {
-	int ret = SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
-	if (ret == SOCKET_ERROR) {
-		QERR("ERROR: setsockopt failed");
+	std::error_code ec;
+	return setReceiveBufferSize(size, ec);
+}
+
+
+bool Samurai::IO::Net::SocketBase::setReceiveBufferSize(size_t size, std::error_code& ec) {
+	ec.clear();
+
+	/* NOTE: this passed &size, a size_t*, where the kernel expects an int.
+	   It happened to work on little endian and was wrong on big endian. */
+	int value = (int) size;
+	if (SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_RCVBUF, &value, sizeof(value)) == SOCKET_ERROR) {
+		ec = Samurai::system_error(NETERROR);
+		return false;
 	}
-	return ret != SOCKET_ERROR;
+	return true;
 }
 
 size_t Samurai::IO::Net::SocketBase::getReceiveBufferSize() const {
-	size_t bufsize = 0;
-	socklen_t sz = sizeof(bufsize);
-	int ret = SAMURAI_GETSOCKOPT(sd, SOL_SOCKET, SO_RCVBUF, &bufsize, &sz);
-	if (ret == SOCKET_ERROR) {
+	int value = 0;
+	socklen_t sz = sizeof(value);
+	if (SAMURAI_GETSOCKOPT(sd, SOL_SOCKET, SO_RCVBUF, &value, &sz) == SOCKET_ERROR) {
 		QERR("ERROR: getsockopt failed");
+		return 0;
 	}
-	return bufsize;
+	return (size_t) (value < 0 ? 0 : value);
 }
 
 uint8_t Samurai::IO::Net::SocketBase::getTimeToLive() const
@@ -277,11 +319,18 @@ uint8_t Samurai::IO::Net::SocketBase::getTimeToLive() const
 
 bool Samurai::IO::Net::SocketBase::setTimeToLive(uint8_t ttl)
 {
+	std::error_code ec;
+	return setTimeToLive(ttl, ec);
+}
+
+
+bool Samurai::IO::Net::SocketBase::setTimeToLive(uint8_t ttl, std::error_code& ec)
+{
+	ec.clear();
 	int value = ttl;
-	socklen_t sz = sizeof(value);
-	int ret = SAMURAI_SETSOCKOPT(sd, IPPROTO_IP, IP_TTL, &value, sz);
-	if (ret == SOCKET_ERROR) {
-		QERR("ERROR: setsockopt failed");
+
+	if (SAMURAI_SETSOCKOPT(sd, IPPROTO_IP, IP_TTL, &value, sizeof(value)) == SOCKET_ERROR) {
+		ec = Samurai::system_error(NETERROR);
 		return false;
 	}
 	return true;

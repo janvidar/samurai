@@ -11,6 +11,7 @@
 #include <zlib.h>
 
 #include <samurai/io/compression.h>
+#include <errno.h>
 
 class Bz2Private
 {
@@ -59,8 +60,36 @@ class GzPrivate
 };
 
 
+/* Map a library status onto errno-space so callers get something better than
+   "it failed". */
+static std::error_code bz2_error(int status)
+{
+	switch (status) {
+		case BZ_MEM_ERROR:         return Samurai::system_error(ENOMEM);
+		case BZ_DATA_ERROR:
+		case BZ_DATA_ERROR_MAGIC:  return Samurai::system_error(EILSEQ);
+		case BZ_PARAM_ERROR:       return Samurai::system_error(EINVAL);
+		case BZ_SEQUENCE_ERROR:    return Samurai::system_error(EPERM);
+		case BZ_OUTBUFF_FULL:      return Samurai::system_error(ENOBUFS);
+		default:                   return Samurai::system_error(EIO);
+	}
+}
+
+static std::error_code gz_error(int status)
+{
+	switch (status) {
+		case Z_MEM_ERROR:    return Samurai::system_error(ENOMEM);
+		case Z_DATA_ERROR:   return Samurai::system_error(EILSEQ);
+		case Z_STREAM_ERROR: return Samurai::system_error(EINVAL);
+		case Z_BUF_ERROR:    return Samurai::system_error(ENOBUFS);
+		default:             return Samurai::system_error(EIO);
+	}
+}
+
+
 Samurai::IO::BZip2Compressor::BZip2Compressor()
 {
+	m_last_status = 0;
 	d = new Bz2Private();
 	
 	if (BZ2_bzCompressInit(d->stream, 5, 0, 0) != BZ_OK)
@@ -91,6 +120,7 @@ bool Samurai::IO::BZip2Compressor::exec(char* input, size_t& input_len, char* ou
 	
 	int action = (input_len) ? BZ_RUN : BZ_FINISH;
 	int retval = BZ2_bzCompress(d->stream, action);
+	m_last_status = retval;
 
 	if (retval == BZ_RUN_OK || retval == BZ_FINISH_OK || retval == BZ_STREAM_END)
 	{
@@ -104,6 +134,7 @@ bool Samurai::IO::BZip2Compressor::exec(char* input, size_t& input_len, char* ou
 
 Samurai::IO::BZip2Decompressor::BZip2Decompressor()
 {
+	m_last_status = 0;
 	d = new Bz2Private();
 	
 	if (BZ2_bzDecompressInit(d->stream, 0, 0) != BZ_OK)
@@ -133,6 +164,7 @@ bool Samurai::IO::BZip2Decompressor::exec(char* input, size_t& input_len, char* 
 	d->stream->next_out = (char*) output;
 
 	int retval = BZ2_bzDecompress(d->stream);
+	m_last_status = retval;
 
 	if (retval == BZ_OK || retval == BZ_STREAM_END)
 	{
@@ -145,6 +177,7 @@ bool Samurai::IO::BZip2Decompressor::exec(char* input, size_t& input_len, char* 
 
 Samurai::IO::GzipCompressor::GzipCompressor()
 {
+	m_last_status = 0;
 	d = new GzPrivate();
 	
 	 // FIXME: Default compression level: 5
@@ -174,6 +207,7 @@ bool Samurai::IO::GzipCompressor::exec(char* input, size_t& input_len, char* out
 	
 	int action = (input_len) ? Z_NO_FLUSH : Z_FINISH;
 	int retval = deflate(d->stream, action);
+	m_last_status = retval;
 
 	if (retval == Z_OK || retval == Z_STREAM_END)
 	{
@@ -187,6 +221,7 @@ bool Samurai::IO::GzipCompressor::exec(char* input, size_t& input_len, char* out
 
 Samurai::IO::GzipDecompressor::GzipDecompressor()
 {
+	m_last_status = 0;
 	d = new GzPrivate();
 	if (inflateInit(d->stream) != Z_OK)
 	{
@@ -212,11 +247,64 @@ bool Samurai::IO::GzipDecompressor::exec(char* input, size_t& input_len, char* o
 	d->stream->next_out = (Bytef*) output;
 
 	int retval = inflate(d->stream, Z_NO_FLUSH);
+	m_last_status = retval;
 	
 	if (retval == Z_OK || retval == Z_STREAM_END) {
 		output_len -= d->stream->avail_out;
 		input_len  -= d->stream->avail_in;
 		return true;
 	}
+	return false;
+}
+
+bool Samurai::IO::BZip2Compressor::exec(char* input, size_t& input_len,
+                                              char* output, size_t& output_len, std::error_code& ec)
+{
+	ec.clear();
+	if (!d) { ec = Samurai::system_error(ENOMEM); return false; }
+	if (!output_len) { ec = Samurai::system_error(ENOBUFS); return false; }
+
+	if (exec(input, input_len, output, output_len)) return true;
+
+	ec = bz2_error(m_last_status);
+	return false;
+}
+
+bool Samurai::IO::BZip2Decompressor::exec(char* input, size_t& input_len,
+                                              char* output, size_t& output_len, std::error_code& ec)
+{
+	ec.clear();
+	if (!d) { ec = Samurai::system_error(ENOMEM); return false; }
+	if (!output_len) { ec = Samurai::system_error(ENOBUFS); return false; }
+
+	if (exec(input, input_len, output, output_len)) return true;
+
+	ec = bz2_error(m_last_status);
+	return false;
+}
+
+bool Samurai::IO::GzipCompressor::exec(char* input, size_t& input_len,
+                                              char* output, size_t& output_len, std::error_code& ec)
+{
+	ec.clear();
+	if (!d) { ec = Samurai::system_error(ENOMEM); return false; }
+	if (!output_len) { ec = Samurai::system_error(ENOBUFS); return false; }
+
+	if (exec(input, input_len, output, output_len)) return true;
+
+	ec = gz_error(m_last_status);
+	return false;
+}
+
+bool Samurai::IO::GzipDecompressor::exec(char* input, size_t& input_len,
+                                              char* output, size_t& output_len, std::error_code& ec)
+{
+	ec.clear();
+	if (!d) { ec = Samurai::system_error(ENOMEM); return false; }
+	if (!output_len) { ec = Samurai::system_error(ENOBUFS); return false; }
+
+	if (exec(input, input_len, output, output_len)) return true;
+
+	ec = gz_error(m_last_status);
 	return false;
 }

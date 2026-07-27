@@ -45,18 +45,27 @@ Samurai::IO::Net::ServerSocket::~ServerSocket()
 }
 
 bool Samurai::IO::Net::ServerSocket::listen(size_t backlog) {
-	if (!addr) return false;
-	if (!setReuseAddress(true)) return false;
-	if (!setNonBlocking(true)) return false;
-	if (!bind(addr)) return false;
-	
-	int ret = ::listen(sd, backlog);
-	if (ret == -1)
+	std::error_code ec;
+	return listen(backlog, ec);
+}
+
+
+bool Samurai::IO::Net::ServerSocket::listen(size_t backlog, std::error_code& ec) {
+	ec.clear();
+
+	if (!addr) { ec = Samurai::system_error(EDESTADDRREQ); return false; }
+	if (!setReuseAddress(true)) { ec = Samurai::system_error(NETERROR); return false; }
+	if (!setNonBlocking(true, ec)) return false;
+	if (!bind(addr, ec)) return false;
+
+	/* NOTE: backlog is a size_t here and an int in the syscall. */
+	if (::listen(sd, (int) backlog) == -1)
 	{
+		ec = Samurai::system_error(NETERROR);
 		QERR("Unable to listen to socket: %s (%d)", strerror(NETERROR), NETERROR);
 		return false;
 	}
-	
+
 	setMonitor(SocketMonitor::MRead);
 	return true;
 }
