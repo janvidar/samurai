@@ -48,10 +48,15 @@ EXO_TEST(inet_addr_ipv4_basic_1,
 	return addr.isValid();
 });
 
-EXO_TEST(inet_addr_ipv4_basic_2,
+/* Leading zeros are rejected, which is a deliberate change: the old
+   hand-rolled parser read "001.002.003.004" as 1.2.3.4, while inet_pton()
+   refuses it because the notation is ambiguous - some resolvers read a leading
+   zero as octal. Accepting it invites a parser disagreement between this
+   library and whatever else inspects the same address. */
+EXO_TEST(inet_addr_ipv4_leading_zeros_rejected,
 {
 	Samurai::IO::Net::InetAddress addr("001.002.003.004", Samurai::IO::Net::InetAddress::IPv4);
-	return addr.isValid();
+	return !addr.isValid();
 });
 
 EXO_TEST(inet_addr_ipv4_basic_3,
