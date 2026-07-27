@@ -37,10 +37,17 @@
 #endif
 
 
-void tiger(uint64_t* str, uint64_t length, uint64_t* res)
+/*
+ * NOTE: this took uint64_t* and every caller cast a uint8_t array to it. The
+ * scratch areas are not 8-byte aligned - tt_init() deliberately sets
+ * ctx->block to ctx->leaf + 1, an odd address - so those casts were undefined
+ * behaviour and fault outright on targets that require natural alignment.
+ * The data is bytes; the signature now says so.
+ */
+static void tiger(const uint8_t* str, size_t length, uint8_t* res)
 {
 	Samurai::Crypto::Digest::Tiger tiger;
-	tiger.update((uint8_t*) str, length);
+	tiger.update(str, length);
 	Samurai::Crypto::Digest::HashValue* value = tiger.digest();
 	memcpy(res, value->getData(), value->size());
 }
@@ -60,7 +67,7 @@ void tt_init(TT_CONTEXT *ctx)
 static void tt_compose(TT_CONTEXT *ctx) {
   uint8_t *node = ctx->top - NODESIZE;
   memmove((ctx->node)+1,node,NODESIZE); // copy to scratch area
-  tiger((uint64_t*)(ctx->node),(uint64_t)(NODESIZE+1),(uint64_t*)(ctx->top)); // combine two nodes
+  tiger(ctx->node, (size_t)(NODESIZE+1), ctx->top); // combine two nodes
   memmove(node,ctx->top,TIGERSIZE);           // move up result
   ctx->top -= TIGERSIZE;                      // update top ptr
   
@@ -77,7 +84,7 @@ static void tt_block(TT_CONTEXT *ctx)
 	
 	uint64_t b;
 	
-	tiger((uint64_t*)ctx->leaf,(uint64_t)ctx->index+1,(uint64_t*)ctx->top);
+	tiger(ctx->leaf, ctx->index + 1, ctx->top);
 	ctx->top += TIGERSIZE;
 	++ctx->count;
 	b = ctx->count;
@@ -146,15 +153,23 @@ void tt_digest(TT_CONTEXT *ctx, uint8_t *s)
 	memmove(s,ctx->nodes,TIGERSIZE);
 }
 
-// this code untested; use at own risk
+/*
+ * NOTE: this used to assign dest->top = src->top, a pointer into *src's*
+ * nodes[] array, so the copy shared the source's stack and outlived it. It
+ * also never set dest->block, leaving it null or stale. Both are interior
+ * pointers and have to be rebuilt as offsets into the destination.
+ */
 void tt_copy(TT_CONTEXT *dest, TT_CONTEXT *src)
 {
-  int i;
+  if (!dest || !src) return;
+
   dest->count = src->count;
-  for(i=0; i < BLOCKSIZE; i++)
-    dest->block[i] = src->block[i];
   dest->index = src->index;
-  for(i=0; i < STACKSIZE; i++)
-    dest->nodes[i] = src->nodes[i];
-  dest->top = src->top;
+
+  memcpy(dest->leaf, src->leaf, sizeof(dest->leaf));
+  memcpy(dest->node, src->node, sizeof(dest->node));
+  memcpy(dest->nodes, src->nodes, sizeof(dest->nodes));
+
+  dest->block = dest->leaf + 1;
+  dest->top   = dest->nodes + (src->top - src->nodes);
 }
