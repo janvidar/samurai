@@ -84,9 +84,17 @@ Samurai::IO::Net::DatagramSocket::DatagramSocket(DatagramEventHandler* eh, enum 
 	createDescriptor(af);
 }
 
+/*
+ * NOTE: this used to call internal_create(), which dereferenced a null 'addr'.
+ * The immediate crash was guarded, but the object was still left with no
+ * address and no descriptor while reporting itself as constructed. There is no
+ * useful datagram socket to build without knowing an address family, so the
+ * constructor now produces a plainly unbound socket and says so, and listen()
+ * and send() already refuse an INVALID_SOCKET.
+ */
 Samurai::IO::Net::DatagramSocket::DatagramSocket() : SocketBase(Datagram), eventHandler(0), myPacket(0) {
-	QERR("Samurai::IO::Net::DatagramSocket::DatagramSocket(): Not implemented");
-	internal_create();
+	QERR("DatagramSocket: default-constructed sockets have no address family "
+	     "and cannot be used; construct with an address, port or version");
 }
 
 Samurai::IO::Net::DatagramSocket::DatagramSocket(Samurai::IO::Net::DatagramEventHandler* eh, const Samurai::IO::Net::SocketAddress& bindAddr)
@@ -162,7 +170,13 @@ int Samurai::IO::Net::DatagramSocket::send(DatagramPacket* packet) {
 			return -1;
 		}
 	}
-	if (bandwidthManager) bandwidthManager->dataSendUDP(length);
+
+	/* NOTE: Buffer::pop() copies without consuming, so the packet's buffer
+	   never drained and every subsequent send() resent the same bytes with
+	   the new ones appended behind them. */
+	packet->buffer->remove((size_t) ret);
+
+	if (bandwidthManager) bandwidthManager->dataSendUDP((size_t) ret);
 	return ret;
 }
 
@@ -170,26 +184,45 @@ int Samurai::IO::Net::DatagramSocket::read(DatagramPacket* packet) {
 	size_t length = MAX_BUF_SIZE;
 	uint8_t data[MAX_BUF_SIZE] = { 0, };
 
-	InetSocketAddress taddr;
+	/* NOTE: this used a struct sockaddr_in and always built an IPv4 source
+	   address, so the sender of any IPv6 datagram came out as garbage. It also
+	   converted the address before checking whether recvfrom() had failed. */
+	struct sockaddr_storage sa;
+	socklen_t sl = sizeof(sa);
+	memset(&sa, 0, sizeof(sa));
 
-	struct sockaddr_in sa;
-	socklen_t sl = sizeof(struct sockaddr_in);
-	memset(&sa, 0, sl);
-	int status = ::recvfrom(sd, (char*) data, length, 0, (sockaddr*) &sa, &sl);
-	taddr.setRawSocketAddress(&sa.sin_addr, sizeof(sa.sin_addr), ntohs(sa.sin_port), Samurai::IO::Net::InetAddress::IPv4);
+	const ssize_t status = ::recvfrom(sd, (char*) data, length, 0, (sockaddr*) &sa, &sl);
 
 	if (status == -1) {
 		QERR("recvfrom err: %s", strerror(NETERROR));
 		return -1;
-	} else if (status == 0) {
+	}
+
+	if (status == 0) {
 		packet->clear();
 		return 0;
-	} else {
-		packet->setData(data, (size_t) status);
-		packet->setAddress(&taddr);
-		if (bandwidthManager) bandwidthManager->dataRecvUDP((size_t) status);
-		return status;
 	}
+
+	InetSocketAddress taddr;
+	bool have_addr = false;
+
+	if (sa.ss_family == AF_INET) {
+		struct sockaddr_in* sin = (struct sockaddr_in*) &sa;
+		taddr.setRawSocketAddress(&sin->sin_addr, sizeof(sin->sin_addr),
+		                          ntohs(sin->sin_port), Samurai::IO::Net::InetAddress::IPv4);
+		have_addr = true;
+	} else if (sa.ss_family == AF_INET6) {
+		struct sockaddr_in6* sin6 = (struct sockaddr_in6*) &sa;
+		taddr.setRawSocketAddress(&sin6->sin6_addr, sizeof(sin6->sin6_addr),
+		                          ntohs(sin6->sin6_port), Samurai::IO::Net::InetAddress::IPv6);
+		have_addr = true;
+	}
+
+	packet->setData(data, (size_t) status);
+	if (have_addr) packet->setAddress(&taddr);
+
+	if (bandwidthManager) bandwidthManager->dataRecvUDP((size_t) status);
+	return (int) status;
 }
 
 
