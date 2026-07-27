@@ -27,6 +27,16 @@ set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
 
 option(SAMURAI_BUILD_TESTS "Build the test and example programs" ON)
 
+option(SAMURAI_SANITIZE
+    "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+
+# LeakSanitizer rides along with AddressSanitizer, but is off by default for
+# two reasons: the library still has known leaks and one of them is reached by
+# the test suite, and LeakSanitizer stops the world through ptrace, which
+# stalls for minutes where /proc/sys/kernel/yama/ptrace_scope is not 0.
+option(SAMURAI_SANITIZE_LEAKS
+    "Enable LeakSanitizer as well (requires SAMURAI_SANITIZE)" OFF)
+
 # The Makefile build had rules for both libsamurai.so and libsamurai.a, so
 # build both by default. They share a single compile pass.
 #
@@ -198,6 +208,28 @@ else()
     add_library(samurai::samurai ALIAS samurai_static)
 endif()
 
+set(SAMURAI_SANITIZE_FLAGS "")
+if(SAMURAI_SANITIZE)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        message(FATAL_ERROR
+            "SAMURAI_SANITIZE needs GCC or Clang, not ${CMAKE_CXX_COMPILER_ID}")
+    endif()
+
+    # -fno-sanitize-recover: UBSan otherwise prints the diagnostic and carries
+    # on, so a run that reported undefined behaviour would still exit 0 and
+    # ctest would call it a pass.
+    set(SAMURAI_SANITIZE_FLAGS
+        -fsanitize=address,undefined
+        -fno-sanitize-recover=address,undefined
+        -fno-omit-frame-pointer
+        -g)
+
+    # Optimisation is what makes a sanitized run bearable, but at -O0 the
+    # traces are the ones worth reading. Leave the build type alone and just
+    # say what was chosen.
+    message(STATUS "Sanitizers enabled (address, undefined)")
+endif()
+
 # Applied to the object library as well as to the finished libraries: the
 # objects need the include paths and definitions in order to compile, and the
 # libraries need them as usage requirements for consumers.
@@ -251,6 +283,14 @@ foreach(target IN ITEMS samurai_objects ${SAMURAI_LIBRARIES})
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(${target} PRIVATE -Wall -Wextra)
+    endif()
+
+    # PUBLIC, and on the link line as well as the compile line: a consumer that
+    # is not built with the same -fsanitize= set fails to link against a
+    # sanitized library with undefined references to __asan_* / __ubsan_*.
+    if(SAMURAI_SANITIZE)
+        target_compile_options(${target} PUBLIC ${SAMURAI_SANITIZE_FLAGS})
+        target_link_options(${target} PUBLIC ${SAMURAI_SANITIZE_FLAGS})
     endif()
 endforeach()
 
@@ -314,4 +354,10 @@ message(STATUS "  Static library  : ${SAMURAI_BUILD_STATIC}")
 message(STATUS "  TLS provider    : ${SAMURAI_TLS_PROVIDER}")
 message(STATUS "  DNS provider    : ${SAMURAI_DNS_PROVIDER}")
 message(STATUS "  Build tests     : ${SAMURAI_BUILD_TESTS}")
+if(SAMURAI_SANITIZE)
+    message(STATUS "  Sanitizers      : address, undefined")
+    message(STATUS "  Leak detection  : ${SAMURAI_SANITIZE_LEAKS}")
+else()
+    message(STATUS "  Sanitizers      : OFF")
+endif()
 message(STATUS "")

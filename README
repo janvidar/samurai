@@ -34,11 +34,32 @@ Configuration
     -DSAMURAI_DNS_PROVIDER=BLOCKING|FORKED|BUILTIN
                                           DNS resolver. Default BLOCKING,
                                           which is the only working backend.
+    -DSAMURAI_SANITIZE=ON|OFF             Build with AddressSanitizer and
+                                          UndefinedBehaviorSanitizer. Default
+                                          OFF. Needs GCC or Clang. The flags
+                                          are a usage requirement, so anything
+                                          linking the library is instrumented
+                                          too.
+    -DSAMURAI_SANITIZE_LEAKS=ON|OFF       Also enable LeakSanitizer. Default
+                                          OFF, because the library has known
+                                          leaks and one of them is reached by
+                                          the test suite. Note that
+                                          LeakSanitizer stops the world through
+                                          ptrace, so it stalls for minutes on
+                                          hosts where
+                                          /proc/sys/kernel/yama/ptrace_scope is
+                                          not 0.
 
 For example, an optimised static-only build without TLS:
 
     cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
         -DSAMURAI_BUILD_SHARED=OFF -DSAMURAI_TLS_PROVIDER=NONE
+
+Or an instrumented build for running the tests under the sanitizers:
+
+    cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DSAMURAI_SANITIZE=ON
+    cmake --build build-asan -j
+    ctest --test-dir build-asan --output-on-failure
 
 
 Tests

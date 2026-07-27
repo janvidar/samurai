@@ -127,3 +127,17 @@ set_tests_properties(exotic PROPERTIES
     # Some tests bind listening sockets and resolve names on the loopback
     # interface; give them room on a loaded machine.
     TIMEOUT 300)
+
+if(SAMURAI_SANITIZE)
+    if(SAMURAI_SANITIZE_LEAKS)
+        set(SAMURAI_ASAN_OPTIONS "detect_leaks=1")
+    else()
+        set(SAMURAI_ASAN_OPTIONS "detect_leaks=0")
+    endif()
+
+    # print_stacktrace makes a UBSan report name the line it fired on; without
+    # it the message says what happened but not where.
+    set_property(TEST exotic APPEND PROPERTY ENVIRONMENT
+        "ASAN_OPTIONS=${SAMURAI_ASAN_OPTIONS}:abort_on_error=0"
+        "UBSAN_OPTIONS=print_stacktrace=1")
+endif()
