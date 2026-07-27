@@ -8,37 +8,59 @@
 #include <stdlib.h>
 #include <string.h>
 
+static const char* quickdc_skip_ws_sign(const char* value, bool* negative) {
+	*negative = false;
+	if (!value) return 0;
+
+	while (*value == ' ' || *value == '\t' || *value == '\n' ||
+	       *value == '\r' || *value == '\v' || *value == '\f')
+		value++;
+
+	if (*value == '-') { *negative = true; value++; }
+	else if (*value == '+') { value++; }
+
+	return value;
+}
+
 /**
  * A very simple string to (64 bit) integer converter.
+ * Stops at the first character that is not a digit. Overflow saturates.
  */
 int64_t quickdc_atoll(const char* value) {
-	int len = strlen(value);
-	int offset = 0;
-	int64_t val = 0;
-	for (int i = 0; i < len; i++)
-		if (value[i] > '9' || value[i] < '0') 
-			offset++;
-			
-	for (int i = offset; i< len; i++) 
-		val = val*10 + (value[i] - '0');
-		
-	return value[0] == '-' ? -val : val;
+	bool negative = false;
+	const char* p = quickdc_skip_ws_sign(value, &negative);
+	if (!p) return 0;
+
+	uint64_t val = 0;
+	const uint64_t limit = negative ? 9223372036854775808ULL /* -INT64_MIN */
+	                                : 9223372036854775807ULL /*  INT64_MAX */;
+
+	for (; *p >= '0' && *p <= '9'; p++) {
+		const unsigned digit = (unsigned) (*p - '0');
+		if (val > (limit - digit) / 10) { val = limit; break; }
+		val = val * 10 + digit;
+	}
+
+	if (negative)
+		return (val == 9223372036854775808ULL) ? (-9223372036854775807LL - 1)
+		                                       : -(int64_t) val;
+	return (int64_t) val;
 }
 
 /**
  * A very simple string to (64 bit) integer converter.
  */
 uint64_t quickdc_atoull(const char* value) {
-	int len = strlen(value);
-	int offset = 0;
+	bool negative = false;
+	const char* p = quickdc_skip_ws_sign(value, &negative);
+	if (!p || negative) return 0;
+
 	uint64_t val = 0;
-	for (int i = 0; i < len; i++)
-		if (value[i] > '9' || value[i] < '0') 
-			offset++;
-			
-	for (int i = offset; i< len; i++) 
-		val = val*10 + (value[i] - '0');
-		
+	for (; *p >= '0' && *p <= '9'; p++) {
+		const unsigned digit = (unsigned) (*p - '0');
+		if (val > (18446744073709551615ULL - digit) / 10) return 18446744073709551615ULL;
+		val = val * 10 + digit;
+	}
 	return val;
 }
 
@@ -46,42 +68,56 @@ uint64_t quickdc_atoull(const char* value) {
  * A very simple string to (64 bit) integer converter.
  */
 int quickdc_atoi(const char* value) {
-	int len = strlen(value);
-	int offset = 0;
-	int val = 0;
-	for (int i = 0; i < len; i++)
-		if (value[i] > '9' || value[i] < '0') 
-			offset++;
-			
-	for (int i = offset; i< len; i++) 
-		val = val*10 + (value[i] - '0');
-		
-	return value[0] == '-' ? -val : val;
+	const int64_t val = quickdc_atoll(value);
+	if (val > 2147483647LL)  return 2147483647;
+	if (val < -2147483648LL) return (-2147483647 - 1);
+	return (int) val;
 }
 
 /**
- * Works with radix <= 16.
- * FIXME: How about negative numbers?
+ * Works with radix 2..16.
  */
 const char* quickdc_itoa(int value, int radix) {
-	static char buf[32] = { 0 };
-	size_t i = 0;
+	static char buf[36] = { 0 };
+
+	if (radix < 2 || radix > 16) return "";
 	if (value == 0) return "0";
-	int val = quickdc_abs(value);
-	for(i = 30; val && i; --i, val /= radix) buf[i] = "0123456789abcdef"[val % radix];
-	return &buf[i+1];
+
+	const bool negative = (value < 0);
+	unsigned int val = negative ? (0u - (unsigned int) value)
+	                            : (unsigned int) value;
+
+	size_t i = sizeof(buf) - 1;
+	buf[i] = '\0';
+
+	while (val && i) {
+		buf[--i] = "0123456789abcdef"[val % (unsigned int) radix];
+		val /= (unsigned int) radix;
+	}
+
+	if (negative && i) buf[--i] = '-';
+
+	return &buf[i];
 }
 
 const char* quickdc_ulltoa(uint64_t value) {
-	static char buf[21] = { 0 };
-	size_t i = 0;
+	static char buf[24] = { 0 };
+
 	if (value == 0) return "0";
-	for(i = 20; value && i; --i, value /= 10) buf[i] = "0123456789"[value % 10];
-	return &buf[i+1];
+
+	size_t i = sizeof(buf) - 1;
+	buf[i] = '\0';
+
+	while (value && i) {
+		buf[--i] = "0123456789"[value % 10];
+		value /= 10;
+	}
+
+	return &buf[i];
 }
 
 unsigned int quickdc_abs(int n) {
-	return (n < 0) ? -n : n;
+	return (n < 0) ? (0u - (unsigned int) n) : (unsigned int) n;
 }
 
 #ifdef SAMURAI_OS_WINDOWS
@@ -121,8 +157,12 @@ char* quickdc_strcasestr(char* haystack, char* needle) {
 
 uint16_t Samurai::Util::Convert::to_uint16(const std::string& str)
 {
-	int n = 0;
-	n = quickdc_atoi(str.c_str());
+	if (str.empty()) return 0;
+
+	for (std::string::const_iterator it = str.begin(); it != str.end(); ++it)
+		if (*it < '0' || *it > '9') return 0;
+
+	const int64_t n = quickdc_atoll(str.c_str());
 	if (n < 0 || n > 65535) return 0;
 	return (uint16_t) n;
 }
