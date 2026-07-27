@@ -477,14 +477,46 @@ int Samurai::IO::File::rmdir(const char* dirname)
 #define PATHSEP_NULL "/./"
 #define PATHSEP_UP "/../"
 
-#define MAX_FILE_NAME 1024
+#define MAX_FILE_NAME 4096
 
+// The working buffers hold the input plus a getcwd() or HOME prefix plus a
+// separator, so they need room for two full names rather than one.
+#define PATH_BUF_SIZE (MAX_FILE_NAME * 2 + 16)
+
+// t_len < num underflows and runs off the end of the buffer.
 #define SQUEEZE_LEFT(str, atpos, num) { \
 	size_t t_len = strlen(str); \
 	size_t n = atpos; \
-	for (; n < t_len-num; n++) \
-		str[n] = str[n+num]; \
-	str[n] = '\0'; \
+	if (t_len >= (size_t) (num)) { \
+		for (; n < t_len-(num); n++) \
+			str[n] = str[n+(num)]; \
+		str[n] = '\0'; \
+	} \
+}
+
+// Bounded replacements for the strcat()/strcpy() calls in resolvePath().
+// Every one of those appended caller or environment supplied data to a fixed
+// buffer without checking the room left in it.
+static void path_append(char* dst, size_t dstsize, const char* src)
+{
+	if (!dstsize || !src) return;
+
+	size_t used = strlen(dst);
+	if (used + 1 >= dstsize) return;
+
+	size_t avail = dstsize - used - 1;
+	size_t len = strlen(src);
+	if (len > avail) len = avail;
+
+	memcpy(&dst[used], src, len);
+	dst[used + len] = '\0';
+}
+
+static void path_set(char* dst, size_t dstsize, const char* src)
+{
+	if (!dstsize) return;
+	dst[0] = '\0';
+	path_append(dst, dstsize, src);
 }
 
 #ifdef SAMURAI_WINDOWS
@@ -514,15 +546,18 @@ const char* Samurai::IO::File::resolvePath(const char* oldpath) {
 
 // 	printf("Samurai::IO::File::resolvePath(): oldpath=%s\n", oldpath);
 
-	static char path[MAX_FILE_NAME+2] = { 0, }; // FIXME: static
-	static char copy[MAX_FILE_NAME+2] = { 0, }; // FIXME: static
+	static char path[PATH_BUF_SIZE] = { 0, }; // FIXME: static
+	static char copy[PATH_BUF_SIZE] = { 0, }; // FIXME: static
 	path[0] = '\0';
 	copy[0] = '\0';
 
+	if (!oldpath) oldpath = "";
+
 	size_t len = strlen(oldpath);
 	if (len > MAX_FILE_NAME) len = MAX_FILE_NAME;
-	strncat(path, oldpath, len);
-	strcat(path, PATHSEP2);
+	memcpy(path, oldpath, len);
+	path[len] = '\0';
+	path_append(path, sizeof(path), PATHSEP2);
 
 #ifdef SAMURAI_WINDOWS
 	char drive = 0;
@@ -535,19 +570,19 @@ const char* Samurai::IO::File::resolvePath(const char* oldpath) {
 	{
 		char* prepend = getenv("HOME");
 		if (prepend) {
-			strcat(copy, prepend);
-			strcat(copy, &path[1]);
-			strcpy(path, copy);
+			path_set(copy, sizeof(copy), prepend);
+			path_append(copy, sizeof(copy), &path[1]);
+			path_set(path, sizeof(path), copy);
 		} else {
 			SQUEEZE_LEFT(path, 0, 1);
 		}
 	}
 	else if (path[0] != '/')
 	{ // path is relative to working directory
-		if (getcwd(copy, MAX_FILE_NAME)) {
-			strcat(copy, PATHSEP2);
-			strcat(copy, path);
-			strcpy(path, copy);
+		if (getcwd(copy, sizeof(copy))) {
+			path_append(copy, sizeof(copy), PATHSEP2);
+			path_append(copy, sizeof(copy), path);
+			path_set(path, sizeof(path), copy);
 		}
 	}
 	
@@ -561,9 +596,9 @@ const char* Samurai::IO::File::resolvePath(const char* oldpath) {
 		{
 			char* tmp = strdup(prepend);
 			fix_backslash(tmp);
-			strcat(copy, tmp);
-			strcat(copy, &path[1]);
-			strcpy(path, copy);
+			path_set(copy, sizeof(copy), tmp);
+			path_append(copy, sizeof(copy), &path[1]);
+			path_set(path, sizeof(path), copy);
 			free(tmp);
 		} else {
 			SQUEEZE_LEFT(path, 0, 1);
@@ -576,11 +611,11 @@ const char* Samurai::IO::File::resolvePath(const char* oldpath) {
 // 	}
 	else if (path[0] != '/' && path[1] != ':')
 	{
-		if (getcwd(copy, MAX_FILE_NAME)) {
+		if (getcwd(copy, sizeof(copy))) {
 			fix_backslash(copy);
-			strcat(copy, PATHSEP2);
-			strcat(copy, path);
-			strcpy(path, copy);
+			path_append(copy, sizeof(copy), PATHSEP2);
+			path_append(copy, sizeof(copy), path);
+			path_set(path, sizeof(path), copy);
 		}
 	}
 
@@ -605,10 +640,9 @@ const char* Samurai::IO::File::resolvePath(const char* oldpath) {
 #endif
 
 	// Add a leading '/' (bodge)
-	copy[0] = '\0';
-	strcat(copy, PATHSEP2);
-	strcat(copy, path);
-	strcpy(path, copy);
+	path_set(copy, sizeof(copy), PATHSEP2);
+	path_append(copy, sizeof(copy), path);
+	path_set(path, sizeof(path), copy);
 
 	// replace any '//' with '/'.
 	char* pos = 0;
@@ -623,7 +657,7 @@ const char* Samurai::IO::File::resolvePath(const char* oldpath) {
 
 	// figure out the real path when we have "/../" in the path.
 	// printf("sqeeze    0: '%s'\n", oldpath);
-	strcpy(copy, path);
+	path_set(copy, sizeof(copy), path);
 	while ((pos = strstr(copy, PATHSEP_UP))) {
 //		printf("sqeeze    1: '%s'\n", pos);
 		SQUEEZE_LEFT(pos, 0, 3); /* Remove "/.." keep the '/' */
@@ -636,34 +670,32 @@ const char* Samurai::IO::File::resolvePath(const char* oldpath) {
 		if (npos) {
 // 			printf("sqeeze 1  4: '%s'\n", npos);
 			npos[1] = '\0';
-			path[0] = '\0';
-			strcat(path, copy);
-			strcat(path, &pos[1]);
+			path_set(path, sizeof(path), copy);
+			path_append(path, sizeof(path), &pos[1]);
 		} else {
-			path[0] = '\0';
-			strcat(path, &pos[1]);
+			path_set(path, sizeof(path), &pos[1]);
 		}
 		
 // 		printf("sqeeze    5: '%s'\n", path);
-		strcpy(copy, path);
+		path_set(copy, sizeof(copy), path);
 	}
 	
-	// remove any trailing /
+	// remove any trailing /  (n == 0 reads and writes path[-1])
 	size_t n = strlen(path);
-	if (path[n-1] == PATHSEP) path[n-1] = '\0';
+	if (n && path[n-1] == PATHSEP) path[n-1] = '\0';
 
 	// make sure path is at least "/" if empty.
 	if (!strlen(path)) {
-		strcat(path, PATHSEP2);
+		path_append(path, sizeof(path), PATHSEP2);
 	}
 
 #ifdef SAMURAI_WINDOWS
 	copy[0] = drive;
 	copy[1] = ':';
 	copy[2] = '\0';
-	strcat(copy, path);
+	path_append(copy, sizeof(copy), path);
 	// fix_slash(copy);
-	strcpy(path, copy);
+	path_set(path, sizeof(path), copy);
 #endif
 
 // 	printf("   -- result: %s\n", path);
