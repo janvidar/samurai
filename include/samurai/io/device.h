@@ -14,6 +14,11 @@
 namespace Samurai {
 namespace IO {
 
+/* NOTE: these used to carry dynamic exception specifications,
+   throw (Samurai::IO::Exception). They were deprecated in C++11 and removed in
+   C++17; they also never did what they appear to - an unlisted exception
+   called std::unexpected() rather than propagating. */
+
 class Exception : public Samurai::Exception
 {
 	public:
@@ -32,30 +37,30 @@ class Device
 		enum BinaryMode { BigEndian, LittleEndian, NativeEndian };
 		
 		/* Low-level read/write operations */
-		virtual ssize_t read(uint8_t* data, size_t length) throw (Samurai::IO::Exception) = 0;
-		virtual ssize_t write(const uint8_t* data, size_t length) throw (Samurai::IO::Exception) = 0;
+		virtual ssize_t read(uint8_t* data, size_t length) = 0;
+		virtual ssize_t write(const uint8_t* data, size_t length) = 0;
 		
 	public:
 		
 	public:
-		virtual ssize_t write(const char* string) throw (Samurai::IO::Exception);
-		virtual void write(const std::string& string) throw (Samurai::IO::Exception);
-		virtual void write(const Buffer& buffer, size_t len) throw (Samurai::IO::Exception);
-		virtual void write(const Buffer* buffer, size_t len) throw (Samurai::IO::Exception);
-		virtual void writeBinary(uint16_t number, BinaryMode endiannes = NativeEndian) throw (Samurai::IO::Exception);
-		virtual void writeBinary(uint32_t number, BinaryMode endiannes = NativeEndian) throw (Samurai::IO::Exception);
-		virtual void writeBinary(uint64_t number, BinaryMode endiannes = NativeEndian) throw (Samurai::IO::Exception);
-		virtual void writeBinary(int16_t number, BinaryMode endiannes = NativeEndian) throw (Samurai::IO::Exception);
-		virtual void writeBinary(int32_t number, BinaryMode endiannes = NativeEndian) throw (Samurai::IO::Exception);
-		virtual void writeBinary(int64_t number, BinaryMode endiannes = NativeEndian) throw (Samurai::IO::Exception);
-		virtual void writeText(uint8_t n) throw (Samurai::IO::Exception);
-		virtual void writeText(uint16_t n) throw (Samurai::IO::Exception);
-		virtual void writeText(uint32_t n) throw (Samurai::IO::Exception);
-		virtual void writeText(uint64_t n) throw (Samurai::IO::Exception);
-		virtual void writeText(int8_t n) throw (Samurai::IO::Exception);
-		virtual void writeText(int16_t n) throw (Samurai::IO::Exception);
-		virtual void writeText(int32_t n) throw (Samurai::IO::Exception);
-		virtual void writeText(int64_t n) throw (Samurai::IO::Exception);
+		virtual ssize_t write(const char* string);
+		virtual void write(const std::string& string);
+		virtual void write(const Buffer& buffer, size_t len);
+		virtual void write(const Buffer* buffer, size_t len);
+		virtual void writeBinary(uint16_t number, BinaryMode endiannes = NativeEndian);
+		virtual void writeBinary(uint32_t number, BinaryMode endiannes = NativeEndian);
+		virtual void writeBinary(uint64_t number, BinaryMode endiannes = NativeEndian);
+		virtual void writeBinary(int16_t number, BinaryMode endiannes = NativeEndian);
+		virtual void writeBinary(int32_t number, BinaryMode endiannes = NativeEndian);
+		virtual void writeBinary(int64_t number, BinaryMode endiannes = NativeEndian);
+		virtual void writeText(uint8_t n);
+		virtual void writeText(uint16_t n);
+		virtual void writeText(uint32_t n);
+		virtual void writeText(uint64_t n);
+		virtual void writeText(int8_t n);
+		virtual void writeText(int16_t n);
+		virtual void writeText(int32_t n);
+		virtual void writeText(int64_t n);
 		
 		
 	public: /* Properties */

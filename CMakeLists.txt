@@ -240,12 +240,13 @@ foreach(target IN ITEMS samurai_objects ${SAMURAI_LIBRARIES})
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
             $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
+    # CXX_STANDARD is not exported, so consumers of the installed package would
+    # not inherit it. The compile feature is a usage requirement and is.
+    target_compile_features(${target} PUBLIC cxx_std_20)
+
     set_target_properties(${target} PROPERTIES
-        CXX_STANDARD 11
+        CXX_STANDARD 20
         CXX_STANDARD_REQUIRED ON
-        # NOTE: C++11 rather than a newer standard because io/device.h still
-        # declares dynamic exception specifications - throw(Exception) - which
-        # C++17 rejects outright.
         CXX_EXTENSIONS OFF
         POSITION_INDEPENDENT_CODE ON)
 

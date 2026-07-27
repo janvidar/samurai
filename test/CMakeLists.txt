@@ -31,7 +31,7 @@ foreach(app IN LISTS SAMURAI_TEST_APPS)
     # tests build whether or not the shared library is enabled.
     target_link_libraries(${app} PRIVATE samurai::samurai)
     set_target_properties(${app} PROPERTIES
-        CXX_STANDARD 11
+        CXX_STANDARD 20
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -116,7 +116,7 @@ target_compile_definitions(autotest PRIVATE
 target_link_libraries(autotest PRIVATE samurai::samurai)
 
 set_target_properties(autotest PROPERTIES
-    CXX_STANDARD 11
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF)
 
