@@ -1,3 +1,4 @@
+#include <memory>
 /*
  * Copyright (C) 2001-2008 Jan Vidar Krey, janvidar@extatic.org
  * See the file "COPYING" for licensing details.
@@ -19,15 +20,15 @@ static bool running = true;
 
 class Connection : public Samurai::IO::Net::SocketEventHandler {
 	protected:
-		Samurai::IO::Net::Socket* socket;
+		std::shared_ptr<Samurai::IO::Net::Socket> socket;
 			
 	public:
 		Connection(const Samurai::IO::Net::URL& url) {
-			socket = new Samurai::IO::Net::Socket(this, url.getHost().toString(), url.getPort());
+			socket = Samurai::IO::Net::Socket::create(this, url.getHost().toString(), url.getPort());
 		}
 		
 		virtual ~Connection() {
-			delete socket;
+			socket.reset();
 		}
 		
 		void connect() {
@@ -35,7 +36,7 @@ class Connection : public Samurai::IO::Net::SocketEventHandler {
 		}
 		
 		void disconnect() {
-			delete socket;
+			socket.reset();
 			socket = 0;
 		}
 

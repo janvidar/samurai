@@ -217,7 +217,7 @@ void Samurai::IO::Net::Socket::connect()
 		return;
 	}
 	
-	if (!create(addr->getSockAddrFamily())) {
+	if (!createDescriptor(addr->getSockAddrFamily())) {
 		state = Invalid;
 		disableMonitor();
 		if (eventHandler) eventHandler->EventError(this, SocketUnknown, strerror(NETERROR));

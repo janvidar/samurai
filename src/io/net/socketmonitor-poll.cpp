@@ -35,7 +35,7 @@ Samurai::IO::Net::PollSocketMonitor::PollSocketMonitor() : Samurai::IO::Net::Soc
 		list[n].fd = INVALID_SOCKET;
 		list[n].events = 0;
 		list[n].revents = 0;
-		act[n].sock = 0;
+		act[n].fd = INVALID_SOCKET;
 		act[n].trig = 0;
 		sockets[n] = 0;
 	}
@@ -152,13 +152,13 @@ void Samurai::IO::Net::PollSocketMonitor::wait(int time_ms)
 
 		if (!trig) continue;
 
-		act[act_num].sock = sock;
+		act[act_num].fd = list[n].fd;
 		act[act_num].trig = trig;
 		act_num++;
 	}
 	
 	for (size_t n = 0; n < act_num; n++)
-		handleSocketEvent(act[n].sock, act[n].trig);
+		dispatch(act[n].fd, act[n].trig);
 }
 
 

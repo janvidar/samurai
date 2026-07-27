@@ -8,6 +8,8 @@
 
 #include <samurai/io/net/socketglue.h>
 
+#include <memory>
+
 namespace Samurai {
 namespace IO {
 namespace Net {
@@ -70,7 +72,15 @@ enum SSLDirection
  * The base for Socket and ServerSocket.
  * This class is not interresting for anything else.
  */
-class SocketBase {
+/*
+ * Sockets are owned through std::shared_ptr so that the socket monitor can
+ * hold a weak reference and detect that an owner has released a socket rather
+ * than dispatching an event to freed memory. Construction therefore goes
+ * through the create() factory on each concrete socket class; the constructors
+ * are protected so that a raw `new Socket` cannot produce an object that
+ * shared_from_this() would reject.
+ */
+class SocketBase : public std::enable_shared_from_this<SocketBase> {
 	public:
 		enum SocketType { Stream, Datagram };
 		
@@ -171,12 +181,20 @@ class SocketBase {
 	
 	protected:
 		/**
+		 * Called by create() once the object is owned by a shared_ptr.
+		 * Anything needing shared_from_this() - registering with the socket
+		 * monitor above all - has to happen here rather than in a
+		 * constructor, where no shared_ptr exists yet.
+		 */
+		virtual void initialize() { }
+
+		/**
 		 * Create socket and return true if the call succeeded.
 		 * This basically call socket()
 		 * If tcp is true then a TCP stream is created,
 		 * otherwise udp is assumed.
 		 */
-		bool create(int af);
+		bool createDescriptor(int af);
 		
 		void setState(enum SocketState state);
 

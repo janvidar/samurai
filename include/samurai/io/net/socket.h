@@ -35,12 +35,26 @@ class Socket :
 	public Samurai::TimerListener
 {
 	public:
-	
+		/**
+		 * Construct a Socket owned by a shared_ptr. The constructors are
+		 * protected: the socket monitor holds weak references, which requires
+		 * that every socket be owned by a shared_ptr from the start.
+		 */
+		template<typename... Args>
+		static std::shared_ptr<Socket> create(Args&&... args)
+		{
+			std::shared_ptr<Socket> self(new Socket(std::forward<Args>(args)...));
+			self->initialize();
+			return self;
+		}
+
+	protected:
 		Socket();
 		Socket(socket_t, const SocketAddress& addr);
 		Socket(SocketEventHandler* eh, const SocketAddress& addr);
 		Socket(SocketEventHandler* eh, const InetAddress& addr, uint16_t port);
 		Socket(SocketEventHandler* eh, const std::string& address, uint16_t port);
+	public:
 		virtual ~Socket();
 
 		void lookup();

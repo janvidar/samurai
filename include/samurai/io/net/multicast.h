@@ -27,6 +27,15 @@ namespace Samurai {
 			*/
 			class MulticastSocket : public DatagramSocket {
 				public:
+					template<typename... Args>
+					static std::shared_ptr<MulticastSocket> create(Args&&... args)
+					{
+						std::shared_ptr<MulticastSocket> self(new MulticastSocket(std::forward<Args>(args)...));
+						self->initialize();
+						return self;
+					}
+
+				public:
 
 					/**
 					 * Set up a MulticastSocket to bind on the local address and port.

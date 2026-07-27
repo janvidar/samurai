@@ -4,6 +4,7 @@
  */
 
 #include <samurai/samurai.h>
+#include <memory>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -53,14 +54,14 @@ class Connection :
 	public Samurai::IO::Net::DatagramEventHandler
 {
 	protected:
-		Samurai::IO::Net::SocketBase* socket;
-		Samurai::IO::Net::ServerSocket* server;
-		Samurai::IO::Net::DatagramSocket* udp;
+		std::shared_ptr<Samurai::IO::Net::SocketBase> socket;
+		std::shared_ptr<Samurai::IO::Net::ServerSocket> server;
+		std::shared_ptr<Samurai::IO::Net::DatagramSocket> udp;
 
 	public:
 		Connection(char* host, int port)
 		{
-			socket = new Samurai::IO::Net::Socket(this, host, port);
+			socket = Samurai::IO::Net::Socket::create(this, host, port);
 			server = 0;
 			udp = 0;
 		}
@@ -72,9 +73,9 @@ class Connection :
 		}
 
 		virtual ~Connection() {
-			delete socket;
-			delete server;
-			delete udp;
+			socket.reset();
+			server.reset();
+			udp.reset();
 		}
 
 		void listen(int localport, const char* bindaddr = 0)
@@ -86,8 +87,8 @@ class Connection :
 
 			if (arg_udp)
 			{
-				delete udp;
-				udp = new Samurai::IO::Net::DatagramSocket(this, localAddr, localport);
+				udp.reset();
+				udp = Samurai::IO::Net::DatagramSocket::create(this, localAddr, localport);
 				if (!udp->listen())
 				{
 					error("could not bind to port. Disabling service");
@@ -97,8 +98,8 @@ class Connection :
 			{
 				Samurai::IO::Net::InetSocketAddress bindAddr(localAddr, localport);
 
-				delete server;
-				server = new Samurai::IO::Net::ServerSocket(this, localAddr, localport);
+				server.reset();
+				server = Samurai::IO::Net::ServerSocket::create(this, localAddr, localport);
 				if (!server->listen())
 				{
 					error("could not bind to port. Disabling service");
@@ -109,7 +110,7 @@ class Connection :
 
 		void connect()
 		{
-			Samurai::IO::Net::Socket* tcp_sock = dynamic_cast<Samurai::IO::Net::Socket*>(socket);
+			std::shared_ptr<Samurai::IO::Net::Socket> tcp_sock = std::dynamic_pointer_cast<Samurai::IO::Net::Socket>(socket);
 			if (tcp_sock) {
 				tcp_sock->connect();
 			}
@@ -117,7 +118,7 @@ class Connection :
 
 		void disconnect()
 		{
-			delete socket; socket = 0;
+			socket.reset();
 		}
 
 		void write(char* buffer, size_t size)
@@ -128,7 +129,7 @@ class Connection :
 			}
 			else
 			{
-				Samurai::IO::Net::Socket* tcp_sock = dynamic_cast<Samurai::IO::Net::Socket*>(socket);
+				std::shared_ptr<Samurai::IO::Net::Socket> tcp_sock = std::dynamic_pointer_cast<Samurai::IO::Net::Socket>(socket);
 				if (tcp_sock)
 				{
 					tcp_sock->write(buffer, size);
@@ -180,7 +181,7 @@ class Connection :
 
 			if (arg_ssl)
 			{
-				Samurai::IO::Net::Socket* sock = dynamic_cast<Samurai::IO::Net::Socket*>(socket);
+				std::shared_ptr<Samurai::IO::Net::Socket> sock = std::dynamic_pointer_cast<Samurai::IO::Net::Socket>(socket);
 				if (sock->TLSInitialize(false))
 				{
 					sock->TLSsendHandshake();
@@ -232,7 +233,7 @@ class Connection :
 			char* buffer = 0;
 			ssize_t bytes = 0;
 
-			Samurai::IO::Net::Socket* tcp_sock = dynamic_cast<Samurai::IO::Net::Socket*>(socket);
+			std::shared_ptr<Samurai::IO::Net::Socket> tcp_sock = std::dynamic_pointer_cast<Samurai::IO::Net::Socket>(socket);
 			if (tcp_sock) {
 				buffer = new char[tcp_sock->getReceiveBufferSize()];
 				bytes = tcp_sock->read(buffer, 1024);
@@ -259,7 +260,7 @@ class Connection :
 			error(msg);
 		}
 
-		void EventAcceptSocket(const Samurai::IO::Net::ServerSocket*, Samurai::IO::Net::Socket* sock)
+		void EventAcceptSocket(const Samurai::IO::Net::ServerSocket*, std::shared_ptr<Samurai::IO::Net::Socket> sock)
 		{
 			if (arg_verbose)
 			{
@@ -269,7 +270,7 @@ class Connection :
 			}
 
 			if (socket)
-				delete socket;
+				socket.reset();
 
 			sock->setNonBlocking(true);
 			sock->setEventHandler(this);

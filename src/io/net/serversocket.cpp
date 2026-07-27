@@ -36,7 +36,7 @@ Samurai::IO::Net::ServerSocket::ServerSocket(ServerSocketEventHandler* eh, uint1
 
 void Samurai::IO::Net::ServerSocket::internal_create()
 {
-	create(addr->getSockAddrFamily());
+	createDescriptor(addr->getSockAddrFamily());
 }
 
 Samurai::IO::Net::ServerSocket::~ServerSocket()
@@ -93,7 +93,7 @@ void Samurai::IO::Net::ServerSocket::internal_accept() {
 
 	// Create a new socket based on the connected client,
 	// and hand it over to the eventHandler.
-	Socket* sock = new Socket(new_sd, n_addr);
+	std::shared_ptr<Socket> sock = Socket::create(new_sd, n_addr);
 
 	// accept() does not inherit O_NONBLOCK from the listening socket.
 	if (!sock->setNonBlocking(true))
@@ -103,7 +103,5 @@ void Samurai::IO::Net::ServerSocket::internal_accept() {
 
 	if (eventHandler)
 		eventHandler->EventAcceptSocket(this, sock);
-	else
-		delete sock;
 }
 

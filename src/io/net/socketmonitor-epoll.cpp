@@ -101,7 +101,7 @@ void Samurai::IO::Net::EPollSocketMonitor::internal_add(Samurai::IO::Net::Socket
 	struct epoll_event ev;
 	memset(&ev, 0, sizeof(struct epoll_event));
 	set_poll_events(&ev, socket->getMonitorTrigger());
-	ev.data.ptr = socket;
+	ev.data.fd = socket->getFD();
 	
 	int ret = epoll_ctl(epfd, EPOLL_CTL_ADD, socket->getFD(), &ev);
 	if (ret == -1)
@@ -145,7 +145,7 @@ void Samurai::IO::Net::EPollSocketMonitor::internal_modify(Samurai::IO::Net::Soc
 {
 	struct epoll_event ev;
 	set_poll_events(&ev, socket->getMonitorTrigger());
-	ev.data.ptr = socket;
+	ev.data.fd = socket->getFD();
 	int ret = epoll_ctl(epfd, EPOLL_CTL_MOD, socket->getFD(), &ev);
 	if (ret == -1)
 	{
@@ -167,9 +167,8 @@ void Samurai::IO::Net::EPollSocketMonitor::wait(int time_ms)
 	
 	for(int n = 0; n < nfds; n++)
 	{
-		Samurai::IO::Net::SocketBase* sock = (Samurai::IO::Net::SocketBase*) act[n].data.ptr;
 		int trig = get_poll_events(&act[n]);
-		handleSocketEvent(sock, trig);
+		dispatch(act[n].data.fd, trig);
 	}
 }
 

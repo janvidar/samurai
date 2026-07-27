@@ -58,7 +58,21 @@ void Samurai::IO::Net::SocketMonitor::add(Samurai::IO::Net::SocketBase* socket)
 	{
 		return;
 	}
-	
+
+	/* A socket built by its create() factory is always held by a shared_ptr,
+	   so this only throws for one built some other way - in which case it is
+	   better to refuse than to monitor something whose lifetime cannot be
+	   observed. */
+	try
+	{
+		registry[socket->getFD()] = socket->shared_from_this();
+	}
+	catch (const std::bad_weak_ptr&)
+	{
+		QERR("Socket is not owned by a shared_ptr; use Socket::create()");
+		return;
+	}
+
 	internal_add(socket);
 }
 
@@ -69,6 +83,8 @@ void Samurai::IO::Net::SocketMonitor::remove(Samurai::IO::Net::SocketBase* socke
 	{
 		return;
 	}
+
+	registry.erase(socket->sd);
 	internal_remove(socket);
 }
 
@@ -81,6 +97,27 @@ void Samurai::IO::Net::SocketMonitor::modify(Samurai::IO::Net::SocketBase* socke
 		return;
 	}
 	internal_modify(socket);
+}
+
+
+void Samurai::IO::Net::SocketMonitor::dispatch(socket_t fd, int trig)
+{
+	std::map<socket_t, std::weak_ptr<SocketBase> >::iterator it = registry.find(fd);
+	if (it == registry.end())
+		return;
+
+	/* Holding the lock for the whole callback is the point of the exercise:
+	   a handler that reacts to EventDisconnected by dropping its own
+	   reference used to leave the rest of this dispatch walking freed
+	   memory. */
+	std::shared_ptr<SocketBase> socket = it->second.lock();
+	if (!socket)
+	{
+		registry.erase(it);
+		return;
+	}
+
+	handleSocketEvent(socket.get(), trig);
 }
 
 

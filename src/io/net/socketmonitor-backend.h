@@ -26,8 +26,10 @@ struct pollfd;
 // Use as fallback for all platforms.
 #define SOCKET_NOTIFY_SELECT
 
+/* Keyed by descriptor rather than by SocketBase*: a pointer gathered before
+   dispatch is worthless once a handler has released its socket. */
 struct poll_act {
-	Samurai::IO::Net::SocketBase* sock;
+	socket_t fd;
 	int trig;
 };
 

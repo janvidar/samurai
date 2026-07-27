@@ -303,7 +303,7 @@ void Samurai::IO::Net::SocketBase::disableMonitor()
 	}
 }
 
-bool Samurai::IO::Net::SocketBase::create(int af)
+bool Samurai::IO::Net::SocketBase::createDescriptor(int af)
 {
 	if (type == Stream)
 	{
