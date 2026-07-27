@@ -78,17 +78,12 @@ unsigned int quickdc_abs(int n) {
 	return (n < 0) ? (0u - (unsigned int) n) : (unsigned int) n;
 }
 
-#ifdef SAMURAI_OS_WINDOWS
-char* strdup(const char* value) {
-	int len = strlen(value);
-	char* dupval = (char*) malloc(len+1);
-	strcpy(dupval, value);
-	dupval[len] = '\0';
-	return dupval;
-}
-#endif // WIN32
+/* NOTE: strdup is no longer reimplemented here; stdc.h maps it to the CRT's
+   _strdup, which avoids colliding with the one Windows already provides. */
 
-#ifndef SAMURAI_OS_LINUX
+/* NOTE: this was #ifndef SAMURAI_OS_LINUX, which redefined a function libc
+   already provides on macOS and the BSDs. Only Windows lacks it. */
+#ifdef SAMURAI_OS_WINDOWS
 char *strndup(const char *value, size_t len) {
 	char* dupval = (char*) malloc(len+1);
 	strncpy(dupval, value, len);
@@ -98,16 +93,18 @@ char *strndup(const char *value, size_t len) {
 #endif
 
 #ifdef SAMURAI_OS_WINDOWS
-char* quickdc_strcasestr(char* haystack, char* needle) {
-	int nlength = (int) strlen (needle);
-	int hlength = (int) strlen (haystack);
+char* quickdc_strcasestr(const char* haystack, const char* needle) {
+	if (!haystack || !needle) return 0;
 
+	const size_t nlength = strlen(needle);
+	const size_t hlength = strlen(haystack);
+
+	if (nlength == 0) return (char*) haystack;
 	if (nlength > hlength) return 0;
-	if (hlength <= 0) return 0;
-	if (nlength <= 0) return haystack;
-	for (int i = 0; i <= (hlength - nlength); i++) {
-		if (strncasecmp (haystack + i, needle, nlength) == 0)
-			return haystack + i;
+
+	for (size_t i = 0; i <= (hlength - nlength); i++) {
+		if (_strnicmp(haystack + i, needle, nlength) == 0)
+			return (char*) (haystack + i);
 	}
 	return 0;
 }

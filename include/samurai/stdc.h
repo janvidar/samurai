@@ -9,19 +9,28 @@
 #include <samurai/samurai.h>
 #include <string>
 
-#ifndef SAMURAI_OS_LINUX
-extern "C" char* strndup(const char *s, size_t n);
-#endif
-
+/*
+ * NOTE: this block used to declare strdup, strncmp, strcasecmp, strncasecmp,
+ * strcasestr and isblank as functions this library provides. Only strdup was
+ * ever defined, so the rest were link errors waiting for someone to build on
+ * Windows - and strncmp and isblank are standard C that is always present
+ * anyway. The C runtime has the others under underscore-prefixed names, so
+ * they are mapped rather than reimplemented.
+ *
+ * strndup is the one genuinely missing function; it exists on Linux, macOS
+ * and the BSDs, so the guard is Windows rather than "not Linux".
+ */
 #ifdef SAMURAI_OS_WINDOWS
-extern "C" char* strdup(const char* value);
-extern "C" int strncmp(const char* s1, const char* s2, size_t n);
-extern "C" int strcasecmp(const char* s1, const char* s2);
-extern "C" int strncasecmp(const char* s1, const char* s2, size_t n);
-extern "C" char* strcasestr(const char* haystack, const char* needle);
-// extern int gettimeofday(struct timeval* tv, const struct timezone* tz);
-extern "C" int isblank(int c);
-#endif // WIN32
+
+extern "C" char* strndup(const char* s, size_t n);
+extern "C" char* quickdc_strcasestr(const char* haystack, const char* needle);
+
+#define strcasecmp  _stricmp
+#define strncasecmp _strnicmp
+#define strdup      _strdup
+#define strcasestr  quickdc_strcasestr
+
+#endif // SAMURAI_OS_WINDOWS
 
 extern "C" int64_t quickdc_atoll(const char* value);
 extern "C" uint64_t quickdc_atoull(const char* value);
