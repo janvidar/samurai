@@ -37,7 +37,7 @@ class NetworkInterfaceUnix : public NetworkInterface
 		const char* getName() const;
 		interface_t getHandle() const;
 		virtual int getMtu() const;
-		
+
 	private:
 		bool getInfo(int info, int af = AF_INET);
 		void extractHardwareAddress();
@@ -112,7 +112,7 @@ void Samurai::IO::Net::NetworkInterfaceUnix::extractHardwareAddress()
 	/* Extract MAC-address */
 	uint8_t hwaddr_bytes[6];
 	memset(hwaddr_bytes, 0, sizeof(hwaddr_bytes));
-	
+
 #if defined(SIOCGIFHWADDR)
 	if (getInfo(SIOCGIFHWADDR))
 	memcpy(hwaddr_bytes, &m_ifr.ifr_hwaddr.sa_data, 6);
@@ -123,9 +123,9 @@ void Samurai::IO::Net::NetworkInterfaceUnix::extractHardwareAddress()
 	{
 		for (struct ifaddrs* iface = first; iface; iface = iface->ifa_next)
 		{
-			if ((iface->ifa_addr->sa_family == AF_LINK))
+			if (iface->ifa_addr->sa_family == AF_LINK)
 			{
-				if (strcmp(iface->ifa_name, name) == 0 && iface->ifa_addr)
+				if (strcmp(iface->ifa_name, m_ifr.ifr_name) == 0 && iface->ifa_addr)
 				{
 					link = (struct sockaddr_dl*) iface->ifa_addr;
 					if (link->sdl_alen == 6)
@@ -148,7 +148,7 @@ void Samurai::IO::Net::NetworkInterfaceUnix::extractHardwareAddress()
 // FIXME: very IPv4 centric!
 void Samurai::IO::Net::NetworkInterfaceUnix::extractAddresses()
 {
-	if (getInfo(SIOCGIFADDR)) 
+	if (getInfo(SIOCGIFADDR))
 		m_address = new Samurai::IO::Net::InetAddress(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_addr)->sin_addr));
 
 	if (getInfo(SIOCGIFNETMASK))
@@ -220,7 +220,7 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_I
 {
 	m_name = strdup(info->Description); // AdapterName
 	m_ifnumber = info->Index;
-	
+
 	if (info->AddressLength == 6)
 	{
 		uint8_t hwaddr_bytes[6];
@@ -228,12 +228,12 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_I
 		if (hwaddr_bytes[0] || hwaddr_bytes[1] || hwaddr_bytes[2] || hwaddr_bytes[3] || hwaddr_bytes[4] || hwaddr_bytes[5])
 			hwaddr = new Samurai::IO::Net::HardwareAddress(hwaddr_bytes);
 	}
-	
+
 	m_flags |= InterfaceEnabled;
 	if (info->Type == MIB_IF_TYPE_LOOPBACK)   m_flags |= InterfaceLoopback;
 	if (info->Type == MIB_IF_TYPE_PPP)        m_flags |= InterfacePointToPoint;
 	if (info->Type == MIB_IF_TYPE_ETHERNET)   m_flags |= (InterfaceBroadcast | InterfaceMulticast);
-	
+
 	PIP_ADDR_STRING ipstr = &info->IpAddressList;
 	while (ipstr)
 	{
@@ -257,11 +257,11 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_I
 
 Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_ADDRESSES info)
 	: Samurai::IO::Net::NetworkInterface()
-	
+
 {
 	name = strdup(info->AdapterName); // AdapterName
 	ifnumber = info->IfIndex;
-	
+
 	if (info->PhysicalAddressLength == 6)
 	{
 		uint8_t hwaddr_bytes[6];
@@ -269,26 +269,26 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_A
 		if (hwaddr_bytes[0] || hwaddr_bytes[1] || hwaddr_bytes[2] || hwaddr_bytes[3] || hwaddr_bytes[4] || hwaddr_bytes[5])
 			hwaddr = new Samurai::IO::Net::HardwareAddress(hwaddr_bytes);
 	}
-	
+
 	mtu = info->Mtu;
-	
+
 	if (info->OperStatus == IfOperStatusUp)
 		flags |= InterfaceEnabled;
-	
+
 	if (!info->Flags & IP_ADAPTER_NO_MULTICAST)
 		flags |= InterfaceMulticast;
-	
+
 	if (info->IfType == IF_TYPE_SOFTWARE_LOOPBACK)
 		flags |= InterfaceLoopback;
-	
+
 	if (info->IfType == IF_TYPE_PPP || info->IfType == IF_TYPE_TUNNEL)
 		flags |= InterfacePointToPoint;
-	
+
 	if (info->IfType == IF_TYPE_ETHERNET_CSMACD || info->IfType == IF_TYPE_IEE80211)
 	{
 		flags |= InterfaceBroadcast;
 	}
-	
+
 	PIP_ADAPTER_UNICAST_ADDRESSES ip = info->FirstUnicastAddress;
 	struct sockaddr* sa = (struct sockaddr*) info->Address->lpSockaddr;
 	struct sockaddr_in* addr4  = (struct sockaddr_in*) sa;
@@ -328,7 +328,7 @@ Samurai::IO::Net::NetworkInterface* Samurai::IO::Net::NetworkInterface::getInter
 bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<NetworkInterface*>& interfaces)
 {
 	(void) interfaces;
-	
+
 	Samurai::IO::Net::NetworkInterface* iface = 0;
 
 #ifdef SAMURAI_UNIX
@@ -336,7 +336,7 @@ bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<NetworkInterf
 	if (!ifaces) return false;
 	for (size_t i = 0; ifaces[i].if_index; i++)
 	{
-		
+
 		iface = new Samurai::IO::Net::NetworkInterfaceUnix(ifaces[i].if_name);
 		interfaces.push_back(iface);
 	}
@@ -351,7 +351,7 @@ bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<NetworkInterf
 	PIP_ADAPTER_INFO adapter = 0;
 	DWORD bufsize = sizeof(IP_ADAPTER_INFO);
 	adapterInfo = (IP_ADAPTER_INFO*) malloc(bufsize);
-	
+
 	ret = GetAdaptersInfo(adapterInfo, &bufsize);
 	if (ret == ERROR_BUFFER_OVERFLOW)
 	{
@@ -359,7 +359,7 @@ bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<NetworkInterf
 		adapterInfo = (IP_ADAPTER_INFO*) malloc(bufsize);
 		ret = GetAdaptersInfo(adapterInfo, &bufsize);
 	}
-	
+
 	if (ret == NO_ERROR)
 	{
 		adapter = adapterInfo;
@@ -379,7 +379,7 @@ bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<NetworkInterf
 	PIP_ADAPTER_ADDRESSES ptr = 0;
 	DWORD bufsize = sizeof(IP_ADAPTER_ADDRESSES);
 	adr = (PIP_ADAPTER_ADDRESSES) malloc(bufsize);
-	
+
 	ret = GetAdaptersAddresses(AF_UNSPEC, flags, 0, adr, &bufsize);
 	if (ret == ERROR_BUFFER_OVERFLOW)
 	{
@@ -387,13 +387,13 @@ bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<NetworkInterf
 		adr = (PIP_ADAPTER_ADDRESSES) malloc(&bufsize);
 		ret = GetAdaptersAddresses(AF_UNSPEC, flags, 0, adr, &bufsize);
 	}
-	
+
 	if (ret == ERROR_NO_DATA)
 	{
 		free(adr);
 		return true;
 	}
-	
+
 	if (ret == ERROR_SUCCESS)
 	{
 		ptr = adr;
@@ -406,11 +406,11 @@ bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<NetworkInterf
 		free(adr);
 		return true:
 	}
-	
+
 	free(adr);
 	return false;
 );
-	
+
 #endif // USE_ADAPTER_INFO
 #endif // SAMURAI_WINDOWS
 }
