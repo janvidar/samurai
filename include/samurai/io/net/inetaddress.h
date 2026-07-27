@@ -94,7 +94,7 @@ namespace Samurai {
 					void EventHostError(enum Samurai::IO::Net::DNS::Resolver::Error error);
 					
 				protected:
-					static bool stringToAddress(enum Version, char* address, struct __InternalAddress*);
+					static bool stringToAddress(enum Version, const char* address, struct __InternalAddress*);
 					
 					
 				protected:

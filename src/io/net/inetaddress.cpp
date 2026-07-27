@@ -9,6 +9,7 @@
 #include <samurai/io/net/inetaddress.h>
 
 #include <stdlib.h>
+#include <string>
 
 /**
  * inet_ntop
@@ -128,7 +129,7 @@ Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Vers
 		{
 			/* If address is indeed an IP address (as opposed to a hostname),
 			   we will try to autodetect it and the address family. */
-			ok = stringToAddress(IPv4, (char*) address.c_str(), data);
+			ok = stringToAddress(IPv4, address.c_str(), data);
 			if (ok)
 			{
 				// printf("Unspec is OK - IPv4\n");
@@ -136,7 +137,7 @@ Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Vers
 			}
 			else
 			{
-				ok = stringToAddress(IPv6, (char*) address.c_str(), data);
+				ok = stringToAddress(IPv6, address.c_str(), data);
 				if (ok)
 				{
 					// printf("Unspec is OK - IPv6\n");
@@ -149,12 +150,12 @@ Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Vers
 			if (version == IPv4)
 			{
 				// printf("Specified IPv4\n");
-				ok = stringToAddress(IPv4, (char*) address.c_str(), data);
+				ok = stringToAddress(IPv4, address.c_str(), data);
 			}
 			else if (version == IPv6)
 			{
 				// printf("Specified IPv6\n");
-				ok = stringToAddress(IPv6, (char*) address.c_str(), data);
+				ok = stringToAddress(IPv6, address.c_str(), data);
 			}
 		}
 	}
@@ -222,7 +223,13 @@ bool Samurai::IO::Net::InetAddress::isValid()
 {
 	if (version == IPv4) {
 #ifdef SAMURAI_POSIX
-		return X_IP4_32 && !IN_BADCLASS(X_IP4_32) && !IN_EXPERIMENTAL(X_IP4_32);
+		/* NOTE: X_IP4_32 is network byte order, but IN_BADCLASS and
+		   IN_EXPERIMENTAL take host order - every sibling here (isMulticast,
+		   isPrivate, isLoopback) converts and this one did not. On a little
+		   endian host it therefore classified by the *last* octet: 10.0.0.250
+		   reported invalid while 240.1.2.3 reported valid. */
+		const uint32_t host_order = ntohl(X_IP4_32);
+		return host_order && !IN_BADCLASS(host_order) && !IN_EXPERIMENTAL(host_order);
 #else
 		return true; // FIXME
 #endif
@@ -461,174 +468,29 @@ void Samurai::IO::Net::InetAddress::lookup(ResolveEventHandler* eventHandler)
 }
 
 
-/* This will return -1 if no number is found */
-static int getNumber(char c)
-{
-	if (c >= '0' && c <= '9')
-		return c - '0';
-	return -1;
-}
-
-static int getHexNumber(char c)
-{
-	int ret = -1;
-	if (c >= '0' && c <= '9')
-		ret = c - '0';
-	if (ret == -1 && c >= 'a' && c <= 'f')
-		ret = (c - 'a') + 10;
-	if (ret == -1 && c >= 'A' && c <= 'F')
-		ret = (c - 'A') + 10;
-		
-	// QDBG("GetHexNum for '%c' => %d", c, ret);
-	return ret;
-}
-
-#define RETURN_ERROR \
-{ \
-	return false; \
-}
-
-
-bool Samurai::IO::Net::InetAddress::stringToAddress(enum Samurai::IO::Net::InetAddress::Version version, char* address, struct __InternalAddress* data)
-{
-	if (!address || !strlen(address) || !data) return false;
-	
-	char* p = address;
-	
-	int adata[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-	int max_value = 65535;
-	int pos      = 0; /* offset into adata */
-	int last_pos = 7;
-	char separator = ':';
-	
-	enum { Invalid, Start, Data, Separator, End } parse_state = Invalid;
-	
-	if (version == Samurai::IO::Net::InetAddress::IPv4)
-	{
-		if (strlen(address) < 6) RETURN_ERROR;
-		
-		char separator = '.';
-		last_pos = 3;
-		max_value = 255;
-		
-		parse_state = Start;
-		while (*p)
-		{
-			char ch = p[0];
-			if (getNumber(ch) != -1)
-			{
-				parse_state = Data;
-				if (adata[pos]) adata[pos] *= 10;
-				adata[pos] += getNumber(ch);
-				if (adata[pos] > max_value) {
-					RETURN_ERROR;
-				}
-			}
-			else if (ch == separator)
-			{
-				if (parse_state != Data) RETURN_ERROR;
-				pos++;
-				parse_state = Separator;
-				if (pos > last_pos) RETURN_ERROR;
-			}
-			else
-			{
-				return false;
-			}
-			p++;
-		}
-		if (pos < last_pos) RETURN_ERROR;
-
-		data->internal.in.s_addr = htonl((uint32_t) ((adata[0] << 24) | (adata[1] << 16) | (adata[2] << 8) | (adata[3])));
-		
-		return true;
-		
-	}
-	else
-	if (version == Samurai::IO::Net::InetAddress::IPv6)
-	{
-		if (strlen(address) < 2) RETURN_ERROR;
-		bool compress_found = false;
-		
-//		QDBG("Samurai::IO::Net::InetAddress::stringToAddress: version=%s, address=%s", version == IPv4 ? "ipv4" : "ipv6", address);
-		
-		if (strncasecmp("::ffff:", address, 7) == 0 && strlen(address) > 13)
-		{
-			/* IPv4 mapped address */
-			return stringToAddress(version, &address[7], data);
-		}
-		
-		
-		while (*p)
-		{
-			char ch = p[0];
-			
-			if (ch == '[' && version == IPv6) {
-				if (parse_state != Invalid) RETURN_ERROR;
-				parse_state = Start;
-			
-			} else if (ch == ']' && version == IPv6) {
-				parse_state = End;
-				break;
-			
-			} else if (getHexNumber(ch) != -1)
-			{
-				parse_state = Data;
-				if (adata[pos]) adata[pos] *= 16;
-				adata[pos] += getHexNumber(ch);
-				if (adata[pos] > max_value)
-					RETURN_ERROR;
-			}
-			else if (ch == separator)
-			{
-				if (parse_state == Separator || parse_state == Invalid || parse_state == Start)
-				{
-					if (compress_found && parse_state == Separator) RETURN_ERROR;
-					compress_found = true;
-					
-					int pad = 0;
-					char* left = p;
-					while ((left = strchr(&left[1], separator))) pad++;
-					/*
-					left = p;
-					if ((left = strchr(&left[1], '.')))
-					{
-						QDBG("Mixed mode configuration");
-					}
-					*/
-					pos = last_pos - pad;
-					
-					
-				}
-				else {
-					pos++;
-					parse_state = Separator;
-					if (pos > last_pos) RETURN_ERROR;
-				}
-			}
-			else
-			{
-				// QERR("Unexpected: '%c'", ch);
-				RETURN_ERROR;
-			}
-			p++;
-		}
-		
-		if (pos < last_pos) RETURN_ERROR;
-		
 /*
-		QDBG("deconvert: %x:%x:%x:%x:%x:%x:%x:%x",	adata[0], adata[1], adata[2], adata[3],
-													adata[4], adata[5], adata[6], adata[7]);
-*/
-		
-		for (int i = 0; i < 8; i++)
-			X_IP6_16[i] = ntohs(adata[i]);
-		
-		return true;
-		
-	}
+ * NOTE: This replaces a hand-written dotted-quad and IPv6 parser
+ * (stringToAddress) of roughly 150 lines. It mis-parsed "::" compression,
+ * never accepted an IPv4-mapped "::ffff:1.2.3.4" at all, and ended in a
+ * free() applied to the caller's buffer - which callers were passing
+ * std::string::c_str() into. inet_pton() is in POSIX and Winsock and does
+ * not have those problems.
+ */
+bool Samurai::IO::Net::InetAddress::stringToAddress(enum Samurai::IO::Net::InetAddress::Version version, const char* address, struct __InternalAddress* data)
+{
+	if (!address || !*address || !data) return false;
 
+	std::string text(address);
 
-	free(address);
+	/* Accept the bracketed form used in URLs and by toString(). */
+	if (text.size() > 2 && text.front() == '[' && text.back() == ']')
+		text = text.substr(1, text.size() - 2);
+
+	if (version == Samurai::IO::Net::InetAddress::IPv4)
+		return net_string_to_address(AF_INET, text.c_str(), (void*) &data->internal.in) > 0;
+
+	if (version == Samurai::IO::Net::InetAddress::IPv6)
+		return net_string_to_address(AF_INET6, text.c_str(), (void*) &data->internal.in6) > 0;
+
 	return false;
 }
