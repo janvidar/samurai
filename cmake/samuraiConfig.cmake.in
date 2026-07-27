@@ -7,6 +7,13 @@ include(CMakeFindDependencyMacro)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_dependency(Threads)
 
+# zlib and bzip2 are PRIVATE dependencies of the library. The shared library
+# absorbs them, but a static archive does not link its dependencies, so they
+# appear in the static target's link interface and consumers have to resolve
+# them as well.
+find_dependency(ZLIB)
+find_dependency(BZip2)
+
 if("@SAMURAI_EXPORTED_TLS_PROVIDER@" STREQUAL "OPENSSL")
     find_dependency(OpenSSL 1.0.2)
 elseif("@SAMURAI_EXPORTED_TLS_PROVIDER@" STREQUAL "GNUTLS")
@@ -15,5 +22,12 @@ elseif("@SAMURAI_EXPORTED_TLS_PROVIDER@" STREQUAL "GNUTLS")
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/samuraiTargets.cmake")
+
+# Installations may carry the shared library, the static one, or both.
+# samurai::samurai always names something usable; samurai::samurai_static is
+# only defined when a static library was installed.
+if(NOT TARGET samurai::samurai AND TARGET samurai::samurai_static)
+    add_library(samurai::samurai ALIAS samurai::samurai_static)
+endif()
 
 check_required_components(samurai)

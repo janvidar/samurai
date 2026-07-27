@@ -28,7 +28,9 @@ set(SAMURAI_TEST_APPS
     testtiger dnslookup netcat wget thread interfaces upnplist)
 
 foreach(app IN LISTS SAMURAI_TEST_APPS)
-    target_link_libraries(${app} PRIVATE samurai)
+    # samurai::samurai resolves to whichever library flavour is primary, so the
+    # tests build whether or not the shared library is enabled.
+    target_link_libraries(${app} PRIVATE samurai::samurai)
     set_target_properties(${app} PROPERTIES
         CXX_STANDARD 11
         CXX_STANDARD_REQUIRED ON
@@ -107,7 +109,7 @@ target_include_directories(autotest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/exotic   # the .tcc files are #included by name
     ${SAMURAI_EXOTIC_HEADER_DIR})
 
-target_link_libraries(autotest PRIVATE samurai)
+target_link_libraries(autotest PRIVATE samurai::samurai)
 
 set_target_properties(autotest PROPERTIES
     CXX_STANDARD 11

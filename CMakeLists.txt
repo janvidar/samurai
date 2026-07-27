@@ -27,9 +27,25 @@ set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
 
 option(SAMURAI_BUILD_TESTS "Build the test and example programs" ON)
 
-# The Makefile build produced libsamurai.so, so default to shared. Override
-# with -DBUILD_SHARED_LIBS=OFF for a static libsamurai.a.
-option(BUILD_SHARED_LIBS "Build samurai as a shared library" ON)
+# The Makefile build had rules for both libsamurai.so and libsamurai.a, so
+# build both by default. They share a single compile pass.
+#
+# -DBUILD_SHARED_LIBS=OFF is still honoured as a request for a static-only
+# build, since that is what it meant before these two options existed.
+if(DEFINED BUILD_SHARED_LIBS AND NOT BUILD_SHARED_LIBS)
+    set(SAMURAI_SHARED_DEFAULT OFF)
+else()
+    set(SAMURAI_SHARED_DEFAULT ON)
+endif()
+
+option(SAMURAI_BUILD_SHARED "Build the shared library (libsamurai.so)" ${SAMURAI_SHARED_DEFAULT})
+option(SAMURAI_BUILD_STATIC "Build the static library (libsamurai.a)" ON)
+
+if(NOT SAMURAI_BUILD_SHARED AND NOT SAMURAI_BUILD_STATIC)
+    message(FATAL_ERROR
+        "Nothing to build: enable at least one of SAMURAI_BUILD_SHARED or "
+        "SAMURAI_BUILD_STATIC.")
+endif()
 
 set(SAMURAI_TLS_PROVIDER "OPENSSL" CACHE STRING
     "TLS backend to use: OPENSSL, GNUTLS or NONE")
@@ -147,59 +163,96 @@ set(SAMURAI_SOURCES
     src/crypto/digest/tigertree.cpp
     src/crypto/digest/tthsum.cpp)
 
-add_library(samurai ${SAMURAI_SOURCES})
-add_library(samurai::samurai ALIAS samurai)
+# The sources are compiled once into an object library, and the enabled
+# library flavours are then assembled from those objects. The objects are
+# position independent so that the same ones serve the shared library and a
+# static library that can still be linked into a PIE.
+add_library(samurai_objects OBJECT ${SAMURAI_SOURCES})
 
-target_include_directories(samurai
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+set(SAMURAI_LIBRARIES "")
 
-set_target_properties(samurai PROPERTIES
-    CXX_STANDARD 11
-    CXX_STANDARD_REQUIRED ON
-    # NOTE: C++11 rather than a newer standard because io/device.h still
-    # declares dynamic exception specifications - throw(Exception) - which
-    # C++17 rejects outright.
-    CXX_EXTENSIONS OFF
-    POSITION_INDEPENDENT_CODE ON
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR})
-
-# NOTE: These have to be PUBLIC, not PRIVATE. SSL_SUPPORT gates a member of
-# Samurai::IO::Net::Socket in the public header, and _FILE_OFFSET_BITS changes
-# off_t, so a consumer compiled without them would disagree with the library
-# about object layout.
-target_compile_definitions(samurai
-    PUBLIC
-        _FILE_OFFSET_BITS=64
-        $<$<CONFIG:Debug>:DEBUG>
-    PRIVATE
-        ZLIB
-        BZIP2
-        DNS_RESOLVE_${SAMURAI_DNS_PROVIDER})
-
-target_link_libraries(samurai
-    PUBLIC Threads::Threads
-    PRIVATE ZLIB::ZLIB BZip2::BZip2)
-
-if(SAMURAI_TLS_PROVIDER STREQUAL "OPENSSL")
-    # PUBLIC: tlsfactory-openssl.h is a public header and includes
-    # <openssl/ssl.h>.
-    target_compile_definitions(samurai PUBLIC SSL_SUPPORT SSL_OPENSSL)
-    target_link_libraries(samurai PUBLIC OpenSSL::SSL OpenSSL::Crypto)
-elseif(SAMURAI_TLS_PROVIDER STREQUAL "GNUTLS")
-    target_compile_definitions(samurai PUBLIC SSL_SUPPORT SSL_GNUTLS)
-    target_link_libraries(samurai PUBLIC PkgConfig::GNUTLS)
+if(SAMURAI_BUILD_SHARED)
+    add_library(samurai SHARED $<TARGET_OBJECTS:samurai_objects>)
+    set_target_properties(samurai PROPERTIES
+        VERSION ${PROJECT_VERSION}
+        SOVERSION ${PROJECT_VERSION_MAJOR})
+    list(APPEND SAMURAI_LIBRARIES samurai)
 endif()
 
-if(WIN32)
-    target_link_libraries(samurai PUBLIC ws2_32 iphlpapi)
+if(SAMURAI_BUILD_STATIC)
+    add_library(samurai_static STATIC $<TARGET_OBJECTS:samurai_objects>)
+    add_library(samurai::samurai_static ALIAS samurai_static)
+    # Produce libsamurai.a rather than libsamurai_static.a. Not done on
+    # Windows, where the shared library's import library would collide with it.
+    if(NOT WIN32)
+        set_target_properties(samurai_static PROPERTIES OUTPUT_NAME samurai)
+    endif()
+    list(APPEND SAMURAI_LIBRARIES samurai_static)
 endif()
 
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(samurai PRIVATE -Wall -Wextra)
+# samurai::samurai is whichever flavour is the primary one, so that in-tree
+# consumers and the tests do not have to care which are enabled.
+if(SAMURAI_BUILD_SHARED)
+    add_library(samurai::samurai ALIAS samurai)
+else()
+    add_library(samurai::samurai ALIAS samurai_static)
 endif()
+
+# Applied to the object library as well as to the finished libraries: the
+# objects need the include paths and definitions in order to compile, and the
+# libraries need them as usage requirements for consumers.
+foreach(target IN ITEMS samurai_objects ${SAMURAI_LIBRARIES})
+    target_include_directories(${target}
+        PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+
+    set_target_properties(${target} PROPERTIES
+        CXX_STANDARD 11
+        CXX_STANDARD_REQUIRED ON
+        # NOTE: C++11 rather than a newer standard because io/device.h still
+        # declares dynamic exception specifications - throw(Exception) - which
+        # C++17 rejects outright.
+        CXX_EXTENSIONS OFF
+        POSITION_INDEPENDENT_CODE ON)
+
+    # NOTE: These have to be PUBLIC, not PRIVATE. SSL_SUPPORT gates a member of
+    # Samurai::IO::Net::Socket in the public header, and _FILE_OFFSET_BITS
+    # changes off_t, so a consumer compiled without them would disagree with
+    # the library about object layout.
+    target_compile_definitions(${target}
+        PUBLIC
+            _FILE_OFFSET_BITS=64
+            $<$<CONFIG:Debug>:DEBUG>
+        PRIVATE
+            ZLIB
+            BZIP2
+            DNS_RESOLVE_${SAMURAI_DNS_PROVIDER})
+
+    # Linking these to the object library contributes no libraries to it, but
+    # does give it their include directories to compile against.
+    target_link_libraries(${target}
+        PUBLIC Threads::Threads
+        PRIVATE ZLIB::ZLIB BZip2::BZip2)
+
+    if(SAMURAI_TLS_PROVIDER STREQUAL "OPENSSL")
+        # PUBLIC: tlsfactory-openssl.h is a public header and includes
+        # <openssl/ssl.h>.
+        target_compile_definitions(${target} PUBLIC SSL_SUPPORT SSL_OPENSSL)
+        target_link_libraries(${target} PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+    elseif(SAMURAI_TLS_PROVIDER STREQUAL "GNUTLS")
+        target_compile_definitions(${target} PUBLIC SSL_SUPPORT SSL_GNUTLS)
+        target_link_libraries(${target} PUBLIC PkgConfig::GNUTLS)
+    endif()
+
+    if(WIN32)
+        target_link_libraries(${target} PUBLIC ws2_32 iphlpapi)
+    endif()
+
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(${target} PRIVATE -Wall -Wextra)
+    endif()
+endforeach()
 
 # ---------------------------------------------------------------------------
 # Tests
@@ -214,7 +267,7 @@ endif()
 # Install
 # ---------------------------------------------------------------------------
 
-install(TARGETS samurai
+install(TARGETS ${SAMURAI_LIBRARIES}
     EXPORT samuraiTargets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -256,7 +309,8 @@ install(FILES
 message(STATUS "")
 message(STATUS "Samurai ${PROJECT_VERSION} configured:")
 message(STATUS "  Build type      : ${CMAKE_BUILD_TYPE}")
-message(STATUS "  Shared library  : ${BUILD_SHARED_LIBS}")
+message(STATUS "  Shared library  : ${SAMURAI_BUILD_SHARED}")
+message(STATUS "  Static library  : ${SAMURAI_BUILD_STATIC}")
 message(STATUS "  TLS provider    : ${SAMURAI_TLS_PROVIDER}")
 message(STATUS "  DNS provider    : ${SAMURAI_DNS_PROVIDER}")
 message(STATUS "  Build tests     : ${SAMURAI_BUILD_TESTS}")

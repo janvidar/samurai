@@ -8,6 +8,9 @@ CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 CTestTestfile.cmake
+build.ninja
+.ninja_deps
+.ninja_log
 Testing/
 install_manifest.txt
 compile_commands.json
