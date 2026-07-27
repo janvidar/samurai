@@ -73,7 +73,7 @@ bool Samurai::Crypto::Digest::HashValue::getFormattedString(enum Format format, 
 		if (buflen < (m_size*2)+1)
 			return false;
 		for (size_t n = 0; n < m_size; n++)
-			sprintf(&buf[n*2], "%02x", (int) m_data[n]);
+			snprintf(&buf[n*2], 3, "%02x", (int) m_data[n]);
 		buf[m_size*2] = 0;
 
 	} else  if (format == FormatBase32) {

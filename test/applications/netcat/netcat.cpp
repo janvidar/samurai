@@ -56,7 +56,7 @@ class Connection :
 		Samurai::IO::Net::SocketBase* socket;
 		Samurai::IO::Net::ServerSocket* server;
 		Samurai::IO::Net::DatagramSocket* udp;
-		
+
 	public:
 		Connection(char* host, int port)
 		{
@@ -64,26 +64,26 @@ class Connection :
 			server = 0;
 			udp = 0;
 		}
-		
+
 		Connection() {
 			socket = 0;
 			server = 0;
 			udp = 0;
 		}
-		
+
 		virtual ~Connection() {
 			delete socket;
 			delete server;
 			delete udp;
 		}
-		
+
 		void listen(int localport, const char* bindaddr = 0)
 		{
 			if (!bindaddr)
 				bindaddr = arg_ipv6 ? "::" : "0.0.0.0";
-			
+
 			Samurai::IO::Net::InetAddress localAddr(bindaddr);
-			
+
 			if (arg_udp)
 			{
 				delete udp;
@@ -96,7 +96,7 @@ class Connection :
 			else
 			{
 				Samurai::IO::Net::InetSocketAddress bindAddr(localAddr, localport);
-			
+
 				delete server;
 				server = new Samurai::IO::Net::ServerSocket(this, localAddr, localport);
 				if (!server->listen())
@@ -105,8 +105,8 @@ class Connection :
 				}
 			}
 		}
-		
-		
+
+
 		void connect()
 		{
 			Samurai::IO::Net::Socket* tcp_sock = dynamic_cast<Samurai::IO::Net::Socket*>(socket);
@@ -114,7 +114,7 @@ class Connection :
 				tcp_sock->connect();
 			}
 		}
-		
+
 		void disconnect()
 		{
 			delete socket; socket = 0;
@@ -124,7 +124,7 @@ class Connection :
 		{
 			if (arg_udp)
 			{
-				
+
 			}
 			else
 			{
@@ -135,7 +135,7 @@ class Connection :
 				}
 			}
 		}
-		
+
 		void status(const char* msg)
 		{
 			printf("*** %s\n", msg);
@@ -146,38 +146,38 @@ class Connection :
 			printf("*** ERROR: %s\n", msg);
 			running = false;
 		}
-		
+
 		void do_connected()
 		{
 			// socket->write("HEAD / HTTP/1.0\r\n\r\n", 20);
 		}
-		
+
 		void do_accepted()
 		{
 			// socket->write("HEAD / HTTP/1.0\r\n\r\n", 20);
 		}
 
 	protected:
-		
+
 		void EventHostLookup(const Samurai::IO::Net::Socket*)
 		{
 			if (arg_verbose) status("Looking up host...");
 		}
-		
+
 		void EventHostFound(const Samurai::IO::Net::Socket*)
 		{
 			if (arg_verbose) status("Host found.");
 		}
-		
+
 		void EventConnecting(const Samurai::IO::Net::Socket*)
 		{
 			if (arg_verbose) status("Connecting ...");
 		}
-		
+
 		void EventConnected(const Samurai::IO::Net::Socket*)
 		{
 			if (arg_verbose) status("Connected.");
-			
+
 			if (arg_ssl)
 			{
 				Samurai::IO::Net::Socket* sock = dynamic_cast<Samurai::IO::Net::Socket*>(socket);
@@ -195,7 +195,7 @@ class Connection :
 				void do_connected();
 			}
 		}
-		
+
 		void EventTLSConnected(const Samurai::IO::Net::Socket*)
 		{
 			if (arg_listen)
@@ -209,36 +209,36 @@ class Connection :
 				do_connected();
 			}
 		}
-	
+
 		void EventTLSDisconnected(const Samurai::IO::Net::Socket*)
 		{
 			if (arg_verbose) status("TLS disconnect -- No longer secure connection.");
 		}
 
-		
+
 		void EventTimeout(const Samurai::IO::Net::Socket*)
 		{
 			error("Connection timed out...");
 		}
-		
+
 		void EventDisconnected(const Samurai::IO::Net::Socket*)
 		{
 			if (arg_verbose) status("Disconnected...");
 			running = false;
 		}
-		
+
 		void EventDataAvailable(const Samurai::IO::Net::Socket*)
 		{
 			char* buffer = 0;
 			ssize_t bytes = 0;
-					
+
 			Samurai::IO::Net::Socket* tcp_sock = dynamic_cast<Samurai::IO::Net::Socket*>(socket);
 			if (tcp_sock) {
 				buffer = new char[tcp_sock->getReceiveBufferSize()];
 				bytes = tcp_sock->read(buffer, 1024);
 				buffer[bytes] = 0;
 			}
-			
+
 			printf("%s", buffer);
 			delete[] buffer;
 		}
@@ -247,35 +247,35 @@ class Connection :
 		{
 			/* can write */
 		}
-		
-		void EventError(const Samurai::IO::Net::Socket*, Samurai::IO::Net::SocketError /*error*/, const char* msg) 
+
+		void EventError(const Samurai::IO::Net::Socket*, Samurai::IO::Net::SocketError /*error*/, const char* msg)
 		{
 			error(msg);
 		}
-	
-		
+
+
 		void EventAcceptError(const Samurai::IO::Net::ServerSocket*, const char* msg)
 		{
 			error(msg);
 		}
-		
+
 		void EventAcceptSocket(const Samurai::IO::Net::ServerSocket*, Samurai::IO::Net::Socket* sock)
 		{
 			if (arg_verbose)
 			{
 				char buf[100];
-				sprintf(buf, "Accepted connection from: %s", sock->getAddress()->toString());
+				snprintf(buf, sizeof(buf), "Accepted connection from: %s", sock->getAddress()->toString());
 				status(buf);
 			}
-			
+
 			if (socket)
 				delete socket;
-			
+
 			sock->setNonBlocking(true);
 			sock->setEventHandler(this);
 			sock->setMonitor(Samurai::IO::Net::SocketMonitor::MRead);
 			socket = sock;
-			
+
 			if (arg_ssl)
 			{
 				if (sock->TLSInitialize(true))
@@ -292,27 +292,27 @@ class Connection :
 				void do_accepted();
 			}
 		}
-		
+
 		void EventGotDatagram(Samurai::IO::Net::DatagramSocket*, Samurai::IO::Net::DatagramPacket* packet)
 		{
 			if (arg_verbose)
 			{
 				printf("Got datagram from: %s\n", packet->getAddress()->toString());
 			}
-			
+
 			char* buffer = new char[packet->size()+1];
 			buffer[packet->size()] = 0;
 			packet->getBuffer()->pop(buffer, packet->size());
-			
+
 			printf("%s", buffer);
 			delete[] buffer;
 		}
-		
+
 		void EventDatagramError(const Samurai::IO::Net::DatagramSocket*, const char* msg)
 		{
 			fprintf(stderr, "Error: %s\n", msg);
 		}
-		
+
 };
 
 void print_usage(const char* cmd)
@@ -347,7 +347,7 @@ void print_usage(const char* cmd)
 // "port numbers can be individual or ranges: lo-hi [inclusive];\n"
 // "hyphens in port names must be backslash escaped (e.g. 'ftp\-data').\n"
 );
-	
+
 	exit(0);
 }
 
@@ -360,7 +360,7 @@ void parse_args(int argc, char** argv)
 
 	int n = 1;
 	int rem;
-	
+
 	while (rem = argc - n, rem > 0)
 	{
 		if (argv[n][0] == '-')
@@ -379,12 +379,12 @@ void parse_args(int argc, char** argv)
 			CHECK_BOOL_ARG("-b", arg_broadcast);
 			CHECK_BOOL_ARG("-r", arg_randomize);
 			CHECK_BOOL_ARG("-6", arg_ipv6);
-			
+
 			CHECK_INT_ARG("-p", arg_local_port);
 			CHECK_STR_ARG("-s", arg_local_addr);
 			CHECK_INT_ARG("-w", arg_timeout);
 			CHECK_STR_ARG("-o", arg_hexdump);
-			
+
 			fprintf(stderr, "Unknown argument: %s\n", argv[n]);
 			exit(1);
 		}
@@ -392,12 +392,12 @@ void parse_args(int argc, char** argv)
 		{
 			if (n < argc && !arg_addr) arg_addr = argv[n++];
 			else print_usage(argv[0]);
-			
+
 			if (n < argc && !arg_port) arg_port = atoi(argv[n++]);
 			else print_usage(argv[0]);
 		}
 	}
-	
+
 	if (arg_listen) {
 		if (!arg_local_port)
 			print_usage(argv[0]);
@@ -432,7 +432,7 @@ int main(int argc, char** argv) {
 	if (fcntl(fileno(stdin), F_SETFL, O_NONBLOCK) == -1) {
 		printf("Unable to set stdin non-blocking\n");
 		return -1;
-	}	
+	}
 #endif // SAMURAI_POSIX
 
 
@@ -445,7 +445,7 @@ int main(int argc, char** argv) {
 	{
 		monitor->wait(10);
 		Samurai::MessageHandler::getInstance()->process();
-		
+
 #ifdef SAMURAI_POSIX
 		int pollret = poll(&pfd, 1, 50);
 		if (pollret == 0) continue;
@@ -465,7 +465,7 @@ int main(int argc, char** argv) {
 			if (ch == '\n' || ch == '\r' || chars == MAXLINE-2) {
 				line[chars++] = '|';
 				line[chars++] = '\0';
-				
+
 				con->write(line, chars);
 				chars = 0;
 				line[0] = '\0';
@@ -475,10 +475,9 @@ int main(int argc, char** argv) {
 		}
 #endif
 	}
-	
+
 #ifdef SAMURAI_WINDOWS
 	delete[] line;
 #endif
 	delete con;
 }
-

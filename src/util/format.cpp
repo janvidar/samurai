@@ -8,11 +8,8 @@ const char* getFormatSize(uint64_t size)
 	uint64_t base;
 	for (base = 1024; size > base; base *= 1024) { sindex++; }
 		if (size % base == 0)
-			sprintf(buf, "%4d %s", (int) ((double) size / (double) (base / 1024)), sizes[sindex]);
+			snprintf(buf, sizeof(buf), "%4d %s", (int) ((double) size / (double) (base / 1024)), sizes[sindex]);
 		else
-			sprintf(buf, "%.02f %s", (double) size / (double) (base / 1024), sizes[sindex]);
+			snprintf(buf, sizeof(buf), "%.02f %s", (double) size / (double) (base / 1024), sizes[sindex]);
 	return buf;
 }
-
-
-
