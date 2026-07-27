@@ -13,7 +13,6 @@ add_executable(testtiger  applications/tiger/tiger.cpp)
 add_executable(dnslookup  applications/dnslookup/dnslookup.cpp)
 add_executable(netcat     applications/netcat/netcat.cpp)
 add_executable(wget       applications/wget/wget.cpp)
-add_executable(thread     applications/thread/thread.cpp)
 add_executable(interfaces applications/net/interfaces.cpp)
 
 # NOTE: upnplist needs all three translation units. The old Makefile listed
@@ -25,7 +24,7 @@ add_executable(upnplist
     applications/upnplist/upnplist.cpp)
 
 set(SAMURAI_TEST_APPS
-    testtiger dnslookup netcat wget thread interfaces upnplist)
+    testtiger dnslookup netcat wget interfaces upnplist)
 
 foreach(app IN LISTS SAMURAI_TEST_APPS)
     # samurai::samurai resolves to whichever library flavour is primary, so the

@@ -159,8 +159,6 @@ set(SAMURAI_SOURCES
     src/io/net/dns/resolver-blocking.cpp
     src/io/net/dns/resolver-builtin.cpp
     src/io/net/dns/resolver-fork.cpp
-    src/thread/thread.cpp
-    src/thread/mutex.cpp
     src/util/base32.cpp
     src/util/bwestimation.cpp
     src/util/format.cpp
