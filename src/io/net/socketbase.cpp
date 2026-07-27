@@ -94,7 +94,7 @@ bool Samurai::IO::Net::SocketBase::bind(Samurai::IO::Net::SocketAddress* sa) {
 			localaddr.sin6_family = AF_INET6;
 			localaddr.sin6_port = htons(isa->getPort());
 			memcpy(&localaddr.sin6_addr, (void*) &isa->getAddress()->data->internal.in6, sizeof(struct in6_addr));
-			int ret = ::bind(sd, (sockaddr*) &localaddr, len) != -1;
+			int ret = ::bind(sd, (sockaddr*) &localaddr, len);
 			if (ret == SOCKET_ERROR)
 			{
 				QDBG("Bind on IPv6 failed. Error %d: %s", NETERROR, strerror(NETERROR));
@@ -109,7 +109,7 @@ bool Samurai::IO::Net::SocketBase::bind(Samurai::IO::Net::SocketAddress* sa) {
 
 
 uint16_t Samurai::IO::Net::SocketBase::getLocalPort() const {
-	if  (state == Connected || state == Connecting) return 0;
+	if (state != Connected && state != Connecting && state != Listening) return 0;
 	sockaddr_in localaddr;
 	socklen_t len = sizeof(localaddr);
 	if (getsockname(sd, (sockaddr*) &localaddr, &len) == 0)
