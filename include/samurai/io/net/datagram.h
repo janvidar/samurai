@@ -104,6 +104,10 @@ class DatagramSocket : public SocketBase {
 		DatagramEventHandler* eventHandler;
 		DatagramPacket* myPacket;
 
+		/* Receive scratch. A member rather than a 64 KB stack array zeroed
+		   on every read(). */
+		uint8_t readbuf[65536];
+
 	protected:
 		void initialize();
 
