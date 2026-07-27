@@ -13,6 +13,7 @@
 #include <samurai/io/net/socketaddress.h>
 #include <samurai/io/net/inetaddress.h>
 #include <samurai/timer.h>
+#include <samurai/error.h>
 
 
 namespace Samurai {
@@ -70,6 +71,30 @@ class Socket :
 		bool canWrite() const { return writable; }
 		int getReadable() const { return readable; }
 		
+		/**
+		 * Read up to 'length' bytes.
+		 *
+		 * @param transferred set to the number of bytes read (0 unless the
+		 *        result is ReadOk).
+		 * @param ec set when the result is ReadError.
+		 *
+		 * NOTE: the ssize_t overloads below cannot distinguish a peer that
+		 * closed from one that has simply sent nothing yet, nor either of
+		 * those from a failed socket - all three answer 0. Prefer this one.
+		 */
+		Samurai::IO::ReadResult read(char* data, size_t length,
+		                             size_t& transferred, std::error_code& ec);
+
+		Samurai::IO::ReadResult peek(char* data, size_t length,
+		                             size_t& transferred, std::error_code& ec);
+
+		/**
+		 * Write up to 'length' bytes.
+		 * @return bytes written, or -1 on error with 'ec' set. A return of 0
+		 *         with no error set means the socket would have blocked.
+		 */
+		ssize_t write(const char* data, size_t length, std::error_code& ec);
+
 		ssize_t write(const char* data, size_t length);
 		ssize_t read(char* data, size_t length);
 		ssize_t peek(char* data, size_t length);

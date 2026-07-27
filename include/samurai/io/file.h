@@ -8,6 +8,7 @@
 
 #include <samurai/samurai.h>
 #include <samurai/timestamp.h>
+#include <samurai/error.h>
 #include <sys/stat.h>
 #include <string>
 
@@ -44,6 +45,14 @@ class File {
 		 * @short Open a file using a specified access mode.
 		 */
 		virtual bool open(int mode = Read);
+
+		/**
+		 * Open, reporting why on failure.
+		 *
+		 * NOTE: the bool overload above cannot tell a missing file from a
+		 * permission problem from a full descriptor table.
+		 */
+		virtual bool open(int mode, std::error_code& ec);
 		
 		/**
 		 * @return true if the file is open.
@@ -89,6 +98,10 @@ class File {
 		// IO
 		virtual ssize_t read(char* data, size_t length);
 		virtual ssize_t write(const char* data, size_t length);
+
+		/** @return bytes transferred, 0 at end of file, or -1 with 'ec' set. */
+		virtual ssize_t read(char* data, size_t length, std::error_code& ec);
+		virtual ssize_t write(const char* data, size_t length, std::error_code& ec);
 		virtual ssize_t read(Samurai::IO::Buffer* data, size_t length = 65536);
 		virtual ssize_t write(Samurai::IO::Buffer* data, size_t length = 65536, bool remove = true);
 		
