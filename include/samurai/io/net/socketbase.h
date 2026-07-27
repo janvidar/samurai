@@ -9,6 +9,7 @@
 #include <samurai/io/net/socketglue.h>
 
 #include <memory>
+#include <samurai/error.h>
 
 namespace Samurai {
 namespace IO {
@@ -96,12 +97,14 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		 * Bind the socket to the given local address.
 		 */
 		bool bind(SocketAddress* localaddr);
+		bool bind(SocketAddress* localaddr, std::error_code& ec);
 		
 		/**
 		 * Set the socket as as a non-blocking socket (asynchronous)
 		 * if toggle is true. Otherwise blocking.
 		 */
 		bool setNonBlocking(bool toggle);
+		bool setNonBlocking(bool toggle, std::error_code& ec);
 		
 		/**
 		 * Set socket address as reusable. This means we don't have to wait TIME_WAIT 

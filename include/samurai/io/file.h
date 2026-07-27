@@ -63,16 +63,19 @@ class File {
 		 * @short Close the file
 		 */
 		virtual bool close();
+		virtual bool close(std::error_code& ec);
 		
 		/**
 		 * @short Flush any unwritten buffer data to disk.
 		 */
 		virtual bool flush();
+		virtual bool flush(std::error_code& ec);
 		
 		/**
 		 * @short Seek to a position inside an open file.
 		 */
 		virtual bool seek(off_t offset);
+		virtual bool seek(off_t offset, std::error_code& ec);
 
 		/**
 		 * @short Get current position
@@ -83,6 +86,7 @@ class File {
 		 * @short delete the file
 		 */
 		virtual bool remove();
+		virtual bool remove(std::error_code& ec);
 		
 		/**
 		 * @short delete a file
@@ -94,6 +98,7 @@ class File {
 		 * @return true if OK
 		 */
 		virtual bool rename(const std::string& new_name);
+		virtual bool rename(const std::string& new_name, std::error_code& ec);
 		
 		// IO
 		virtual ssize_t read(char* data, size_t length);

@@ -174,38 +174,73 @@ bool Samurai::IO::File::open(int mode, std::error_code& ec)
 
 bool Samurai::IO::File::close()
 {
-	if (fd != -1)
+	std::error_code ec;
+	return close(ec);
+}
+
+
+bool Samurai::IO::File::close(std::error_code& ec)
+{
+	ec.clear();
+	if (fd == -1) { ec = Samurai::system_error(EBADF); return false; }
+
+	if (::close(fd) == -1)
 	{
-		int retval = ::close(fd);
-		if (retval == -1) return false;
+		ec = Samurai::system_error(errno);
+		/* The descriptor is gone either way; holding on to it would mean
+		   closing someone else's file on a later attempt. */
 		fd = -1;
-		return true;
+		return false;
 	}
-	return false;
+
+	fd = -1;
+	return true;
 }
 
 
 bool Samurai::IO::File::rename(const std::string& new_name)
 {
+	std::error_code ec;
+	return rename(new_name, ec);
+}
+
+
+bool Samurai::IO::File::rename(const std::string& new_name, std::error_code& ec)
+{
+	ec.clear();
 	std::string new_filename = resolvePath(new_name);
-	int ret = ::rename(filename.c_str(), new_filename.c_str());
-	if (ret == 0)
+
+	if (::rename(filename.c_str(), new_filename.c_str()) != 0)
 	{
-		filename = new_filename;
-		return true;
+		ec = Samurai::system_error(errno);
+		return false;
 	}
-	
-	return false;
+
+	filename = new_filename;
+	baseName = "";
+	info_valid = false;
+	return true;
 }
 
 
 
 bool Samurai::IO::File::seek(off_t offset)
 {
-	RETURN_IF_NOT_OPEN(fd, false);
+	std::error_code ec;
+	return seek(offset, ec);
+}
 
-	if (SAMURAI_SEEK(fd, offset, SEEK_SET) == (off_t)-1)
+
+bool Samurai::IO::File::seek(off_t offset, std::error_code& ec)
+{
+	ec.clear();
+	if (fd == -1) { ec = Samurai::system_error(EBADF); return false; }
+
+	if (SAMURAI_SEEK(fd, offset, SEEK_SET) == (off_t) -1)
+	{
+		ec = Samurai::system_error(errno);
 		return false;
+	}
 	return true;
 }
 
@@ -219,8 +254,22 @@ off_t Samurai::IO::File::getCurrentPosition()
 
 bool Samurai::IO::File::flush()
 {
-	RETURN_IF_NOT_OPEN(fd, false);
-	return (SAMURAI_FSYNC(fd) != -1);
+	std::error_code ec;
+	return flush(ec);
+}
+
+
+bool Samurai::IO::File::flush(std::error_code& ec)
+{
+	ec.clear();
+	if (fd == -1) { ec = Samurai::system_error(EBADF); return false; }
+
+	if (SAMURAI_FSYNC(fd) == -1)
+	{
+		ec = Samurai::system_error(errno);
+		return false;
+	}
+	return true;
 }
 
 
@@ -418,7 +467,20 @@ bool Samurai::IO::File::exists() const
 }
 
 bool Samurai::IO::File::remove() {
-	return (SAMURAI_UNLINK(filename.c_str()) != -1);
+	std::error_code ec;
+	return remove(ec);
+}
+
+
+bool Samurai::IO::File::remove(std::error_code& ec) {
+	ec.clear();
+	if (SAMURAI_UNLINK(filename.c_str()) == -1)
+	{
+		ec = Samurai::system_error(errno);
+		return false;
+	}
+	info_valid = false;
+	return true;
 }
 
 
