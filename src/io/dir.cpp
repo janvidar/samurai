@@ -6,104 +6,72 @@
 #include <samurai/io/dir.h>
 #include <samurai/io/file.h>
 
+#include <filesystem>
 #include <string>
+#include <system_error>
 
-#ifdef SAMURAI_OS_WINDOWS
-#include <io.h>
-#endif
-
-Samurai::IO::Directory::Directory(const Samurai::IO::File* file_) {
-	file = new Samurai::IO::File(*file_);
-
-#ifdef SAMURAI_UNIX
-	dir = 0;
-	entry_data = 0;
-#endif
+Samurai::IO::Directory::Directory(const Samurai::IO::File* file_) : opened(false) {
+	path = file_ ? file_->getName() : std::string();
 }
 
 
-Samurai::IO::Directory::Directory(const std::string& path) {
-	file = new Samurai::IO::File(path);
-
-#ifdef SAMURAI_UNIX
-	dir = 0;
-	entry_data = 0;
-#endif
+Samurai::IO::Directory::Directory(const std::string& path_) : opened(false) {
+	path = Samurai::IO::File(path_).getName();
 }
 
-Samurai::IO::Directory::Directory(const char* path) {
-	file = new Samurai::IO::File(path);
 
-#ifdef SAMURAI_UNIX
-	dir = 0;
-	entry_data = 0;
-#endif
+Samurai::IO::Directory::Directory(const char* path_) : opened(false) {
+	path = Samurai::IO::File(path_ ? path_ : "").getName();
 }
+
 
 Samurai::IO::Directory::~Directory() {
 	close();
-	delete file;
 }
+
 
 bool Samurai::IO::Directory::open() {
-#ifdef SAMURAI_UNIX
-	if (dir) {
-		close();
-	}
+	close();
 
-	dir = opendir(file->getName().c_str());
-	if (!dir) return false;
+	std::error_code ec;
+	iter = std::filesystem::directory_iterator(path, ec);
+	if (ec) return false;
+
+	opened = true;
 	return true;
-#endif
-
-#ifdef SAMURAI_OS_WINDOWS
-	// FIXME: Not implemented
-	return false;
-#endif
 }
+
 
 void Samurai::IO::Directory::close() {
-#ifdef SAMURAI_UNIX
-	if (dir)
-		::closedir(dir);
-	dir = 0;
-#endif
-
-#ifdef SAMURAI_OS_WINDOWS
-	// FIXME: Not implemented
-#endif
+	iter = std::filesystem::directory_iterator();
+	opened = false;
 }
+
 
 bool Samurai::IO::Directory::first(Samurai::IO::File& entry) {
-#ifdef SAMURAI_UNIX
-	if (!dir) return false;
-	::rewinddir(dir);
+	if (!opened) return false;
+
+	std::error_code ec;
+	iter = std::filesystem::directory_iterator(path, ec);
+	if (ec) return false;
+
 	return next(entry);
-#else
-	(void) entry;
-	return false;
-#endif
 }
 
+
 bool Samurai::IO::Directory::next(Samurai::IO::File& entry) {
-#ifdef SAMURAI_UNIX
-	if (!dir) return false;
+	if (!opened) return false;
 
-	for (;;) {
-		entry_data = readdir(dir);
-		if (!entry_data) return false;
+	const std::filesystem::directory_iterator end;
+	if (iter == end) return false;
 
-		if ((strcmp(entry_data->d_name, ".") == 0) || (strcmp(entry_data->d_name, "..") == 0))
-			continue;
+	/* directory_iterator never yields "." or "..", so the name filtering the
+	   readdir() loop needed is gone too. */
+	entry = Samurai::IO::File(iter->path().string());
 
-		entry = Samurai::IO::File(file->getName() + "/" + entry_data->d_name);
-		return true;
-	}
-#endif
+	std::error_code ec;
+	iter.increment(ec);
+	if (ec) iter = end;
 
-#ifdef SAMURAI_OS_WINDOWS
-	// FIXME: Not implemented
-	(void) entry;
-	return false;
-#endif
+	return true;
 }
