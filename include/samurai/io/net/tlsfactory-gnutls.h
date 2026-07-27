@@ -3,7 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
-#if defined(SSL_SUPPORT) && defined(SSL_GNUTLS)
+#ifdef SSL_GNUTLS
 
 #ifndef HAVE_SSL_SOCKET_GNUTLS_H
 #define HAVE_SSL_SOCKET_GNUTLS9_H

@@ -105,11 +105,9 @@ class Socket :
 		void internal_lookup();
 		void internal_timeout();
 		
-#ifdef SSL_SUPPORT
 		void internal_tls_handshake();
 		void internal_tls_bye();
 		TlsFactory* tls;
-#endif
 
 		bool checkConnectTimeout();
 

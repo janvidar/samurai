@@ -3,7 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
-#if defined(SSL_SUPPORT) && defined(SSL_GNUTLS)
+#ifdef SSL_GNUTLS
 
 #include <samurai/samurai.h>
 #include <samurai/io/net/tlsfactory-gnutls.h>
