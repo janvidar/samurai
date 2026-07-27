@@ -12,7 +12,16 @@
 
 static const char* ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
-void base32_encode(const unsigned char* buffer, size_t len, char* result) {
+size_t base32_encode_size(size_t len) {
+	/* Every 5 bits become one character; plus the terminator. */
+	return ((len * 8 + 4) / 5) + 1;
+}
+
+size_t base32_encode(const unsigned char* buffer, size_t len, char* result, size_t result_len) {
+	if (!result || !result_len) return 0;
+	if (result_len < base32_encode_size(len)) { result[0] = '\0'; return 0; }
+	if (!buffer || !len) { result[0] = '\0'; return 0; }
+
 	unsigned char word = 0;
 	size_t n = 0;
 	for (size_t i = 0, index = 0; i < len;) {
@@ -31,11 +40,13 @@ void base32_encode(const unsigned char* buffer, size_t len, char* result) {
 		result[n++] = ALPHABET[word];
 	}
 	result[n] = '\0';
+	return n;
 }
 
-void base32_decode(const char* src, unsigned char* dst, size_t len) {
+size_t base32_decode(const char* src, unsigned char* dst, size_t len) {
 	size_t index = 0;
 	size_t offset = 0;
+	if (!src || !dst || !len) return 0;
 	memset(dst, 0, len);
 	for (size_t i = 0; src[i]; i++) {
 		unsigned char n = 0;
@@ -56,5 +67,5 @@ void base32_decode(const char* src, unsigned char* dst, size_t len) {
 			dst[offset] |= n << (8 - index);
 		}
 	}
+	return offset;
 }
-

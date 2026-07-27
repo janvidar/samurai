@@ -120,7 +120,7 @@ int main(int argc, char* argv[]) {
 		
 		delete[] buffer;
 
-		base32_encode(hash, TIGERSIZE, digest);
+		base32_encode(hash, TIGERSIZE, digest, sizeof(digest));
 		printf("%s  %s\n", digest, argv[i]);
 	}
 	
