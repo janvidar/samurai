@@ -227,16 +227,18 @@ bool Samurai::IO::Net::InetAddress::setRawAddress(void* data_, size_t length, en
 }
 
 
+uint32_t Samurai::IO::Net::InetAddress::getIPv4HostOrder() const
+{
+	if (version != IPv4 || !data) return 0;
+	return ntohl(X_IP4_32);
+}
+
+
 bool Samurai::IO::Net::InetAddress::isValid()
 {
 	if (version == IPv4) {
 #ifdef SAMURAI_POSIX
-		/* NOTE: X_IP4_32 is network byte order, but IN_BADCLASS and
-		   IN_EXPERIMENTAL take host order - every sibling here (isMulticast,
-		   isPrivate, isLoopback) converts and this one did not. On a little
-		   endian host it therefore classified by the *last* octet: 10.0.0.250
-		   reported invalid while 240.1.2.3 reported valid. */
-		const uint32_t host_order = ntohl(X_IP4_32);
+		const uint32_t host_order = getIPv4HostOrder();
 		return host_order && !IN_BADCLASS(host_order) && !IN_EXPERIMENTAL(host_order);
 #else
 		return true; // FIXME
@@ -256,7 +258,8 @@ bool Samurai::IO::Net::InetAddress::isValid()
 bool Samurai::IO::Net::InetAddress::isMulticast()
 {
 	if (version == IPv4) {
-		return (ntohl(X_IP4_32) >= 0xe0000000 && ntohl(X_IP4_32) < 0xf0000000);
+		const uint32_t host_order = getIPv4HostOrder();
+		return (host_order >= 0xe0000000 && host_order < 0xf0000000);
 	} else if (version == IPv6) {
 #ifdef SAMURAI_POSIX
 		return (X_IP6_08[0] == 0xff);
@@ -288,7 +291,7 @@ bool Samurai::IO::Net::InetAddress::isPrivate()
 bool Samurai::IO::Net::InetAddress::isLoopback() const
 {
 	if (version == IPv4) {
-		return ((ntohl(X_IP4_32) & 0xff000000) == 0x7f000000);
+		return ((getIPv4HostOrder() & 0xff000000) == 0x7f000000);
 	} else if (version == IPv6) {
 #ifdef SAMURAI_POSIX
 		return (X_IP6_32[0] == 0 && X_IP6_32[1] == 0 && X_IP6_32[2] == 0 && X_IP6_16[6] == 0 && X_IP6_08[14] == 0 && X_IP6_08[15] == 1);

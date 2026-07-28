@@ -6,6 +6,7 @@
 #ifndef HAVE_SYSTEM_NET_INET_ADDRESS_H
 #define HAVE_SYSTEM_NET_INET_ADDRESS_H
 
+#include <stdint.h>
 #include <string>
 #include <samurai/io/net/socketevent.h>
 
@@ -69,6 +70,15 @@ namespace Samurai {
 					 */
 					virtual bool isLoopback() const;
 					
+					/**
+					 * The IPv4 address as a host order integer, or 0 if this
+					 * is not an IPv4 address. The stored bytes are network
+					 * order; read them through this rather than converting at
+					 * each use, so a host order predicate cannot be handed a
+					 * network order value.
+					 */
+					uint32_t getIPv4HostOrder() const;
+
 					virtual std::string getAddress() const;
 					virtual std::string toString() const;
 					
