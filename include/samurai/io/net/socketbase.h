@@ -35,7 +35,7 @@ enum class SocketState
 	Invalid
 };
 
-enum SocketError
+enum class SocketError
 {
 	ConnectionTimeout,
 	ConnectionRefused,
@@ -164,7 +164,7 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		bool setTimeToLive(uint8_t ttl, std::error_code& ec);
 
 		/**
-		 * Restrict an IPv6 socket to IPv6, or allow it to accept IPv4-mapped
+		 * Restrict an Version::IPv6 socket to Version::IPv6, or allow it to accept Version::IPv4-mapped
 		 * connections as well. Without this the behaviour is whatever the
 		 * platform defaults to, which differs between Linux and the BSDs.
 		 */

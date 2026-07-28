@@ -330,14 +330,14 @@ static constexpr bool host_is_big_endian = (std::endian::native == std::endian::
 void Samurai::IO::Buffer::appendBinary(uint16_t number_, BinaryMode endiannes) {
 	uint16_t number = number_;
 	switch (endiannes) {
-		case LittleEndian:
+		case BinaryMode::LittleEndian:
 			if constexpr (host_is_big_endian) number = SWAP16(number);
 			break;
 
-		case BigEndian:
+		case BinaryMode::BigEndian:
 			if constexpr (!host_is_big_endian) number = SWAP16(number);
 			break;
-		case NativeEndian:
+		case BinaryMode::NativeEndian:
 			break;
 	}
 	 append((char*) &number, sizeof(number));
@@ -346,14 +346,14 @@ void Samurai::IO::Buffer::appendBinary(uint16_t number_, BinaryMode endiannes) {
 void Samurai::IO::Buffer::appendBinary(uint32_t number_, BinaryMode endiannes) {
 	uint32_t number = number_;
 	switch (endiannes) {
-		case LittleEndian:
+		case BinaryMode::LittleEndian:
 			if constexpr (host_is_big_endian) number = SWAP32(number);
 			break;
 
-		case BigEndian:
+		case BinaryMode::BigEndian:
 			if constexpr (!host_is_big_endian) number = SWAP32(number);
 			break;
-		case NativeEndian:
+		case BinaryMode::NativeEndian:
 			break;
 	}
 	 append((char*) &number, sizeof(number));
@@ -362,14 +362,14 @@ void Samurai::IO::Buffer::appendBinary(uint32_t number_, BinaryMode endiannes) {
 void Samurai::IO::Buffer::appendBinary(uint64_t number_, BinaryMode endiannes) {
 	uint64_t number = number_;
 	switch (endiannes) {
-		case LittleEndian:
+		case BinaryMode::LittleEndian:
 			if constexpr (host_is_big_endian) number = SWAP64(number);
 			break;
 
-		case BigEndian:
+		case BinaryMode::BigEndian:
 			if constexpr (!host_is_big_endian) number = SWAP64(number);
 			break;
-		case NativeEndian:
+		case BinaryMode::NativeEndian:
 			break;
 	}
 	 append((char*) &number, sizeof(number));
@@ -395,15 +395,15 @@ bool Samurai::IO::Buffer::popBinary(size_t offset, uint16_t& number, BinaryMode 
 
 	memcpy(&number, &buf[head + offset], sizeof(number));
 	switch (endianness) {
-		case LittleEndian:
+		case BinaryMode::LittleEndian:
 			if constexpr (host_is_big_endian) number = SWAP16(number);
 			break;
 
-		case BigEndian:
+		case BinaryMode::BigEndian:
 			if constexpr (!host_is_big_endian) number = SWAP16(number);
 			break;
 
-		case NativeEndian:
+		case BinaryMode::NativeEndian:
 			break;
 	}
 
@@ -415,15 +415,15 @@ bool Samurai::IO::Buffer::popBinary(size_t offset, uint32_t& number, BinaryMode 
 
 	memcpy(&number, &buf[head + offset], sizeof(number));
 	switch (endianness) {
-		case LittleEndian:
+		case BinaryMode::LittleEndian:
 			if constexpr (host_is_big_endian) number = SWAP32(number);
 			break;
 
-		case BigEndian:
+		case BinaryMode::BigEndian:
 			if constexpr (!host_is_big_endian) number = SWAP32(number);
 			break;
 
-		case NativeEndian:
+		case BinaryMode::NativeEndian:
 			break;
 	}
 	return true;
@@ -434,15 +434,15 @@ bool Samurai::IO::Buffer::popBinary(size_t offset, uint64_t& number, BinaryMode 
 
 	memcpy(&number, &buf[head + offset], sizeof(number));
 	switch (endianness) {
-		case LittleEndian:
+		case BinaryMode::LittleEndian:
 			if constexpr (host_is_big_endian) number = SWAP64(number);
 			break;
 
-		case BigEndian:
+		case BinaryMode::BigEndian:
 			if constexpr (!host_is_big_endian) number = SWAP64(number);
 			break;
 
-		case NativeEndian:
+		case BinaryMode::NativeEndian:
 			break;
 	}
 	return true;

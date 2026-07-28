@@ -37,7 +37,7 @@ class DNSResolver : public ResolveEventHandler {
 			running = false;
 		}
 		
-		void EventHostError(enum Samurai::IO::Net::DNS::Resolver::Error error) {
+		void EventHostError(Samurai::IO::Net::DNS::Resolver::Error error) {
 			(void) error;
 			puts("Lookup failed\n");
 			running = false;

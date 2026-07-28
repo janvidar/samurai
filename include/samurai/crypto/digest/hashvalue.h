@@ -21,7 +21,7 @@ namespace Digest {
 class HashValue
 {
 	public:
-		enum Format { FormatHex, FormatBase32 };
+		enum class Format { Hex, Base32 };
 
 	public:
 		explicit HashValue(HashValue* copy);

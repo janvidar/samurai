@@ -13,7 +13,7 @@
 #include <samurai/io/net/bandwidth.h>
 
 
-Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::SocketAddress& addr_, enum SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(SocketState::Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(0), monitored(false), type(type_) {
+Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::SocketAddress& addr_, SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(SocketState::Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(0), monitored(false), type(type_) {
 
 	if (const Samurai::IO::Net::InetSocketAddress* isa =
 		dynamic_cast<const Samurai::IO::Net::InetSocketAddress*>(&addr_))
@@ -23,7 +23,7 @@ Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::SocketAddress& 
 }
 
 
-Samurai::IO::Net::SocketBase::SocketBase(socket_t sd_, const Samurai::IO::Net::SocketAddress& addr_, enum SocketType type_) : sd(sd_), addr(nullptr), state(SocketState::Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(0), monitored(false), type(type_)
+Samurai::IO::Net::SocketBase::SocketBase(socket_t sd_, const Samurai::IO::Net::SocketAddress& addr_, SocketType type_) : sd(sd_), addr(nullptr), state(SocketState::Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(0), monitored(false), type(type_)
 {
 	if (const Samurai::IO::Net::InetSocketAddress* isa =
 		dynamic_cast<const Samurai::IO::Net::InetSocketAddress*>(&addr_))
@@ -32,14 +32,14 @@ Samurai::IO::Net::SocketBase::SocketBase(socket_t sd_, const Samurai::IO::Net::S
 	bandwidthManager = Samurai::IO::Net::BandwidthManager::getInstance();
 }
 
-Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::InetAddress& addr_, uint16_t port_, enum SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(SocketState::Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(0), monitored(false), type(type_) {
+Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::InetAddress& addr_, uint16_t port_, SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(SocketState::Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(0), monitored(false), type(type_) {
 	addr = std::make_unique<Samurai::IO::Net::InetSocketAddress>(addr_, port_);
 
 	bandwidthManager = Samurai::IO::Net::BandwidthManager::getInstance();
 }
 
 
-Samurai::IO::Net::SocketBase::SocketBase(enum SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(SocketState::Disconnected), ia(nullptr), local_ia(nullptr), monitor_trigger(0), monitored(false), type(type_)
+Samurai::IO::Net::SocketBase::SocketBase(SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(SocketState::Disconnected), ia(nullptr), local_ia(nullptr), monitor_trigger(0), monitored(false), type(type_)
 {
 	bandwidthManager = Samurai::IO::Net::BandwidthManager::getInstance();
 }
@@ -67,14 +67,14 @@ const Samurai::IO::Net::InetAddress* Samurai::IO::Net::SocketBase::getLocalAddre
 	if (localaddr.ss_family == AF_INET) {
 		struct sockaddr_in* sin = (struct sockaddr_in*) &localaddr;
 		if (!local_ia->setRawAddress(&sin->sin_addr, sizeof(sin->sin_addr),
-		                       Samurai::IO::Net::InetAddress::IPv4)) return nullptr;
+		                       Samurai::IO::Net::InetAddress::Version::IPv4)) return nullptr;
 		return local_ia.get();
 	}
 
 	if (localaddr.ss_family == AF_INET6) {
 		struct sockaddr_in6* sin6 = (struct sockaddr_in6*) &localaddr;
 		if (!local_ia->setRawAddress(&sin6->sin6_addr, sizeof(sin6->sin6_addr),
-		                       Samurai::IO::Net::InetAddress::IPv6)) return nullptr;
+		                       Samurai::IO::Net::InetAddress::Version::IPv6)) return nullptr;
 		return local_ia.get();
 	}
 
@@ -92,7 +92,7 @@ bool Samurai::IO::Net::SocketBase::bind(Samurai::IO::Net::SocketAddress* sa, std
 
 	InetSocketAddress* isa = dynamic_cast<InetSocketAddress*>(sa);
 	if (isa && sd != INVALID_SOCKET) {
-		if (isa->getAddress()->getType() == Samurai::IO::Net::InetAddress::IPv4) {
+		if (isa->getAddress()->getType() == Samurai::IO::Net::InetAddress::Version::IPv4) {
 			struct sockaddr_in localaddr;
 			socklen_t len = sizeof(struct sockaddr_in);
 			memset(&localaddr, 0, len);
@@ -104,12 +104,12 @@ bool Samurai::IO::Net::SocketBase::bind(Samurai::IO::Net::SocketAddress* sa, std
 			if (ret == SOCKET_ERROR)
 			{
 				ec = Samurai::system_error(NETERROR);
-				QDBG("Bind on IPv4 failed. Error %d: %s", NETERROR, strerror(NETERROR));
+				QDBG("Bind on Version::IPv4 failed. Error %d: %s", NETERROR, strerror(NETERROR));
 				return false;
 			}
 			return true;
 			
-		} if (isa->getAddress()->getType() == Samurai::IO::Net::InetAddress::IPv6) {
+		} if (isa->getAddress()->getType() == Samurai::IO::Net::InetAddress::Version::IPv6) {
 			struct sockaddr_in6 localaddr;
 			socklen_t len = sizeof(struct sockaddr_in6);
 			memset(&localaddr, 0, len);
@@ -120,7 +120,7 @@ bool Samurai::IO::Net::SocketBase::bind(Samurai::IO::Net::SocketAddress* sa, std
 			if (ret == SOCKET_ERROR)
 			{
 				ec = Samurai::system_error(NETERROR);
-				QDBG("Bind on IPv6 failed. Error %d: %s", NETERROR, strerror(NETERROR));
+				QDBG("Bind on Version::IPv6 failed. Error %d: %s", NETERROR, strerror(NETERROR));
 				return false;
 			}
 			return true;
@@ -329,13 +329,13 @@ size_t Samurai::IO::Net::SocketBase::getReceiveBufferSize() const {
 	return (size_t) (value < 0 ? 0 : value);
 }
 
-/* NOTE: IP_TTL is meaningless on an IPv6 socket; the hop limit lives behind
+/* NOTE: IP_TTL is meaningless on an Version::IPv6 socket; the hop limit lives behind
    IPV6_UNICAST_HOPS. */
 bool Samurai::IO::Net::SocketBase::isIPv6() const
 {
 	InetSocketAddress* isa = dynamic_cast<InetSocketAddress*>(addr.get());
 	return isa && isa->getAddress() &&
-	       isa->getAddress()->getType() == Samurai::IO::Net::InetAddress::IPv6;
+	       isa->getAddress()->getType() == Samurai::IO::Net::InetAddress::Version::IPv6;
 }
 
 

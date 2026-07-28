@@ -34,7 +34,7 @@ class Buffer {
 		Buffer& operator=(Buffer&& other) noexcept;
 		~Buffer();
 	
-		enum BinaryMode { BigEndian, LittleEndian, NativeEndian };
+		enum class BinaryMode { BigEndian, LittleEndian, NativeEndian };
 		
 	public:
 	
@@ -52,9 +52,9 @@ class Buffer {
 		/**
 		 * Append data binary as little endian
 		 */
-		void appendBinary(uint16_t number, BinaryMode endiannes = NativeEndian);
-		void appendBinary(uint32_t number, BinaryMode endiannes = NativeEndian);
-		void appendBinary(uint64_t number, BinaryMode endiannes = NativeEndian);
+		void appendBinary(uint16_t number, BinaryMode endiannes = BinaryMode::NativeEndian);
+		void appendBinary(uint32_t number, BinaryMode endiannes = BinaryMode::NativeEndian);
+		void appendBinary(uint64_t number, BinaryMode endiannes = BinaryMode::NativeEndian);
 	
 		/** Returned by the find() family when there is no match. */
 		static constexpr size_t npos = static_cast<size_t>(-1);
@@ -82,9 +82,9 @@ class Buffer {
 		size_t pop(char* data, size_t offset, size_t len);
 
 		bool popBinary(size_t offset, uint8_t& number);
-		bool popBinary(size_t offset, uint16_t& number, BinaryMode endianness = NativeEndian);
-		bool popBinary(size_t offset, uint32_t& number, BinaryMode endianness = NativeEndian);
-		bool popBinary(size_t offset, uint64_t& number, BinaryMode endianness = NativeEndian);
+		bool popBinary(size_t offset, uint16_t& number, BinaryMode endianness = BinaryMode::NativeEndian);
+		bool popBinary(size_t offset, uint32_t& number, BinaryMode endianness = BinaryMode::NativeEndian);
+		bool popBinary(size_t offset, uint64_t& number, BinaryMode endianness = BinaryMode::NativeEndian);
 		
 		// search/find, returning npos when there is no match.
 		size_t find(char achar, size_t offset = 0);

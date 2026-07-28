@@ -106,11 +106,11 @@ void Samurai::IO::Net::ServerSocket::internal_accept() {
 
 	if (new_addr.ss_family == AF_INET) {
 		struct sockaddr_in* sin = (struct sockaddr_in*) &new_addr;
-		n_addr.setRawSocketAddress((void*) &sin->sin_addr, sizeof(struct in_addr), ntohs(sin->sin_port), Samurai::IO::Net::InetAddress::IPv4);
+		n_addr.setRawSocketAddress((void*) &sin->sin_addr, sizeof(struct in_addr), ntohs(sin->sin_port), Samurai::IO::Net::InetAddress::Version::IPv4);
 
 	} else if (new_addr.ss_family == AF_INET6) {
 		struct sockaddr_in6* sin6 = (struct sockaddr_in6*) &new_addr;
-		n_addr.setRawSocketAddress((void*) &sin6->sin6_addr, sizeof(struct in6_addr), ntohs(sin6->sin6_port), Samurai::IO::Net::InetAddress::IPv6);
+		n_addr.setRawSocketAddress((void*) &sin6->sin6_addr, sizeof(struct in6_addr), ntohs(sin6->sin6_port), Samurai::IO::Net::InetAddress::Version::IPv6);
 	}
 
 	// Create a new socket based on the connected client,

@@ -162,7 +162,7 @@ void Samurai::IO::Net::NetworkInterfaceUnix::extractHardwareAddress()
 		m_hwaddr = std::make_unique<Samurai::IO::Net::HardwareAddress>(hwaddr_bytes);
 }
 
-// FIXME: very IPv4 centric!
+// FIXME: very Version::IPv4 centric!
 void Samurai::IO::Net::NetworkInterfaceUnix::extractAddresses()
 {
 	if (getInfo(SIOCGIFADDR))
@@ -274,9 +274,9 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_I
 	if (ipstr)
 	{
 		m_address = std::make_unique<Samurai::IO::Net::InetAddress>(
-			ipstr->IpAddress.String, Samurai::IO::Net::InetAddress::IPv4);
+			ipstr->IpAddress.String, Samurai::IO::Net::InetAddress::Version::IPv4);
 		m_netmask = std::make_unique<Samurai::IO::Net::InetAddress>(
-			ipstr->IpMask.String, Samurai::IO::Net::InetAddress::IPv4);
+			ipstr->IpMask.String, Samurai::IO::Net::InetAddress::Version::IPv4);
 	}
 }
 
@@ -326,14 +326,14 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_A
 		struct sockaddr_in* addr4 = (struct sockaddr_in*) sa;
 		m_address = std::make_unique<Samurai::IO::Net::InetAddress>();
 		m_address->setRawAddress(&addr4->sin_addr, sizeof(addr4->sin_addr),
-			Samurai::IO::Net::InetAddress::IPv4);
+			Samurai::IO::Net::InetAddress::Version::IPv4);
 	}
 	else if (sa && sa->sa_family == AF_INET6)
 	{
 		struct sockaddr_in6* addr6 = (struct sockaddr_in6*) sa;
 		m_address = std::make_unique<Samurai::IO::Net::InetAddress>();
 		m_address->setRawAddress(&addr6->sin6_addr, sizeof(addr6->sin6_addr),
-			Samurai::IO::Net::InetAddress::IPv6);
+			Samurai::IO::Net::InetAddress::Version::IPv6);
 	}
 }
 #endif // USE_ADAPTER_INFO

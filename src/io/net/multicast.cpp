@@ -24,10 +24,10 @@ Samurai::IO::Net::MulticastSocket::MulticastSocket(DatagramEventHandler* eh_, ui
 namespace {
 
 /*
- * Describe 'address' as an IPv4 group membership request.
+ * Describe 'address' as an Version::IPv4 group membership request.
  *
- * Returns false for anything that is not an IPv4 address: getSockAddr() yields
- * null for an unset address, and an IPv6 one produces a sockaddr_in6 that must
+ * Returns false for anything that is not an Version::IPv4 address: getSockAddr() yields
+ * null for an unset address, and an Version::IPv6 one produces a sockaddr_in6 that must
  * not be read as a sockaddr_in.
  */
 bool makeGroupRequest(Samurai::IO::Net::InetSocketAddress& address, struct ip_mreq& mreq)
@@ -83,7 +83,7 @@ bool Samurai::IO::Net::MulticastSocket::join(const Samurai::IO::Net::InetAddress
 	struct ip_mreq mreq;
 	if (!makeGroupRequest(address, mreq))
 	{
-		QERR("Not an IPv4 multicast address: %s", address.toString().c_str());
+		QERR("Not an Version::IPv4 multicast address: %s", address.toString().c_str());
 		return false;
 	}
 

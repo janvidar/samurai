@@ -326,7 +326,7 @@ void print_usage(const char* cmd)
 // "        -c shell commands       as `-e'; use /bin/sh to exec [dangerous!!]\n"
 // "        -e filename             program to exec after connect [dangerous!!]\n"
 "        -b                      allow broadcasts\n"
-"        -6                      Use IPv6\n"
+"        -6                      Use Version::IPv6\n"
 // "        -g gateway              source-routing hop point[s], up to 8\n"
 // "        -G num                  source-routing pointer: 4, 8, 12, ...\n"
 "        -h                      this cruft\n"

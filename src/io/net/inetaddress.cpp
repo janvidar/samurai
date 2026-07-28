@@ -94,7 +94,7 @@ static int net_string_to_address(int af, const char* src, void* dst)
 }
 
 
-Samurai::IO::Net::InetAddress::InetAddress() : version(Unspecified), data(nullptr), resolver(nullptr), resolveState(ResolveState::Unresolved), dnsevent(nullptr)
+Samurai::IO::Net::InetAddress::InetAddress() : version(Version::Unspecified), data(nullptr), resolver(nullptr), resolveState(ResolveState::Unresolved), dnsevent(nullptr)
 {
 	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
 	memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
@@ -106,7 +106,7 @@ Samurai::IO::Net::InetAddress::InetAddress(enum Version ip_version) : version(ip
 	memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
 }
 
-Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Version ip_version) : version(Unspecified), data(nullptr), resolver(nullptr), resolveState(ResolveState::Unresolved), dnsevent(nullptr)
+Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Version ip_version) : version(Version::Unspecified), data(nullptr), resolver(nullptr), resolveState(ResolveState::Unresolved), dnsevent(nullptr)
 {
 	version = ip_version;
 	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
@@ -121,42 +121,42 @@ Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Vers
 	if (!address.size()) {
 		/* INADDR_ANY */
 		ok = true;
-		version = IPv4;
+		version = Version::IPv4;
 		
 	}
 	else
 	{
-		if (version == Unspecified)
+		if (version == Version::Unspecified)
 		{
 			/* If address is indeed an IP address (as opposed to a hostname),
 			   we will try to autodetect it and the address family. */
-			ok = stringToAddress(IPv4, address.c_str(), data.get());
+			ok = stringToAddress(Version::IPv4, address.c_str(), data.get());
 			if (ok)
 			{
-				// printf("Unspec is OK - IPv4\n");
-				version = IPv4;
+				// printf("Unspec is OK - Version::IPv4\n");
+				version = Version::IPv4;
 			}
 			else
 			{
-				ok = stringToAddress(IPv6, address.c_str(), data.get());
+				ok = stringToAddress(Version::IPv6, address.c_str(), data.get());
 				if (ok)
 				{
-					// printf("Unspec is OK - IPv6\n");
-					version = IPv6;
+					// printf("Unspec is OK - Version::IPv6\n");
+					version = Version::IPv6;
 				}
 			}
 		}
 		else
 		{
-			if (version == IPv4)
+			if (version == Version::IPv4)
 			{
-				// printf("Specified IPv4\n");
-				ok = stringToAddress(IPv4, address.c_str(), data.get());
+				// printf("Specified Version::IPv4\n");
+				ok = stringToAddress(Version::IPv4, address.c_str(), data.get());
 			}
-			else if (version == IPv6)
+			else if (version == Version::IPv6)
 			{
-				// printf("Specified IPv6\n");
-				ok = stringToAddress(IPv6, address.c_str(), data.get());
+				// printf("Specified Version::IPv6\n");
+				ok = stringToAddress(Version::IPv6, address.c_str(), data.get());
 			}
 		}
 	}
@@ -168,8 +168,8 @@ Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Vers
 		// error in string, or this is not an IP address.
 		// let's try to resolve it
 		memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
-		version = Unspecified;
-		// FIXME: Maybe this is indeed a name? Perhaps we should look up a IPv6 name, when IPv6 is specified?
+		version = Version::Unspecified;
+		// FIXME: Maybe this is indeed a name? Perhaps we should look up a Version::IPv6 name, when Version::IPv6 is specified?
 	}
 	else
 	{
@@ -180,7 +180,7 @@ Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Vers
 }
 
 
-Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress& address) : ResolveEventHandler(), version(Unspecified), data(nullptr), resolver(nullptr), resolveState(ResolveState::Unresolved), dnsevent(nullptr)
+Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress& address) : ResolveEventHandler(), version(Version::Unspecified), data(nullptr), resolver(nullptr), resolveState(ResolveState::Unresolved), dnsevent(nullptr)
 {
 	version = address.version;
 	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
@@ -190,7 +190,7 @@ Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress& 
 }
 
 
-Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress* address) : version(Unspecified), data(nullptr), resolver(nullptr), resolveState(ResolveState::Unresolved), dnsevent(nullptr)
+Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress* address) : version(Version::Unspecified), data(nullptr), resolver(nullptr), resolveState(ResolveState::Unresolved), dnsevent(nullptr)
 {
 	version = address->version;
 	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
@@ -215,8 +215,8 @@ Samurai::IO::Net::InetAddress::~InetAddress()
 
 bool Samurai::IO::Net::InetAddress::setRawAddress(void* data_, size_t length, enum Samurai::IO::Net::InetAddress::Version ip_version)
 {
-	if (ip_version == Samurai::IO::Net::InetAddress::IPv4 && length < sizeof(struct in_addr)) return false;
-	if (ip_version == Samurai::IO::Net::InetAddress::IPv6 && length < sizeof(struct in6_addr)) return false;
+	if (ip_version == Samurai::IO::Net::InetAddress::Version::IPv4 && length < sizeof(struct in_addr)) return false;
+	if (ip_version == Samurai::IO::Net::InetAddress::Version::IPv6 && length < sizeof(struct in6_addr)) return false;
 	
  	version = ip_version;
 	memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
@@ -228,21 +228,21 @@ bool Samurai::IO::Net::InetAddress::setRawAddress(void* data_, size_t length, en
 
 uint32_t Samurai::IO::Net::InetAddress::getIPv4HostOrder() const
 {
-	if (version != IPv4 || !data) return 0;
+	if (version != Version::IPv4 || !data) return 0;
 	return ntohl(X_IP4_32);
 }
 
 
 bool Samurai::IO::Net::InetAddress::isValid() const
 {
-	if (version == IPv4) {
+	if (version == Version::IPv4) {
 #ifdef SAMURAI_POSIX
 		const uint32_t host_order = getIPv4HostOrder();
 		return host_order && !IN_BADCLASS(host_order) && !IN_EXPERIMENTAL(host_order);
 #else
 		return true; // FIXME
 #endif
-	} else if (version == IPv6) {
+	} else if (version == Version::IPv6) {
 #ifdef SAMURAI_POSIX
 		return (X_IP6_32[0] || X_IP6_32[1] || X_IP6_32[2] || X_IP6_32[3]);
 #else
@@ -256,10 +256,10 @@ bool Samurai::IO::Net::InetAddress::isValid() const
 
 bool Samurai::IO::Net::InetAddress::isMulticast() const
 {
-	if (version == IPv4) {
+	if (version == Version::IPv4) {
 		const uint32_t host_order = getIPv4HostOrder();
 		return (host_order >= 0xe0000000 && host_order < 0xf0000000);
-	} else if (version == IPv6) {
+	} else if (version == Version::IPv6) {
 #ifdef SAMURAI_POSIX
 		return (X_IP6_08[0] == 0xff);
 #else
@@ -273,13 +273,13 @@ bool Samurai::IO::Net::InetAddress::isMulticast() const
 
 bool Samurai::IO::Net::InetAddress::isPrivate() const
 {
-	if (version == IPv4) {
+	if (version == Version::IPv4) {
 		const uint32_t host_order = getIPv4HostOrder();
 		if ((host_order & 0xff000000) == 0x0a000000) return true; /* 10.0.0.0/8 */
 		if ((host_order & 0xfff00000) == 0xac100000) return true; /* 172.16.0.0/12 */
 		if ((host_order & 0xffff0000) == 0xc0a80000) return true; /* 192.168.0.0/16 */
 		return false;
-	} else if (version == IPv6) {
+	} else if (version == Version::IPv6) {
 #ifdef SAMURAI_POSIX
 		return ((X_IP6_08[0] & 0xfe) == 0xfc); /* fc00::/7 */
 #else
@@ -293,9 +293,9 @@ bool Samurai::IO::Net::InetAddress::isPrivate() const
 
 bool Samurai::IO::Net::InetAddress::isLinkLocal() const
 {
-	if (version == IPv4) {
+	if (version == Version::IPv4) {
 		return ((getIPv4HostOrder() & 0xffff0000) == 0xa9fe0000); /* 169.254.0.0/16 */
-	} else if (version == IPv6) {
+	} else if (version == Version::IPv6) {
 #ifdef SAMURAI_POSIX
 		return (X_IP6_08[0] == 0xfe && (X_IP6_08[1] & 0xc0) == 0x80); /* fe80::/10 */
 #else
@@ -309,9 +309,9 @@ bool Samurai::IO::Net::InetAddress::isLinkLocal() const
 
 bool Samurai::IO::Net::InetAddress::isLoopback() const
 {
-	if (version == IPv4) {
+	if (version == Version::IPv4) {
 		return ((getIPv4HostOrder() & 0xff000000) == 0x7f000000);
-	} else if (version == IPv6) {
+	} else if (version == Version::IPv6) {
 #ifdef SAMURAI_POSIX
 		return (X_IP6_32[0] == 0 && X_IP6_32[1] == 0 && X_IP6_32[2] == 0 && X_IP6_16[6] == 0 && X_IP6_08[14] == 0 && X_IP6_08[15] == 1);
 #else
@@ -333,9 +333,9 @@ std::string Samurai::IO::Net::InetAddress::getAddress() const
 	char buf[INET6_ADDRSTRLEN+1] = { 0, };
 	const char* ret = nullptr;
 
-	if (version == IPv4) {
+	if (version == Version::IPv4) {
 		ret = net_address_to_string(AF_INET, (void*) &data->internal.in, buf, INET_ADDRSTRLEN);
-	} else if (version == IPv6) {
+	} else if (version == Version::IPv6) {
 		ret = net_address_to_string(AF_INET6, (void*) &data->internal.in6, buf, INET6_ADDRSTRLEN);
 	}
 
@@ -375,7 +375,7 @@ Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const st
 	data.reset();
 	resolver.reset();
 	
-	version = Unspecified;
+	version = Version::Unspecified;
 	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
 	memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
 	
@@ -385,11 +385,11 @@ Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const st
 	
 	ret = net_string_to_address(AF_INET, address.c_str(), (void*) &data->internal.in);
 	if (ret > 0) {
-		version = IPv4;
+		version = Version::IPv4;
 	} else {
 		ret = net_string_to_address(AF_INET6, address.c_str(), (void*) &data->internal.in6);
 		if (ret > 0) {
-			version = IPv6;
+			version = Version::IPv6;
 		}
 		else
 		{
@@ -399,7 +399,7 @@ Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const st
 				std::string addr2 = address.substr(1, address.size()-2);
 				ret = net_string_to_address(AF_INET6, addr2.c_str(), (void*) &data->internal.in6);
 				if (ret > 0) {
-					version = IPv6;
+					version = Version::IPv6;
 				}
 			}
 		}
@@ -411,7 +411,7 @@ Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const st
 		// let's try to resolve it
 		hostname = address;
 		memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
-		version = Unspecified;
+		version = Version::Unspecified;
 	} else {
 		resolveState = ResolveState::Resolved;
 	}
@@ -462,7 +462,7 @@ void Samurai::IO::Net::InetAddress::EventHostFound(const Samurai::IO::Net::InetA
 }
 
 
-void Samurai::IO::Net::InetAddress::EventHostError(enum Samurai::IO::Net::DNS::Resolver::Error error)
+void Samurai::IO::Net::InetAddress::EventHostError(Samurai::IO::Net::DNS::Resolver::Error error)
 {
 	resolveState = ResolveState::ResolveError;
 	if (dnsevent) {
@@ -528,7 +528,7 @@ static bool is_canonical_dotted_quad(const char* text)
 }
 
 /*
- * A dotted-quad can also appear inside an IPv6 literal, as in
+ * A dotted-quad can also appear inside an Version::IPv6 literal, as in
  * "::ffff:1.2.3.4", where it is always the part following the last colon.
  */
 static bool has_canonical_embedded_ipv4(const std::string& text)
@@ -549,13 +549,13 @@ bool Samurai::IO::Net::InetAddress::stringToAddress(enum Samurai::IO::Net::InetA
 	if (text.size() > 2 && text.front() == '[' && text.back() == ']')
 		text = text.substr(1, text.size() - 2);
 
-	if (version == Samurai::IO::Net::InetAddress::IPv4)
+	if (version == Samurai::IO::Net::InetAddress::Version::IPv4)
 	{
 		if (!is_canonical_dotted_quad(text.c_str())) return false;
 		return net_string_to_address(AF_INET, text.c_str(), (void*) &data->internal.in) > 0;
 	}
 
-	if (version == Samurai::IO::Net::InetAddress::IPv6)
+	if (version == Samurai::IO::Net::InetAddress::Version::IPv6)
 	{
 		if (!has_canonical_embedded_ipv4(text)) return false;
 		return net_string_to_address(AF_INET6, text.c_str(), (void*) &data->internal.in6) > 0;

@@ -264,7 +264,7 @@ void Samurai::IO::Net::Socket::internal_error(int socket_error) {
 		case EHOSTUNREACH:  message = "No route to host"; break;
 	}
 
-	if (eventHandler) eventHandler->EventError(this, SocketUnknown, message);
+	if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, message);
 	disableMonitor();
 }
 
@@ -283,15 +283,15 @@ void Samurai::IO::Net::Socket::internal_connected() {
 		enum Samurai::IO::Net::SocketError sockErr;
 		const char* error = strerror(value);
 		switch (value) {
-			case ECONNREFUSED:   sockErr = ConnectionRefused; break;
-			case EHOSTDOWN:      sockErr = HostDown;          break;
-			case EHOSTUNREACH:   sockErr = HostUnreachable;   break;
-			case ENETDOWN:       sockErr = NetDown;           break;
-			case ENETUNREACH:    sockErr = NetUnreachable;    break;
+			case ECONNREFUSED:   sockErr = Samurai::IO::Net::SocketError::ConnectionRefused; break;
+			case EHOSTDOWN:      sockErr = Samurai::IO::Net::SocketError::HostDown;          break;
+			case EHOSTUNREACH:   sockErr = Samurai::IO::Net::SocketError::HostUnreachable;   break;
+			case ENETDOWN:       sockErr = Samurai::IO::Net::SocketError::NetDown;           break;
+			case ENETUNREACH:    sockErr = Samurai::IO::Net::SocketError::NetUnreachable;    break;
 			case ENETRESET:
 			case ECONNRESET:
 			default:
-				sockErr = ConnectionRefused;
+				sockErr = Samurai::IO::Net::SocketError::ConnectionRefused;
 		}
 		close();
 		if (eventHandler) eventHandler->EventError(this, sockErr, error);
@@ -307,7 +307,7 @@ void Samurai::IO::Net::Socket::internal_connected() {
 
 void Samurai::IO::Net::Socket::internal_timeout() {
 	close();
-	if (eventHandler) eventHandler->EventError(this, ConnectionTimeout, "Connection timed out.");
+	if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::ConnectionTimeout, "Connection timed out.");
 }
 
 
@@ -324,14 +324,14 @@ void Samurai::IO::Net::Socket::connect()
 	if (!createDescriptor(addr->getSockAddrFamily())) {
 		state = SocketState::Invalid;
 		disableMonitor();
-		if (eventHandler) eventHandler->EventError(this, SocketUnknown, strerror(NETERROR));
+		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, strerror(NETERROR));
 		return;
 	}
 
 	if (!setNonBlocking(true)) {
 		state = SocketState::Invalid;
 		disableMonitor();
-		if (eventHandler) eventHandler->EventError(this, SocketUnknown, strerror(NETERROR));
+		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, strerror(NETERROR));
 		return;
 	}
 
@@ -352,7 +352,7 @@ void Samurai::IO::Net::Socket::connect()
 		} else {
 			state = SocketState::Invalid;
 			disableMonitor();
-			if (eventHandler) eventHandler->EventError(this, SocketUnknown, strerror(NETERROR));
+			if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, strerror(NETERROR));
 			return;
 		}
 	}
@@ -385,7 +385,7 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 	 && state != SocketState::SSLConnected
 		)
 	{
-		if (eventHandler) eventHandler->EventError(this, SocketWrite, "Not connected");
+		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketWrite, "Not connected");
 		return 0;
 	}
 
@@ -413,7 +413,7 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 				if (eventHandler) eventHandler->EventTLSDisconnected(this);
 				state = SocketState::Invalid;
 				disableMonitor();
-				if (eventHandler) eventHandler->EventError(this, SocketWrite, "FIXME: SSL/TLS send error");
+				if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketWrite, "FIXME: SSL/TLS send error");
 				return -1;
 
 			default:
@@ -429,7 +429,7 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 			} else {
 				state = SocketState::Invalid;
 				disableMonitor();
-				if (eventHandler) eventHandler->EventError(this, SocketWrite, strerror(NETERROR));
+				if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketWrite, strerror(NETERROR));
 				return -1;
 			}
 		}
@@ -451,7 +451,7 @@ ssize_t Samurai::IO::Net::Socket::read(char* data, size_t length) {
 	 && state != SocketState::SSLConnected
 		)
 	{
-		if (eventHandler) eventHandler->EventError(this, SocketRead, "Not connected");
+		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketRead, "Not connected");
 		return 0; // nothing was read.
 	}
 	ssize_t ret = 0;
@@ -476,7 +476,7 @@ ssize_t Samurai::IO::Net::Socket::read(char* data, size_t length) {
 				if (eventHandler) eventHandler->EventTLSDisconnected(this);
 				state = SocketState::Invalid;
 				disableMonitor();
-				if (eventHandler) eventHandler->EventError(this, SocketRead, "FIXME: SSL/TLS read error");
+				if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketRead, "FIXME: SSL/TLS read error");
 				return -1;
 		}
 	}
@@ -492,7 +492,7 @@ ssize_t Samurai::IO::Net::Socket::read(char* data, size_t length) {
 
 			state = SocketState::Invalid;
 			disableMonitor();
-			if (eventHandler) eventHandler->EventError(this, SocketRead, strerror(NETERROR));
+			if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketRead, strerror(NETERROR));
 			return 0; // nothing was read.
 		}
 	}
@@ -506,7 +506,7 @@ ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
 	 && state != SocketState::SSLConnected
 		)
 	{
-		if (eventHandler) eventHandler->EventError(this, SocketRead, "Not connected");
+		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketRead, "Not connected");
 		return 0;
 	}
 
@@ -531,7 +531,7 @@ ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
 				if (eventHandler) eventHandler->EventTLSDisconnected(this);
 				state = SocketState::Invalid;
 				disableMonitor();
-				if (eventHandler) eventHandler->EventError(this, SocketRead, "SSL/TLS peek error");
+				if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketRead, "SSL/TLS peek error");
 				return 0;
 		}
 	}
@@ -546,7 +546,7 @@ ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
 
 		state = SocketState::Invalid;
 		disableMonitor();
-		if (eventHandler) eventHandler->EventError(this, SocketRead, strerror(NETERROR));
+		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketRead, strerror(NETERROR));
 		return 0;
 	}
 	return ret;
@@ -562,10 +562,10 @@ void Samurai::IO::Net::Socket::EventHostFound(const Samurai::IO::Net::InetAddres
 }
 
 
-void Samurai::IO::Net::Socket::EventHostError(enum Samurai::IO::Net::DNS::Resolver::Error /*error*/) {
+void Samurai::IO::Net::Socket::EventHostError(Samurai::IO::Net::DNS::Resolver::Error /*error*/) {
 	state = SocketState::Invalid;
 	disableMonitor();
-	if (eventHandler) eventHandler->EventError(this, HostNotFound, "Host not found.");
+	if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::HostNotFound, "Host not found.");
 }
 
 
@@ -712,7 +712,7 @@ Samurai::IO::ReadResult Samurai::IO::Net::Socket::read(char* data, size_t length
 	if (state != SocketState::Connected && state != SocketState::SSLConnected)
 	{
 		ec = Samurai::system_error(ENOTCONN);
-		return Samurai::IO::ReadError;
+		return Samurai::IO::ReadResult::Error;
 	}
 
 	if (state == SocketState::SSLConnected && tls)
@@ -722,24 +722,24 @@ Samurai::IO::ReadResult Samurai::IO::Net::Socket::read(char* data, size_t length
 
 		switch (status) {
 			case Samurai::IO::Net::TlsFactory::TlsStatus::Ok:
-				if (ret > 0) { transferred = (size_t) ret; return Samurai::IO::ReadOk; }
-				return Samurai::IO::ReadEndOfFile;
+				if (ret > 0) { transferred = (size_t) ret; return Samurai::IO::ReadResult::Ok; }
+				return Samurai::IO::ReadResult::EndOfFile;
 
 			case Samurai::IO::Net::TlsFactory::TlsStatus::WantWrite:
 				toggleWriteNotifier(true);
-				return Samurai::IO::ReadWouldBlock;
+				return Samurai::IO::ReadResult::WouldBlock;
 
 			case Samurai::IO::Net::TlsFactory::TlsStatus::WantRead:
-				return Samurai::IO::ReadWouldBlock;
+				return Samurai::IO::ReadResult::WouldBlock;
 
 			case Samurai::IO::Net::TlsFactory::TlsStatus::Closed:
-				return Samurai::IO::ReadEndOfFile;
+				return Samurai::IO::ReadResult::EndOfFile;
 
 			case Samurai::IO::Net::TlsFactory::TlsStatus::Error:
 				ec = Samurai::system_error(EPROTO);
-				return Samurai::IO::ReadError;
+				return Samurai::IO::ReadResult::Error;
 		}
-		return Samurai::IO::ReadWouldBlock;
+		return Samurai::IO::ReadResult::WouldBlock;
 	}
 
 	ssize_t ret = ::recv(sd, data, length, 0);
@@ -748,19 +748,19 @@ Samurai::IO::ReadResult Samurai::IO::Net::Socket::read(char* data, size_t length
 	{
 		transferred = (size_t) ret;
 		if (bandwidthManager) bandwidthManager->dataRecvTCP(transferred);
-		return Samurai::IO::ReadOk;
+		return Samurai::IO::ReadResult::Ok;
 	}
 
 	/* recv() returning 0 on a stream socket is an orderly shutdown by the
 	   peer, which the ssize_t overload could not express. */
 	if (ret == 0)
-		return Samurai::IO::ReadEndOfFile;
+		return Samurai::IO::ReadResult::EndOfFile;
 
 	if (NETERROR == EAGAIN || NETERROR == EWOULDBLOCK || NETERROR == EINTR)
-		return Samurai::IO::ReadWouldBlock;
+		return Samurai::IO::ReadResult::WouldBlock;
 
 	ec = Samurai::system_error(NETERROR);
-	return Samurai::IO::ReadError;
+	return Samurai::IO::ReadResult::Error;
 }
 
 
@@ -773,19 +773,19 @@ Samurai::IO::ReadResult Samurai::IO::Net::Socket::peek(char* data, size_t length
 	if (state != SocketState::Connected && state != SocketState::SSLConnected)
 	{
 		ec = Samurai::system_error(ENOTCONN);
-		return Samurai::IO::ReadError;
+		return Samurai::IO::ReadResult::Error;
 	}
 
 	ssize_t ret = ::recv(sd, data, length, MSG_PEEK);
 
-	if (ret > 0) { transferred = (size_t) ret; return Samurai::IO::ReadOk; }
-	if (ret == 0) return Samurai::IO::ReadEndOfFile;
+	if (ret > 0) { transferred = (size_t) ret; return Samurai::IO::ReadResult::Ok; }
+	if (ret == 0) return Samurai::IO::ReadResult::EndOfFile;
 
 	if (NETERROR == EAGAIN || NETERROR == EWOULDBLOCK || NETERROR == EINTR)
-		return Samurai::IO::ReadWouldBlock;
+		return Samurai::IO::ReadResult::WouldBlock;
 
 	ec = Samurai::system_error(NETERROR);
-	return Samurai::IO::ReadError;
+	return Samurai::IO::ReadResult::Error;
 }
 
 

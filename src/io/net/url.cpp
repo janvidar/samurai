@@ -161,7 +161,7 @@ void Samurai::IO::Net::URL::parse()
 			portstr = authority.substr(colon + 1);
 			have_port = true;
 
-			/* A second colon means an IPv6 literal that was not bracketed. */
+			/* A second colon means an Version::IPv6 literal that was not bracketed. */
 			if (portstr.find(':') != std::string::npos) return;
 		}
 	}

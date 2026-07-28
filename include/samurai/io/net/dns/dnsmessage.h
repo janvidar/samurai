@@ -55,7 +55,7 @@ class MessageHeader {
 			return (flags_u16 & 0x8000) != 0;
 		}
 
-		enum QueryType getQueryType() {
+		QueryType getQueryType() {
 			switch ((flags_u16 & 0x7800) >> 11) {
 				case 0: return QueryType::Query;
 				case 1: return QueryType::InverseQuery;
@@ -103,7 +103,7 @@ class MessageHeader {
 				);
 		}
 		
-		enum ResponseCode getResponseCode()
+		ResponseCode getResponseCode()
 		{
 			switch (flags_u16 & 0x000f) {
 				case 0: return ResponseCode::Ok;
@@ -156,7 +156,7 @@ class Message {
 		Message(Samurai::IO::Buffer* buffer);
 		~Message();
 
-		enum Samurai::IO::Net::DNS::ResponseCode decode();
+		Samurai::IO::Net::DNS::ResponseCode decode();
 		bool encode();
 	
 		bool isResponse();

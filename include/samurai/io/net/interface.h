@@ -22,7 +22,7 @@ class NetworkInterfacePrivate;
 /**
  * FIXME:
  * 1) Does not provide means to extract multiple IP addresses for one interface.
- * 2) No IPv6 support (see 1).
+ * 2) No Version::IPv6 support (see 1).
  */
 class NetworkInterface
 {

@@ -412,7 +412,7 @@ EXO_TEST(sockets_monitor_count_3, {
 EXO_TEST(sockets_client_udp_create, {
 	SocketVariables* vars = socket_tests_create();
 	if (!vars) return false;
-	vars->client_udp = Samurai::IO::Net::DatagramSocket::create(vars->listener, Samurai::IO::Net::InetAddress::IPv4);
+	vars->client_udp = Samurai::IO::Net::DatagramSocket::create(vars->listener, Samurai::IO::Net::InetAddress::Version::IPv4);
 	return vars->client_udp != 0;
 });
 
