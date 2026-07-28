@@ -59,6 +59,7 @@ endif()
 
 set(SAMURAI_EXOTIC_INPUTS
     buffer.tcc
+    buffer_binary.tcc
     compression.tcc
     dns.tcc
     file.tcc
