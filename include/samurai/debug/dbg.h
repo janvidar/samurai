@@ -58,10 +58,6 @@ void samurai_net(const char* func, const char* file, int line, const char *forma
 void samurai_search(const char* func, const char* file, int line, const char *format, ...);
 void samurai_hub(const char* func, const char* file, int line, const char *format, ...);
 
-#ifdef SAMURAI_MEMDBG
-void samurai_memory(const char* func, void* addr, size_t size, void* code_addr, void* code_addr_up);
-#endif
-
 
 #else /* ! DEBUG */
 

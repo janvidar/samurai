@@ -14,7 +14,6 @@
 #define DUMP_FILE_SEARCH  "~/.samurai/debug/search.log"
 #define DUMP_FILE_DEBUG   "~/.samurai/debug/debug.log"
 #define DUMP_FILE_HUB     "~/.samurai/debug/hub.log"
-#define DUMP_FILE_MEM     "~/.samurai/debug/memory.log"
 
 #define PREFIX "../"
 
@@ -31,9 +30,6 @@ static Samurai::IO::File* samurai_dump_net;
 static Samurai::IO::File* samurai_dump_sch;
 static Samurai::IO::File* samurai_dump_dbg;
 static Samurai::IO::File* samurai_dump_hub;
-#ifdef SAMURAI_MEMDBG
-static Samurai::IO::File* samurai_dump_mem;
-#endif
 
 static bool g_debug_stderr = false;
 
@@ -48,11 +44,6 @@ void samurai_debug_init() {
 		g_debug_stderr = true;
 		fprintf(stderr, "    (dumping debug messages to stderr)\n");
 	}
-	
-#ifdef SAMURAI_MEMDBG
-	samurai_dump_mem = new Samurai::IO::File(DUMP_FILE_MEM);
-	samurai_dump_mem->open(Samurai::IO::File::Write | Samurai::IO::File::Truncate);
-#endif
 	
 	samurai_dump_net = new Samurai::IO::File(DUMP_FILE_NETWORK);
 	samurai_dump_sch = new Samurai::IO::File(DUMP_FILE_SEARCH);
@@ -70,10 +61,6 @@ void samurai_debug_fini() {
 	delete samurai_dump_hub; samurai_dump_hub = 0;
 	delete samurai_dump_dbg; samurai_dump_dbg = 0;
 	delete samurai_dump_net; samurai_dump_net = 0;
-#ifdef SAMURAI_MEMDBG
-	delete samurai_dump_mem; samurai_dump_mem = 0;
-#endif
-
 }
 
 void samurai_debug(const char* /*func*/, const char* file, int line, const char *format, ...) {
@@ -206,30 +193,6 @@ void samurai_hub(const char*, const char* , int, const char *format, ...) {
 
 
 }
-
-#ifdef SAMURAI_MEMDBG
-void samurai_memory(const char* func, void* addr, size_t size, void* code_addr, void* code_addr_up) {
-	if (!samurai_dump_mem) return;
-	
-	char logmsg[1024] = {0, };
-	sprintf(logmsg, "%s: addr=%p, size=%u, stack=%p, stack=%p", func, addr, size, code_addr, code_addr_up);
-	samurai_dump_mem->write(logmsg, strlen(logmsg));
-	samurai_dump_mem->write(ENDLINE, strlen(ENDLINE));
-#ifdef FLUSH_DEBUG
-	samurai_dump_mem->flush();
-#endif
-
-#ifdef DUPLICATE_TO_DEBUG
-        if (!samurai_dump_dbg) return;
-        samurai_dump_dbg->write(logmsg, strlen(logmsg));
-        samurai_dump_dbg->write(ENDLINE, strlen(ENDLINE));
-#ifdef FLUSH_DEBUG
-        samurai_dump_dbg->flush();
-#endif
-#endif
-
-}
-#endif
 
 
 
