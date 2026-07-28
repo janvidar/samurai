@@ -6,9 +6,11 @@
 #ifndef HAVE_SAMURAI_DEBUG_DBG_H
 #define HAVE_SAMURAI_DEBUG_DBG_H
 
-#ifndef BUILD
-#define BUILD "internal"
-#endif
+/*
+ * NOTE: no BUILD macro here. It named the application's build and nothing in
+ * this library reads it, so defining an object-like macro called BUILD in an
+ * installed header only risked colliding with a consumer's own.
+ */
 
 /*
  * NOTE: these are included for both configurations on purpose. Around eighteen
