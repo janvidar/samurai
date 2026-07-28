@@ -75,3 +75,21 @@ bool Samurai::IO::Directory::next(Samurai::IO::File& entry) {
 
 	return true;
 }
+
+
+std::optional<Samurai::IO::File> Samurai::IO::Directory::first() {
+	if (!opened) return std::nullopt;
+
+	std::error_code ec;
+	iter = std::filesystem::directory_iterator(path, ec);
+	if (ec) return std::nullopt;
+
+	return next();
+}
+
+
+std::optional<Samurai::IO::File> Samurai::IO::Directory::next() {
+	Samurai::IO::File entry;
+	if (!next(entry)) return std::nullopt;
+	return entry;
+}

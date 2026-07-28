@@ -4,6 +4,7 @@
  */
 
 #include <samurai/io/file.h>
+#include <samurai/io/dir.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -137,4 +138,43 @@ EXO_TEST(file_move_assign_open, {
 	ssize_t n = b.read(buf, 4);
 	b.close();
 	return n > 0;
+});
+
+EXO_TEST(dir_iterate_out_param, {
+	Samurai::IO::Directory dir(EXOTIC_DATA_PATH("data"));
+	if (!dir.open()) return false;
+
+	size_t count = 0;
+	Samurai::IO::File entry;
+	for (bool ok = dir.first(entry); ok; ok = dir.next(entry))
+		count++;
+	return count > 0;
+});
+
+EXO_TEST(dir_iterate_optional, {
+	Samurai::IO::Directory dir(EXOTIC_DATA_PATH("data"));
+	if (!dir.open()) return false;
+
+	size_t count = 0;
+	for (auto entry = dir.first(); entry; entry = dir.next())
+		count++;
+	return count > 0;
+});
+
+EXO_TEST(dir_iterate_counts_agree, {
+	Samurai::IO::Directory a(EXOTIC_DATA_PATH("data"));
+	Samurai::IO::Directory b(EXOTIC_DATA_PATH("data"));
+	if (!a.open() || !b.open()) return false;
+
+	size_t na = 0;
+	size_t nb = 0;
+	Samurai::IO::File entry;
+	for (bool ok = a.first(entry); ok; ok = a.next(entry)) na++;
+	for (auto e = b.first(); e; e = b.next()) nb++;
+	return na == nb && na > 0;
+});
+
+EXO_TEST(dir_iterate_unopened, {
+	Samurai::IO::Directory dir(EXOTIC_DATA_PATH("data/nosuchdir"));
+	return !dir.first().has_value();
 });
