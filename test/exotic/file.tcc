@@ -87,3 +87,33 @@ EXO_TEST(file_exist_3, {
 	return !f.exists();
 });
 
+
+EXO_TEST(file_extension_1, {
+	Samurai::IO::File f("/tmp/archive.tar.gz");
+	return f.getExtension() == "gz";
+});
+
+EXO_TEST(file_extension_2, {
+	Samurai::IO::File f("/home/user.name/file");
+	return f.getExtension() == "";
+});
+
+EXO_TEST(file_extension_3, {
+	Samurai::IO::File f("/home/user.name/file.txt");
+	return f.getExtension() == "txt";
+});
+
+EXO_TEST(file_extension_4, {
+	Samurai::IO::File f("/home/user/.bashrc");
+	return f.getExtension() == "";
+});
+
+EXO_TEST(file_extension_5, {
+	Samurai::IO::File f("noextension");
+	return f.getExtension() == "";
+});
+
+EXO_TEST(file_match_extension_1, {
+	Samurai::IO::File f("/home/user.name/file");
+	return !f.matchExtension("name/file");
+});
