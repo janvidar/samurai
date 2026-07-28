@@ -88,9 +88,8 @@
  * Exactly one platform family must be selected, and the two Windows spellings
  * always travel together. Both are in use across the tree - SAMURAI_WINDOWS
  * for the OS class, SAMURAI_OS_WINDOWS for the specific OS - and a guard that
- * names a macro nobody defines compiles to nothing rather than complaining.
- * That is how the Winsock startup came to be guarded on plain WINSOCK and
- * never ran. These checks turn the next such slip into a build error.
+ * names a macro nobody defines compiles to nothing rather than complaining, so
+ * these checks make such a slip a build error.
  */
 #if defined(SAMURAI_WINDOWS) != defined(SAMURAI_OS_WINDOWS)
 #error "SAMURAI_WINDOWS and SAMURAI_OS_WINDOWS must be defined together"

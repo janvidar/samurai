@@ -42,10 +42,6 @@ class Directory {
 		/**
 		 * Read the next entry into 'entry'.
 		 * @return false when the directory is exhausted.
-		 *
-		 * NOTE: these used to return a File* that the Directory owned and
-		 * deleted on the following call, so the caller's pointer was
-		 * invalidated by the act of continuing to iterate.
 		 */
 		bool next(Samurai::IO::File& entry);
 
@@ -57,10 +53,6 @@ class Directory {
 		std::optional<Samurai::IO::File> next();
 
 	protected:
-		/* NOTE: this used to be an opendir()/readdir() loop behind
-		   SAMURAI_UNIX with an unimplemented _finddata_t stub for Windows.
-		   std::filesystem::directory_iterator is portable, so the platform
-		   conditionals are gone and Windows works. */
 		std::string path;
 		std::filesystem::directory_iterator iter;
 		bool opened;

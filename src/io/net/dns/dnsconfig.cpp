@@ -48,10 +48,9 @@ Samurai::IO::Net::InetAddress* Samurai::IO::Net::DNS::ResolveConfiguration::getN
 
 	if (option_rotate) cur_nameserver = n % num_nameservers;
 
-	/* NOTE: this was '>', so cur_nameserver == num_nameservers read the slot
-	   one past the last configured server - a null entry, or off the end of
-	   the array entirely once MAXNS servers are configured. skipNameServer()
-	   walks it there. */
+	/* NOTE: skipNameServer() can leave cur_nameserver at num_nameservers, which
+	   is one past the last configured server - and off the end of the array once
+	   MAXNS are configured. */
 	if (cur_nameserver >= num_nameservers) cur_nameserver = 0;
 	return nameservers[cur_nameserver];
 }
@@ -141,14 +140,9 @@ void Samurai::IO::Net::DNS::ResolveConfiguration::parse(const char* resolv_conf)
 		QDBG("[DNS] Read %d bytes", (int) buffer.size());
 
 		/*
-		 * NOTE: this loop used to advance past the newline it had just found
-		 * and then search from one character *beyond* that, so an empty line
-		 * was swallowed together with the line following it. The pair came
-		 * back as one string starting with '\n', which matches no directive.
-		 * A blank line above 'nameserver' - which is how the systemd-resolved
-		 * stub resolv.conf is laid out - therefore left the configuration
-		 * with no name servers at all.
-		 *
+		 * NOTE: a blank line must not swallow the line after it - the
+		 * systemd-resolved stub resolv.conf has one above 'nameserver' - so the
+		 * search resumes at the character after the newline, not beyond it.
 		 * The last line is handled too; it need not end in a newline.
 		 */
 		size_t last = 0;

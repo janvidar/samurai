@@ -101,8 +101,8 @@ class Socket :
 
 		/**
 		 * Write several buffers as one operation, without joining them first.
-		 * A protocol layer with a header and a body no longer has to copy both
-		 * into one buffer to send them in a single segment.
+		 * A protocol layer with a header and a body can send both in a single
+		 * segment without copying them into one buffer.
 		 *
 		 * Partial writes work as they do above: the return value is the number
 		 * of bytes accepted, counted across the buffers in order, and the

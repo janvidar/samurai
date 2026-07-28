@@ -19,9 +19,7 @@
 
 Samurai::IO::Net::SocketMonitor::SocketMonitor(const char* name_) : name(name_)
 {
-/* NOTE: this was #ifdef WINSOCK, a macro defined nowhere in the tree - the
-   rest of the sources use SAMURAI_WINSOCK from socketglue.h. WSAStartup()
-   therefore never ran, and no socket call works on Windows until it has. */
+/* NOTE: no socket call works on Windows until WSAStartup() has run. */
 #ifdef SAMURAI_WINSOCK
 	QDBG("Initializing Winsock library...");
 	WSAData wsa;
@@ -149,10 +147,9 @@ void Samurai::IO::Net::SocketMonitor::dispatch(socket_t fd, int trig)
 	if (it == registry.end())
 		return;
 
-	/* Holding the lock for the whole callback is the point of the exercise:
-	   a handler that reacts to EventDisconnected by dropping its own
-	   reference used to leave the rest of this dispatch walking freed
-	   memory. */
+	/* The shared_ptr is held for the whole callback: a handler that reacts to
+	   EventDisconnected by dropping its own reference must not leave this
+	   dispatch holding freed memory. */
 	std::shared_ptr<SocketBase> socket = it->second.lock();
 	if (!socket)
 	{

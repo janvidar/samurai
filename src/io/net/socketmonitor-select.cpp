@@ -71,11 +71,10 @@ void Samurai::IO::Net::SelectSocketMonitor::internal_modify(Samurai::IO::Net::So
 /*
  * NOTE: fd_set is a fixed size bitmap of FD_SETSIZE bits, and FD_SET() on a
  * descriptor at or above that limit writes past the end of it - here, past two
- * fd_sets living on this function's stack frame. Nothing bounded the
- * descriptor numbers: 'max' sizes the act[] array, not the values. A process
- * whose descriptor limit is above FD_SETSIZE can perfectly well be handed a
- * socket numbered 5000 while monitoring only a handful, so this was reachable
- * without anything unusual happening.
+ * fd_sets living on this function's stack frame. Nothing bounds the descriptor
+ * numbers: 'max' sizes the act[] array, not the values. A process whose
+ * descriptor limit is above FD_SETSIZE can perfectly well be handed a socket
+ * numbered 5000 while monitoring only a handful.
  *
  * select() cannot represent such a descriptor at all, so the only honest thing
  * is to leave it out and say so. The other backends have no such limit, and
@@ -88,11 +87,9 @@ static bool fd_fits_in_set(socket_t fd)
 
 
 /*
- * A descriptor that has been closed behind the monitor's back makes select()
- * fail with EBADF for the whole call. The loop then reported the error and
- * returned without dispatching anything - and did so again on the next call,
- * and every call after that, so one stale descriptor stalled every socket in
- * the process permanently. Identifying the offenders lets them be torn down.
+ * A descriptor closed behind the monitor's back makes select() fail with EBADF
+ * for the whole call, which would stall every socket in the process until it is
+ * identified and torn down.
  */
 static bool fd_is_usable(socket_t fd)
 {
@@ -127,15 +124,14 @@ void Samurai::IO::Net::SelectSocketMonitor::internal_wait(int time_ms) {
 
 		const int trigger = sock->getMonitorTrigger();
 
-		/* NOTE: these were 'if (MWrite) ... else if (MRead)', so a socket
-		   registered for both - which is what connect() and
-		   toggleWriteNotifier(true) do - was never placed in rfds and its
-		   reads went unreported for as long as the write notifier was on. */
+		/* NOTE: not mutually exclusive: connect() and
+		   toggleWriteNotifier(true) register a socket for read and write at
+		   once, so both sets have to be set. */
 		if (trigger & MWrite)  FD_SET(fd, &wfds);
 		if (trigger & MRead)   FD_SET(fd, &rfds);
 
 		/* select()'s third set is out-of-band data, which is what MUrgent
-		   means; epoll and kqueue already report it and this did not. */
+		   means. */
 		if (trigger & MUrgent) FD_SET(fd, &efds);
 
 		if (!(trigger & (MRead | MWrite | MUrgent))) continue;

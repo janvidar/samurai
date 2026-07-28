@@ -321,7 +321,6 @@ ssize_t Samurai::IO::File::read(char* data, size_t length, std::error_code& ec)
 	ec.clear();
 	if (fd == -1) { ec = Samurai::system_error(EBADF); return -1; }
 
-	/* NOTE: was 'int status', truncating a ssize_t result. */
 	ssize_t status = ::read(fd, data, length);
 	if (status == -1) { ec = Samurai::system_error(errno); return -1; }
 	return status;
@@ -437,8 +436,6 @@ bool Samurai::IO::File::isDeleteable() const
 
 bool Samurai::IO::File::isExcecutable()  const
 {
-	/* NOTE: neither branch was followed by a return, so a platform that is
-	   neither ran off the end of a non-void function. */
 #ifdef SAMURAI_WINDOWS
 	/* Windows has no execute bit; the extension is what decides. Compared
 	   case-insensitively, since "PROGRAM.EXE" is just as executable. */
@@ -479,18 +476,16 @@ bool Samurai::IO::File::matchExtension(const std::string& other) const
 	return ext == other;
 }
 
-/* NOTE: S_ISREG and friends are only guaranteed non-zero, not 1, so the
-   '== 1' these used to do was wrong on platforms that return the masked
-   value. std::filesystem answers the question directly. */
+/* NOTE: S_ISREG and friends are only guaranteed non-zero, not 1, so they cannot
+   be compared against a value. std::filesystem answers the question directly. */
 bool Samurai::IO::File::isRegular() const
 {
 	std::error_code ec;
 	return std::filesystem::is_regular_file(filename, ec) && !ec;
 }
 
-/* NOTE: this could never return true. It tested the cached stat(), which
-   follows symlinks, so a link always reported as whatever it pointed at.
-   is_symlink() has lstat() semantics. */
+/* NOTE: the cached stat() follows symlinks, so it cannot answer this;
+   symlink_status() has lstat() semantics. */
 bool Samurai::IO::File::isSymlink() const
 {
 	std::error_code ec;
@@ -536,9 +531,7 @@ bool Samurai::IO::File::remove(std::error_code& ec) {
 
 bool Samurai::IO::File::remove(const char* path)
 {
-	/* NOTE: this called unlink() directly while the member remove() went
-	   through SAMURAI_UNLINK, so the static overload alone failed to build
-	   on Windows, where the name is _unlink. */
+	/* NOTE: SAMURAI_UNLINK, not unlink(): the name is _unlink on Windows. */
 	if (!path) return false;
 	return (SAMURAI_UNLINK(path) != -1);
 }
@@ -569,10 +562,8 @@ Samurai::TimeStamp Samurai::IO::File::getTimeAccessed() const
 
 
 /*
- * NOTE: these were split across #ifdefs that named the POSIX functions on
- * Windows - ::mkdir there is _mkdir and takes no mode, and rmdir had no
- * Windows branch at all, so neither compiled. std::filesystem covers both.
- * Return values keep the ::mkdir convention: 0 on success, -1 on failure.
+ * NOTE: std::filesystem covers both platforms. Return values keep the ::mkdir
+ * convention: 0 on success, -1 on failure.
  */
 int Samurai::IO::File::mkdir(const char* dirname, int mode)
 {
@@ -603,28 +594,17 @@ int Samurai::IO::File::rmdir(const char* dirname)
 /**
  * This will convert any path given to the absolute path
  * and even follow symlinks.
- * 
+ *
  * This handles a prepending '~' as the environment variable
  * 'HOME' (or / if not set).
  *
  * The path is always simplified so redundant path separators
  * are removed (example: /dir//file => /dir/file).
- * 
+ *
  * Also any /../ are followed, /./ are removed etc.
  *
- * This is acheived in the following steps:
- * 1) Fix prepending '~' if it exists (FIXME: Does not work on Win32)
- * 2) Remove any multiple path separators to one.
- * 3) Resolve any /./ to '/'.
- * 4) Reesolve any '/../'
- * 5) Remove trailing '/' (if any).
- */
-
-/**
- * NOTE: This was ~150 lines of hand-rolled path arithmetic over two fixed
- * buffers - the source of a global-buffer-overflow, a SQUEEZE_LEFT length
- * underflow and an out-of-bounds read on the empty path. std::filesystem does
- * the normalisation; the only thing it does not do is '~', so that stays.
+ * std::filesystem does the normalisation; '~' expansion is the one thing it
+ * does not do, so that is handled here.
  */
 std::string Samurai::IO::File::resolvePath(const std::string& input) {
 	std::string work = input;

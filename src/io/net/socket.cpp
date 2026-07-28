@@ -137,10 +137,7 @@ void Samurai::IO::Net::Socket::handleMonitorEvent(int trig)
 			case SSLHandshake:
 			case SSLConnected:
 				/* NOTE: This is a *read* event, so it has to dispatch to
-				   internal_canRead(). It used to call internal_canWrite(),
-				   which delivered incoming application data as
-				   EventCanWrite - so EventDataAvailable never fired once
-				   the TLS handshake had completed.
+				   internal_canRead().
 
 				   No MSG_PEEK probe as in the Connected case above: a
 				   complete TLS record may already be buffered inside the
@@ -341,8 +338,6 @@ void Samurai::IO::Net::Socket::connect()
 	setMonitor(Samurai::IO::Net::SocketMonitor::MRead |  Samurai::IO::Net::SocketMonitor::MWrite);
 
 	// connect and reset connection timer.
-	/* NOTE: this used to assign over 'timer', leaking the previous one on
-	   every reconnect. */
 	delete timer;
 	timer = 0;
 
@@ -561,8 +556,6 @@ ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
 
 void Samurai::IO::Net::Socket::EventHostFound(Samurai::IO::Net::InetAddress* resolved_addr) {
 	if (addr) delete addr;
-	/* NOTE: was new InetSocketAddress(resolved_addr->toString(), port, type),
-	   which formatted the address to text and re-parsed it. */
 	addr = new InetSocketAddress(*resolved_addr, port);
 
 	state = HostFound;
@@ -709,9 +702,9 @@ void Samurai::IO::Net::Socket::TLSsendGoodbye() {
 
 
 /*
- * NOTE: The three functions below are the reporting API. The legacy
- * ssize_t read()/peek()/write() above are kept for source compatibility and
- * now delegate, discarding the detail.
+ * NOTE: The three functions below are the reporting API. The ssize_t
+ * read()/peek()/write() overloads above delegate to them, discarding the
+ * detail, and are kept for source compatibility.
  */
 
 Samurai::IO::ReadResult Samurai::IO::Net::Socket::read(char* data, size_t length,

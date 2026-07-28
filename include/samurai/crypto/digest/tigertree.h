@@ -15,15 +15,12 @@
 #include <samurai/crypto/digest/tiger.h>
 
 /*
- * NOTE: the four sizes below were macros, and the functions were declared
- * extern "C". Nothing in either project is C - the implementation and every
- * caller are C++ - so the C linkage bought nothing and exported tt_init,
- * tt_update, tt_digest and tt_copy from the shared library as unmangled global
- * symbols. Those are the names of the Bitzi reference API that DC++ and the
- * gnutella clients also derive from, so a consumer linking a second TigerTree
- * implementation would silently bind to one of the two. The sizes went the
- * same way because this is an installed header, and BLOCKSIZE is not a name to
- * be defining in one.
+ * NOTE: tt_init, tt_update, tt_digest and tt_copy are the names of the Bitzi
+ * reference API that DC++ and the gnutella clients also derive from, so they
+ * stay inside the namespace with C++ linkage: unmangled globals would let a
+ * consumer that links a second TigerTree implementation bind to either. The
+ * sizes are constants for the same reason - this is an installed header, and
+ * BLOCKSIZE is not a name to be defining in one.
  */
 
 namespace Samurai {

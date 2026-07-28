@@ -53,8 +53,8 @@ Samurai::IO::Net::DNS::Label::Label(const char* val, uint8_t sz) {
 	}
 }
 
-/* NOTE: These copied DNS_LABEL_SIZE of the DNS_LABEL_SIZE+1 byte array, so a
-   full length label lost its terminator and the copy was not a valid string. */
+/* NOTE: name[] is DNS_LABEL_SIZE+1 bytes; the whole array is copied so that a
+   full length label keeps its terminator. */
 Samurai::IO::Net::DNS::Label::Label(const Samurai::IO::Net::DNS::Label& copy) {
 	memcpy(name, copy.name, sizeof(name));
 	size = copy.size;
@@ -194,9 +194,6 @@ void Samurai::IO::Net::DNS::Name::addPart(Label* label) {
 
 
 std::string Samurai::IO::Net::DNS::Name::toString() const {
-	/* NOTE: This used to strcat() into the name[] member with no bound, from
-	   wire data, and destroyed the member's contents as a side effect of being
-	   asked for a formatted value. */
 	std::string out;
 
 	for (std::vector<Label*>::const_iterator it = parts.begin(); it != parts.end(); it++) {

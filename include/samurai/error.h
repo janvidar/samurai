@@ -34,9 +34,6 @@ namespace IO {
 
 /**
  * Outcome of a read() on a stream that can end.
- *
- * NOTE: this exists because Socket::read() used to answer would-block, clean
- * end-of-stream and a hard error all with 0, which no caller could tell apart.
  */
 enum ReadResult
 {

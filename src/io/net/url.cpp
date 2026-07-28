@@ -65,20 +65,8 @@ std::string Samurai::IO::Net::URL::toString()
 
 
 /*
- * NOTE: The previous implementation had four separate defects:
- *
- *  - the IPv6 branch set the host start to the index *of* the ']', so
- *    "http://[::1]/" produced a host of "]";
- *  - the port search ran over the whole remaining string rather than the
- *    authority, so "http://host/path:8080" found the colon in the path and
- *    then computed substr(pos+1, split_end - (pos+1)) with split_end < pos+1,
- *    underflowing size_t;
- *  - there was no userinfo handling at all, so "http://user:pass@host/"
- *    parsed "pass@host" as the port;
- *  - a failed parse left the previous URL's fields in place, because nothing
- *    was reset on entry.
- *
- * This follows the RFC 3986 shape instead:
+ * NOTE: this follows the RFC 3986 shape. The port is searched for within the
+ * authority only, so a colon in the path is not mistaken for one.
  *
  *   scheme "://" [ userinfo "@" ] host [ ":" port ] path [ "?" query ] [ "#" frag ]
  */

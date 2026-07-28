@@ -23,12 +23,8 @@
 /*
  * How many ready descriptors one epoll_wait() may report, which is not the
  * same thing as how many sockets may be monitored - epoll has no limit on the
- * latter and reports whatever does not fit on the next call.
- *
- * NOTE: this array used to be sized from getMaxOpenSockets(), so a process
- * with a high descriptor limit paid for a large allocation up front to
- * describe a handful of sockets. Anything left over is picked up immediately,
- * because the descriptors stay ready.
+ * latter and reports whatever does not fit on the next call. Anything left over
+ * is picked up immediately, because the descriptors stay ready.
  */
 #define EPOLL_BATCH 256
 

@@ -324,9 +324,8 @@ bool Samurai::IO::Net::InetAddress::isLoopback() const
 }
 
 
-/* NOTE: This used to cache the formatted address in a mutable char* member
-   and hand out a pointer to it, so the result went stale when the address
-   changed and dangled once the object died. Formatted on demand instead. */
+/* NOTE: formatted on demand and returned by value: a cached pointer would go
+   stale when the address changed and dangle once the object died. */
 std::string Samurai::IO::Net::InetAddress::getAddress() const
 {
 	if (resolveState != Resolved)
@@ -461,9 +460,8 @@ void Samurai::IO::Net::InetAddress::EventHostFound(Samurai::IO::Net::InetAddress
 {
 	if (!address || !address->data) return;
 
-	/* NOTE: this used to allocate a fresh __InternalAddress over the one
-	   already held, leaking it on every resolution. Every constructor
-	   allocates it, so there is always a block to copy into. */
+	/* Every constructor allocates 'data', so there is always a block to copy
+	   into. */
 	version = address->version;
 	memcpy(data, address->data, sizeof(struct Samurai::IO::Net::__InternalAddress));
 	resolveState = Resolved;
@@ -500,8 +498,6 @@ void Samurai::IO::Net::InetAddress::lookup(ResolveEventHandler* eventHandler)
 		return;
 	}
 
-	/* NOTE: this used to assign straight over 'resolver', leaking the
-	   previous one on every repeated lookup. */
 	delete resolver;
 	resolver = 0;
 
@@ -558,14 +554,6 @@ static bool has_canonical_embedded_ipv4(const std::string& text)
 	return is_canonical_dotted_quad(text.c_str() + (colon == std::string::npos ? 0 : colon + 1));
 }
 
-/*
- * NOTE: This replaces a hand-written dotted-quad and IPv6 parser
- * (stringToAddress) of roughly 150 lines. It mis-parsed "::" compression,
- * never accepted an IPv4-mapped "::ffff:1.2.3.4" at all, and ended in a
- * free() applied to the caller's buffer - which callers were passing
- * std::string::c_str() into. inet_pton() is in POSIX and Winsock and does
- * not have those problems.
- */
 bool Samurai::IO::Net::InetAddress::stringToAddress(enum Samurai::IO::Net::InetAddress::Version version, const char* address, struct __InternalAddress* data)
 {
 	if (!address || !*address || !data) return false;

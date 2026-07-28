@@ -82,11 +82,9 @@ class SocketMonitor
 		 * and decrypts it, so a caller that asked for less than the record held
 		 * leaves application data buffered in the TLS layer while the
 		 * descriptor itself has nothing further to report - and no amount of
-		 * polling will say so. This used to strand that data until the peer
-		 * happened to send something else, which for a request/response
-		 * protocol means never: each side waits for the other. Buffered data is
-		 * therefore reported as readable in its own right, and the poll below
-		 * does not block while any is outstanding.
+		 * polling will say so. Buffered data is therefore reported as readable
+		 * in its own right, and the poll below does not block while any is
+		 * outstanding.
 		 */
 		void wait(int time_ms);
 		

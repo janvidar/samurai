@@ -191,8 +191,6 @@ class File {
 	public:
 		
 	protected:
-		/* NOTE: was a mutable struct stat* with no assignment operator, so
-		   assigning one File to another double freed it. */
 		mutable std::optional<struct stat> info;
 		std::string filename;
 		mutable std::string baseName;

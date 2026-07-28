@@ -208,11 +208,9 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		/**
 		 * Act on a readiness event from the socket monitor.
 		 *
-		 * NOTE: the monitor used to work out what kind of socket it was
-		 * holding with three dynamic_casts per event, on every event, and then
-		 * branch on the state of a class it should not have had to know about.
-		 * Each socket class knows what its own states mean, so it answers for
-		 * itself.
+		 * Each socket class knows what its own states mean, so it answers a
+		 * readiness event for itself rather than having the monitor branch on
+		 * its state.
 		 *
 		 * @param trig see SocketMonitor::Triggers (ORed)
 		 */

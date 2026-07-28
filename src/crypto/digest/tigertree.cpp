@@ -42,11 +42,10 @@ namespace Crypto {
 namespace Digest {
 
 /*
- * NOTE: this took uint64_t* and every caller cast a uint8_t array to it. The
- * scratch areas are not 8-byte aligned - tt_init() deliberately sets
- * ctx->block to ctx->leaf + 1, an odd address - so those casts were undefined
- * behaviour and fault outright on targets that require natural alignment.
- * The data is bytes; the signature now says so.
+ * NOTE: the scratch areas are deliberately unaligned - tt_init() sets
+ * ctx->block to ctx->leaf + 1, an odd address - so this takes uint8_t* and must
+ * not be reached through a wider pointer type: that is undefined behaviour and
+ * faults outright on targets requiring natural alignment.
  */
 static void tiger(const uint8_t* str, size_t length, uint8_t* res)
 {
@@ -158,10 +157,9 @@ void tt_digest(TT_CONTEXT *ctx, uint8_t *s)
 }
 
 /*
- * NOTE: this used to assign dest->top = src->top, a pointer into *src's*
- * nodes[] array, so the copy shared the source's stack and outlived it. It
- * also never set dest->block, leaving it null or stale. Both are interior
- * pointers and have to be rebuilt as offsets into the destination.
+ * NOTE: 'block' and 'top' are interior pointers into the context's own arrays,
+ * so a copy has to rebuild them as offsets into the destination rather than
+ * assigning the source's.
  */
 void tt_copy(TT_CONTEXT *dest, TT_CONTEXT *src)
 {
