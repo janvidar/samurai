@@ -96,15 +96,23 @@ static Samurai::IO::Net::SocketMonitor::Triggers get_poll_events(struct kevent* 
 
 struct kevent* Samurai::IO::Net::KQueueSocketMonitor::getChangeEventSlot()
 {
-	// If change buffer is full, commit it to the kqueue.
-	if (numChanges == MAXCHANGES)
-	{
-		struct timespec timeout;
-		timeout.tv_sec  = 0;
-		timeout.tv_nsec = 0;
-		kevent(kfd, change.data(), numChanges, events.data(), 0, &timeout);
-		numChanges = 0;
-	}
+	/*
+	 * Grown rather than flushed here.
+	 *
+	 * Committing mid-stream had to pass an eventlist of zero length, since
+	 * there is nowhere to deliver readiness events from this call. But with no
+	 * room in the eventlist kevent() cannot report a rejected change as an
+	 * EV_ERROR entry, so it returns -1 at the first one and abandons every
+	 * change after it - and the result was not checked. One EV_DELETE for a
+	 * descriptor that had already been closed, which is ordinary, therefore
+	 * silently discarded the registrations queued behind it.
+	 *
+	 * internal_wait() submits the whole list with room to report each
+	 * rejection, and already skips EV_ERROR entries. Letting the list grow
+	 * keeps that the only place changes are committed.
+	 */
+	if (numChanges == change.size())
+		change.resize(change.size() * 2);
 
 	struct kevent* ev = &change[numChanges++];
 	memset(ev, 0, sizeof(struct kevent));

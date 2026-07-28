@@ -68,6 +68,7 @@ set(SAMURAI_EXOTIC_INPUTS
     inetaddress.tcc
     interface.tcc
     misc.tcc
+    multicast.tcc
     socketmonitor.tcc
     sockets.tcc
     tls.tcc

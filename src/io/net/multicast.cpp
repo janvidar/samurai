@@ -128,9 +128,15 @@ void Samurai::IO::Net::MulticastSocket::setInterface(Samurai::IO::Net::NetworkIn
 	}
 }
 
+/*
+ * The option value is an int, not a socklen_t - that is a length type, and
+ * using it here only worked because the two happen to be the same width. Linux
+ * and Winsock expect an int; macOS accepts either width and reports back
+ * whichever was asked for.
+ */
 bool Samurai::IO::Net::MulticastSocket::setLoopbackMode(bool toggle)
 {
-	socklen_t loop = toggle ? 1 : 0;
+	int loop = toggle ? 1 : 0;
 	if (Samurai::IO::Net::set_sockopt(sd, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop)) != 0)
 	{
 		QERR("Unable to set loopback mode (%d) %s", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
@@ -141,8 +147,12 @@ bool Samurai::IO::Net::MulticastSocket::setLoopbackMode(bool toggle)
 
 bool Samurai::IO::Net::MulticastSocket::getLoopbackMode()
 {
-	socklen_t loop;
-	socklen_t size;
+	/* getsockopt takes the length as in/out: on the way in it says how much
+	   room there is. Leaving it uninitialised let the call write against a
+	   garbage size and left the unwritten bytes of 'loop' undefined, so the
+	   answer did not depend on the socket. */
+	int loop = 0;
+	socklen_t size = sizeof(loop);
 	if (Samurai::IO::Net::get_sockopt(sd, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, &size) != 0)
 	{
 		QERR("Unable to get loopback mode (%d) %s", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));

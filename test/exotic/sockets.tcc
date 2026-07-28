@@ -348,6 +348,7 @@ EXO_TEST(sockets_client_read_1, {
 	vars->monitor->wait(25);
 	
 	char buf[64];
+	if (!vars->listener->accepted) return false;
 	ssize_t n = vars->listener->accepted->read(buf, 64);
 	return n == (ssize_t) strlen(vars->listener->message) && strncmp(buf, vars->listener->message, n) == 0;
 });
@@ -358,6 +359,7 @@ EXO_TEST(sockets_client_write_2, {
 	
 	vars->listener->message = (char*) "Reply from the other end\n";
 	
+	if (!vars->listener->accepted) return false;
 	ssize_t n = vars->listener->accepted->write(vars->listener->message, strlen(vars->listener->message));
 	return n == (ssize_t) strlen(vars->listener->message);
 });
@@ -391,6 +393,7 @@ EXO_TEST(sockets_client_read_vectored, {
 	vars->monitor->wait(25);
 
 	char buf[64];
+	if (!vars->listener->accepted) return false;
 	ssize_t n = vars->listener->accepted->read(buf, 64);
 	return n == (ssize_t) strlen(vars->listener->message) && strncmp(buf, vars->listener->message, n) == 0;
 });
