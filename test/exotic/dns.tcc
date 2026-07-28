@@ -488,10 +488,10 @@ EXO_TEST(dns_cache_is_bounded,
 {
 	Samurai::IO::Net::DNS::CacheStorage* cache =
 		Samurai::IO::Net::DNS::CacheStorage::getInstance();
-	for (size_t n = 0; n < DNS_CACHE_MAX_STORAGE * 2; n++)
+	for (size_t n = 0; n < Samurai::IO::Net::DNS::DNS_CACHE_MAX_STORAGE * 2; n++)
 		cache->add(dns_make_record("flood.cachetest.invalid", 3600));
 
-	return cache->size() <= DNS_CACHE_MAX_STORAGE;
+	return cache->size() <= Samurai::IO::Net::DNS::DNS_CACHE_MAX_STORAGE;
 });
 
 EXO_TEST(dns_cache_add_null_is_harmless,
