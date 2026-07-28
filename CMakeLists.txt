@@ -55,15 +55,6 @@ if(NOT SAMURAI_BUILD_SHARED AND NOT SAMURAI_BUILD_STATIC)
         "SAMURAI_BUILD_STATIC.")
 endif()
 
-# TLS is mandatory. SSL_SUPPORT is a PUBLIC compile definition that gates a
-# member of Samurai::IO::Net::Socket in the public header, so a consumer built
-# without it disagrees with the library about object layout - a mismatch that
-# shows up as heap corruption rather than a link error. Removing the option to
-# build without it removes that failure mode.
-set(SAMURAI_TLS_PROVIDER "OPENSSL" CACHE STRING
-    "TLS backend to use: OPENSSL or GNUTLS")
-set_property(CACHE SAMURAI_TLS_PROVIDER PROPERTY STRINGS OPENSSL GNUTLS)
-
 set(SAMURAI_DNS_PROVIDER "BLOCKING" CACHE STRING
     "DNS resolver to use: BLOCKING, FORKED or BUILTIN")
 set_property(CACHE SAMURAI_DNS_PROVIDER PROPERTY STRINGS BLOCKING FORKED BUILTIN)
@@ -81,22 +72,44 @@ find_package(BZip2 REQUIRED)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-if(SAMURAI_TLS_PROVIDER STREQUAL "OPENSSL")
-    # 1.0.2 is the oldest release providing SSL_get0_param(), which the
-    # hostname verification in tlsfactory-openssl.cpp relies on.
-    find_package(OpenSSL 1.0.2 REQUIRED)
-elseif(SAMURAI_TLS_PROVIDER STREQUAL "GNUTLS")
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(GNUTLS REQUIRED IMPORTED_TARGET gnutls)
-    message(WARNING
-        "The GnuTLS backend is unmaintained and is not expected to compile: "
-        "it returns a TLS_STATUS_RETRY that is not in the TlsStatus enum and "
-        "uses gnutls_*_set_priority() APIs removed in GnuTLS 3.x. "
-        "Use SAMURAI_TLS_PROVIDER=OPENSSL unless you are porting it.")
+# TLS is mandatory, and there is only one backend: OpenSSL 3.0 or newer, or
+# LibreSSL 3.5 or newer, which provides the same API subset.
+find_package(OpenSSL REQUIRED)
+
+# FindOpenSSL derives OPENSSL_VERSION from the OPENSSL_VERSION_NUMBER macro,
+# which LibreSSL hardcodes to 0x20000000L - so every LibreSSL, old or new,
+# reports itself as "OpenSSL 2.0.0" and cannot be version checked as OpenSSL.
+# Its real version is in LIBRESSL_VERSION_TEXT.
+set(SAMURAI_LIBRESSL_VERSION "")
+foreach(dir IN LISTS OPENSSL_INCLUDE_DIR)
+    if(NOT SAMURAI_LIBRESSL_VERSION AND EXISTS "${dir}/openssl/opensslv.h")
+        file(STRINGS "${dir}/openssl/opensslv.h" libressl_version_str
+            REGEX "^#[\t ]*define[\t ]+LIBRESSL_VERSION_TEXT[\t ]+\"LibreSSL [0-9.]+\"")
+        if(libressl_version_str)
+            string(REGEX REPLACE "^.*\"LibreSSL ([0-9.]+)\".*$" "\\1"
+                SAMURAI_LIBRESSL_VERSION "${libressl_version_str}")
+        endif()
+    endif()
+endforeach()
+
+if(SAMURAI_LIBRESSL_VERSION)
+    set(SAMURAI_TLS_NAME "LibreSSL ${SAMURAI_LIBRESSL_VERSION}")
+    # 3.5 is the oldest series with TLS 1.3 on both the client and the server
+    # side, and with the X509_VERIFY_PARAM hostname APIs the verification in
+    # tlsfactory-openssl.cpp relies on.
+    if(SAMURAI_LIBRESSL_VERSION VERSION_LESS 3.5.0)
+        message(FATAL_ERROR
+            "LibreSSL 3.5.0 or newer is required, found "
+            "${SAMURAI_LIBRESSL_VERSION} in ${OPENSSL_INCLUDE_DIR}.")
+    endif()
 else()
-    message(FATAL_ERROR
-        "Invalid SAMURAI_TLS_PROVIDER '${SAMURAI_TLS_PROVIDER}' "
-        "(expected OPENSSL or GNUTLS). TLS is mandatory.")
+    set(SAMURAI_TLS_NAME "OpenSSL ${OPENSSL_VERSION}")
+    if(OPENSSL_VERSION VERSION_LESS 3.0.0)
+        message(FATAL_ERROR
+            "OpenSSL 3.0 or newer is required, found ${OPENSSL_VERSION} in "
+            "${OPENSSL_INCLUDE_DIR}. Point OPENSSL_ROOT_DIR at a newer "
+            "installation, or use LibreSSL 3.5 or newer.")
+    endif()
 endif()
 
 if(NOT SAMURAI_DNS_PROVIDER MATCHES "^(BLOCKING|FORKED|BUILTIN)$")
@@ -146,7 +159,6 @@ set(SAMURAI_SOURCES
     src/io/net/socketmonitor-select.cpp
     src/io/net/socketmonitor-kqueue.cpp
     src/io/net/tlsfactory.cpp
-    src/io/net/tlsfactory-gnutls.cpp
     src/io/net/tlsfactory-openssl.cpp
     src/io/net/url.cpp
     src/io/net/dns/cache.cpp
@@ -259,19 +271,11 @@ foreach(target IN ITEMS samurai_objects ${SAMURAI_LIBRARIES})
 
     # Linking these to the object library contributes no libraries to it, but
     # does give it their include directories to compile against.
+    # PUBLIC for OpenSSL: tlsfactory-openssl.h is a public header and includes
+    # <openssl/ssl.h>.
     target_link_libraries(${target}
-        PUBLIC Threads::Threads
+        PUBLIC Threads::Threads OpenSSL::SSL OpenSSL::Crypto
         PRIVATE ZLIB::ZLIB BZip2::BZip2)
-
-    if(SAMURAI_TLS_PROVIDER STREQUAL "OPENSSL")
-        # PUBLIC: tlsfactory-openssl.h is a public header and includes
-        # <openssl/ssl.h>.
-        target_compile_definitions(${target} PUBLIC SSL_OPENSSL)
-        target_link_libraries(${target} PUBLIC OpenSSL::SSL OpenSSL::Crypto)
-    elseif(SAMURAI_TLS_PROVIDER STREQUAL "GNUTLS")
-        target_compile_definitions(${target} PUBLIC SSL_GNUTLS)
-        target_link_libraries(${target} PUBLIC PkgConfig::GNUTLS)
-    endif()
 
     if(WIN32)
         target_link_libraries(${target} PUBLIC ws2_32 iphlpapi)
@@ -319,10 +323,6 @@ install(EXPORT samuraiTargets
     NAMESPACE samurai::
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/samurai)
 
-# Record the configuration so that consumers get the same PUBLIC definitions
-# and can resolve the same dependencies.
-set(SAMURAI_EXPORTED_TLS_PROVIDER "${SAMURAI_TLS_PROVIDER}")
-
 configure_package_config_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/cmake/samuraiConfig.cmake.in
     ${CMAKE_CURRENT_BINARY_DIR}/samuraiConfig.cmake
@@ -347,7 +347,8 @@ message(STATUS "Samurai ${PROJECT_VERSION} configured:")
 message(STATUS "  Build type      : ${CMAKE_BUILD_TYPE}")
 message(STATUS "  Shared library  : ${SAMURAI_BUILD_SHARED}")
 message(STATUS "  Static library  : ${SAMURAI_BUILD_STATIC}")
-message(STATUS "  TLS provider    : ${SAMURAI_TLS_PROVIDER}")
+message(STATUS "  TLS             : ${SAMURAI_TLS_NAME}")
+message(STATUS "  TLS versions    : 1.2 minimum, 1.3 preferred")
 message(STATUS "  DNS provider    : ${SAMURAI_DNS_PROVIDER}")
 message(STATUS "  Build tests     : ${SAMURAI_BUILD_TESTS}")
 if(SAMURAI_SANITIZE)

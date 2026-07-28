@@ -8,8 +8,6 @@
 #include <samurai/io/net/tlsfactory-openssl.h>
 #include <samurai/io/file.h>
 
-#ifdef SSL_OPENSSL
-
 #include <openssl/ssl.h>
 #include <openssl/crypto.h>
 #include <openssl/opensslv.h>
@@ -23,9 +21,18 @@
 #include <string.h>
 
 /*
- * OpenSSL 3.0 renamed this; the old name remains as a deprecated alias.
+ * The build requires OpenSSL 3.0 or LibreSSL 3.5, both of which negotiate
+ * TLS 1.3 whenever the peer offers it. A stack without it would silently top
+ * out at the 1.2 floor set in initialize().
  */
-#if OPENSSL_VERSION_NUMBER < 0x30000000L
+#ifndef TLS1_3_VERSION
+#error "TLS 1.3 support is required"
+#endif
+
+/*
+ * OpenSSL 3.0 renamed this. LibreSSL still has only the old name.
+ */
+#ifdef LIBRESSL_VERSION_NUMBER
 #define SSL_get1_peer_certificate SSL_get_peer_certificate
 #endif
 
@@ -114,11 +121,7 @@ bool Samurai::IO::Net::TlsFactory::getOwnCertificateSHA256(uint8_t* digest, size
 bool Samurai::IO::Net::TlsFactory::global_init()
 {
 	TlsFactory::priv_init();
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-	/* OpenSSL >= 1.1.0 initializes itself on first use. */
-	SSL_library_init();
-	SSL_load_error_strings();
-#endif
+	/* The library initializes itself on first use. */
 	return true;
 }
 
@@ -149,25 +152,13 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 
 	QDBG("Initializing OpenSSL with socket sd=%d", sd);
 
-	/* Since OpenSSL 1.1.0 the method accessors return a const pointer. */
+	/* The method accessors return a const pointer. */
 	const SSL_METHOD* method;
 
 	if (mode == Samurai::IO::Net::TlsFactory::TLS_OPERATE_CLIENT)
-	{
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
 		method = TLS_client_method();
-#else
-		method = SSLv23_client_method();
-#endif
-	}
 	else
-	{
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
 		method = TLS_server_method();
-#else
-		method = SSLv23_server_method();
-#endif
-	}
 
 	ctx = SSL_CTX_new(method);
 	ssl = 0;
@@ -180,13 +171,14 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 		return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
 	}
 
-	/* SSLv2/v3 and TLS 1.0/1.1 are obsolete and rejected by modern peers. */
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+	/*
+	 * SSLv2/v3 and TLS 1.0/1.1 are obsolete and rejected by modern peers, so
+	 * 1.2 is the floor. The ceiling is set explicitly rather than left at the
+	 * default so that a system configuration file carrying MaxProtocol cannot
+	 * quietly take TLS 1.3 away from us.
+	 */
 	SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
-#else
-	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 |
-	                         SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
-#endif
+	SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
 
 	const bool verify = !TlsFactory::allowUntrustedConnections();
 
@@ -219,14 +211,6 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 			return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
 		}
 	}
-#ifdef SSL_REQUIRE_CERTIFICATE
-	else
-	{
-			QERR("Certificate not found");
-			return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
-	}
-#endif
-
 
 	Samurai::IO::File* pkey = TlsFactory::getPrivateKey();
 	if (pkey && pkey->exists())
@@ -239,13 +223,6 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 			return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
 		}
 	}
-#ifdef SSL_REQUIRE_CERTIFICATE
-	else
-	{
-			QERR("Private key not found");
-			return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
-	}
-#endif
 
 	ssl = SSL_new(ctx);
 	if (!ssl)
@@ -261,7 +238,6 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 	 * certificate was issued for the host we asked for. Without this, any
 	 * peer holding any CA-signed certificate can impersonate any server.
 	 */
-#if OPENSSL_VERSION_NUMBER >= 0x10002000L
 	if (mode == Samurai::IO::Net::TlsFactory::TLS_OPERATE_CLIENT && !peer_name.empty())
 	{
 		X509_VERIFY_PARAM* param = SSL_get0_param(ssl);
@@ -291,7 +267,6 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 		     "Call TlsFactory::setPeerName() before initialize().");
 		return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
 	}
-#endif
 
 	SSL_set_fd(ssl, sd);
 	return Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
@@ -585,5 +560,3 @@ ssize_t Samurai::IO::Net::OpenSSL::write(const char* data, size_t length, enum S
 		}
 	}
 }
-
-#endif // SSL_OPENSSL

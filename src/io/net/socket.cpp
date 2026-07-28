@@ -13,7 +13,6 @@
 #include <samurai/io/net/socketevent.h>
 #include <samurai/io/net/socketmonitor.h>
 #include <samurai/io/net/tlsfactory.h>
-#include <samurai/io/net/tlsfactory-gnutls.h>
 #include <samurai/io/net/tlsfactory-openssl.h>
 
 #include <stdio.h>
@@ -596,18 +595,7 @@ void Samurai::IO::Net::Socket::toggleWriteNotifier(bool toggle) {
 bool Samurai::IO::Net::Socket::TLSInitialize(bool server) {
 	if (tls) return false;
 
-#ifdef SSL_GNUTLS
-	tls = new GnuTLS();
-#endif
-
-#ifdef SSL_OPENSSL
 	tls = new OpenSSL();
-#endif
-
-	if (!tls) {
-		QERR("No TLS provider available");
-		return false;
-	}
 
 	/* The name we asked for - not one derived from the connection - is the
 	   only thing a certificate can meaningfully be verified against. */

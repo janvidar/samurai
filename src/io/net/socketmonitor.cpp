@@ -14,10 +14,6 @@
 #include "socketmonitor-backend.h"
 
 #include <samurai/io/net/tlsfactory.h>
-#if !defined(SSL_GNUTLS) && !defined(SSL_OPENSSL)
-bool Samurai::IO::Net::TlsFactory::global_init() { return false; }
-bool Samurai::IO::Net::TlsFactory::global_deinit() {return false; }
-#endif
 
 /* FIXME: Must not initialize SSL and WSA for each SocketMonitor created! */
 
