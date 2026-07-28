@@ -95,7 +95,7 @@ void Samurai::Crypto::Digest::Tiger::reset()
 	result[0]= 0x0123456789ABCDEFULL;
 	result[1]= 0xFEDCBA9876543210ULL;
 	result[2]= 0xF096A5B4C3B2E187ULL;
-	memset(m_current_block, 0, m_block_size);
+	memset(m_current_block.data(), 0, m_block_size);
 	m_current_block_index = 0;
 	m_file_size = 0;
 	m_finalized = false;

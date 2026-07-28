@@ -7,6 +7,7 @@
 #define HAVE_SAMURAI_HASH_BASE_H
 
 #include <samurai/samurai.h>
+#include <vector>
 #include <samurai/crypto/digest/hashvalue.h>
 
 namespace Samurai {
@@ -87,7 +88,8 @@ class Hash {
 		const size_t m_size;
 		const size_t m_block_size;
 		
-		uint8_t* m_current_block;
+		/* Accumulates a block's worth of input before it is hashed. */
+		std::vector<uint8_t> m_current_block;
 		size_t   m_current_block_index;
 		uint64_t m_file_size;
 		

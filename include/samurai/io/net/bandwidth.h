@@ -21,8 +21,8 @@ class BandwidthManager {
 		BandwidthManager();
 		~BandwidthManager();
 
-		/* Releases raw pointers in its destructor, so the implicit copy
-		 * operations would release them a second time. */
+		/* A single instance accounts for the whole process; a copy would
+		 * silently count a subset of the traffic. */
 		BandwidthManager(const BandwidthManager&) = delete;
 		BandwidthManager& operator=(const BandwidthManager&) = delete;
 		

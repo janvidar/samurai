@@ -11,7 +11,9 @@
 Samurai::Crypto::Digest::Hash::Hash(size_t result_size, size_t block_size, bool big_bit_endian, bool big_byte_endian, size_t count_size) :
 	m_size(result_size),
 	m_block_size(block_size),
-	m_current_block(nullptr),
+	/* Sized from the constructor parameter, not the member, so this does not
+	   depend on the order the members are declared in. */
+	m_current_block(block_size),
 	m_current_block_index(0),
 	m_file_size(0),
 	m_big_bit_endian(big_bit_endian),
@@ -20,13 +22,9 @@ Samurai::Crypto::Digest::Hash::Hash(size_t result_size, size_t block_size, bool 
 	m_finalized_value(m_size),
 	m_count_size(count_size)
 {
-	m_current_block = new uint8_t[m_block_size];
 }
 
-Samurai::Crypto::Digest::Hash::~Hash()
-{
-	delete[] m_current_block;
-}
+Samurai::Crypto::Digest::Hash::~Hash() = default;
 
 void Samurai::Crypto::Digest::Hash::update(const void* data_, size_t length)
 {
@@ -47,7 +45,7 @@ void Samurai::Crypto::Digest::Hash::update(const void* data_, size_t length)
 		if (m_current_block_index == m_block_size)
 		{
 			m_current_block_index = 0;
-			hash(m_current_block, m_block_size);
+			hash(m_current_block.data(), m_block_size);
 		}
 	}
 	m_file_size += length;
@@ -64,13 +62,13 @@ void Samurai::Crypto::Digest::Hash::finalize()
 	
 	if (m_current_block_index >= m_block_size - m_count_size)
 	{
-		hash(m_current_block, m_block_size);
-		memset(m_current_block, 0, m_block_size);
+		hash(m_current_block.data(), m_block_size);
+		memset(m_current_block.data(), 0, m_block_size);
 	}
 	
 	finalize_count();
 	
-	hash(m_current_block, m_block_size);
+	hash(m_current_block.data(), m_block_size);
 	
 }
 
@@ -78,7 +76,7 @@ void Samurai::Crypto::Digest::Hash::finalize_count()
 {
 	if (m_block_size < 8) return;
 
-	uint8_t* pos = m_current_block + m_block_size - 8;
+	uint8_t* pos = m_current_block.data() + m_block_size - 8;
 
 	for (size_t j = 0; j < 8; ++j)
 	{
