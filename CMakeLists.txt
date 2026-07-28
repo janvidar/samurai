@@ -32,8 +32,25 @@ option(SAMURAI_SANITIZE
 
 # LeakSanitizer rides along with AddressSanitizer. Turn it off if the ptrace
 # restrictions on the host make stopping the world too slow to be useful.
+#
+# Darwin has no LeakSanitizer at all: asking for it there makes the process
+# print "detect_leaks is not supported on this platform" and abort before it
+# runs a single test, so a sanitized ctest run fails for that reason alone.
+if(APPLE)
+    set(SAMURAI_SANITIZE_LEAKS_DEFAULT OFF)
+else()
+    set(SAMURAI_SANITIZE_LEAKS_DEFAULT ON)
+endif()
+
 option(SAMURAI_SANITIZE_LEAKS
-    "Enable LeakSanitizer as well (requires SAMURAI_SANITIZE)" ON)
+    "Enable LeakSanitizer as well (requires SAMURAI_SANITIZE)"
+    ${SAMURAI_SANITIZE_LEAKS_DEFAULT})
+
+if(SAMURAI_SANITIZE AND SAMURAI_SANITIZE_LEAKS AND APPLE)
+    message(WARNING
+        "SAMURAI_SANITIZE_LEAKS is on, but Darwin has no LeakSanitizer; the "
+        "test run will abort on startup. Use 'leaks' or a Linux host instead.")
+endif()
 
 # The Makefile build had rules for both libsamurai.so and libsamurai.a, so
 # build both by default. They share a single compile pass.
