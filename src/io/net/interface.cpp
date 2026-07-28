@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <string.h>
 #include <samurai/samurai.h>
 #include <samurai/io/net/interface.h>
 #include <samurai/io/net/hardwareaddress.h>
@@ -331,15 +332,33 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_A
 #endif // SAMURAI_WINDOWS
 
 
-Samurai::IO::Net::NetworkInterface* Samurai::IO::Net::NetworkInterface::getInterface(const Samurai::IO::Net::InetAddress& addr)
+std::unique_ptr<Samurai::IO::Net::NetworkInterface> Samurai::IO::Net::NetworkInterface::getInterface(const Samurai::IO::Net::InetAddress& addr)
 {
-	(void) addr;
+	std::vector<std::unique_ptr<NetworkInterface>> interfaces;
+	if (!getInterfaces(interfaces)) return nullptr;
+
+	for (std::unique_ptr<NetworkInterface>& iface : interfaces)
+	{
+		const InetAddress* candidate = iface->getAddress();
+		if (candidate && *candidate == addr)
+			return std::move(iface);
+	}
 	return nullptr;
 }
 
-Samurai::IO::Net::NetworkInterface* Samurai::IO::Net::NetworkInterface::getInterface(const char* name)
+std::unique_ptr<Samurai::IO::Net::NetworkInterface> Samurai::IO::Net::NetworkInterface::getInterface(const char* name)
 {
-	(void) name;
+	if (!name) return nullptr;
+
+	std::vector<std::unique_ptr<NetworkInterface>> interfaces;
+	if (!getInterfaces(interfaces)) return nullptr;
+
+	for (std::unique_ptr<NetworkInterface>& iface : interfaces)
+	{
+		const char* candidate = iface->getName();
+		if (candidate && strcmp(candidate, name) == 0)
+			return std::move(iface);
+	}
 	return nullptr;
 }
 

@@ -66,6 +66,7 @@ set(SAMURAI_EXOTIC_INPUTS
     file.tcc
     hash_tiger.tcc
     inetaddress.tcc
+    interface.tcc
     misc.tcc
     sockets.tcc
     url.tcc)
