@@ -8,6 +8,7 @@
 #include <samurai/io/net/hardwareaddress.h>
 #include <samurai/io/net/inetaddress.h>
 #include <stdlib.h>
+#include <string>
 
 #ifdef SAMURAI_WINDOWS
 #include <iphlpapi.h>
@@ -63,11 +64,18 @@ class NetworkInterfaceWindows : public NetworkInterface
 		NetworkInterfaceWindows(PIP_ADAPTER_ADDRESSES info);
 #endif
 
+		/* The base implementations report nothing, so an interface that has a
+		 * name and an MTU has to hand them over itself. */
+		const char* getName() const;
+		interface_t getHandle() const;
+		int getMtu() const;
+
 	private:
-		interface_t ifnumber;
-		char* name;
-		int flags;
-		int mtu;
+		/* std::string rather than a strdup()ed char*, which nothing released.
+		 * m_flags belongs to the base class and is not redeclared here. */
+		std::string m_name;
+		interface_t m_ifnumber;
+		int m_mtu;
 };
 
 #endif // SAMURAI_WINDOWS
@@ -225,19 +233,34 @@ interface_t Samurai::IO::Net::NetworkInterfaceUnix::getHandle() const
 
 #ifdef SAMURAI_WINDOWS
 
+const char* Samurai::IO::Net::NetworkInterfaceWindows::getName() const
+{
+	return m_name.c_str();
+}
+
+interface_t Samurai::IO::Net::NetworkInterfaceWindows::getHandle() const
+{
+	return m_ifnumber;
+}
+
+int Samurai::IO::Net::NetworkInterfaceWindows::getMtu() const
+{
+	return m_mtu;
+}
+
 #ifdef USE_ADAPTER_INFO
 Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_INFO info)
 	: Samurai::IO::Net::NetworkInterface()
+	, m_name(info->Description ? info->Description : "")
+	, m_ifnumber((interface_t) info->Index)
+	, m_mtu(0)
 {
-	m_name = strdup(info->Description); // AdapterName
-	m_ifnumber = info->Index;
-
 	if (info->AddressLength == 6)
 	{
 		uint8_t hwaddr_bytes[6];
 		memcpy(hwaddr_bytes, info->Address, 6);
 		if (hwaddr_bytes[0] || hwaddr_bytes[1] || hwaddr_bytes[2] || hwaddr_bytes[3] || hwaddr_bytes[4] || hwaddr_bytes[5])
-			hwaddr = new Samurai::IO::Net::HardwareAddress(hwaddr_bytes);
+			m_hwaddr = new Samurai::IO::Net::HardwareAddress(hwaddr_bytes);
 	}
 
 	m_flags |= InterfaceEnabled;
@@ -245,22 +268,16 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_I
 	if (info->Type == MIB_IF_TYPE_PPP)        m_flags |= InterfacePointToPoint;
 	if (info->Type == MIB_IF_TYPE_ETHERNET)   m_flags |= (InterfaceBroadcast | InterfaceMulticast);
 
+	/* Only the first address of the adapter is represented, so the list is not
+	   walked; assigning inside a loop would leak all but the last anyway. */
 	PIP_ADDR_STRING ipstr = &info->IpAddressList;
-	while (ipstr)
+	if (ipstr)
 	{
-		char ip[16]   = {0, };
-		char mask[16] = {0, };
-
-		strcpy(ip, ipstr->IpAddress.String);
-		strcpy(mask, ipstr->IpMask.String);
-
-		printf("IP %s/%s (adapter: %d, %s)\n", ip, mask, ifnumber, name);
-		address = new Samurai::IO::Net::InetAddress(ip, Samurai::IO::Net::InetAddress::IPv4);
-		netmask = new Samurai::IO::Net::InetAddress(mask, Samurai::IO::Net::InetAddress::IPv4);
-		break;
-		ipstr = ipstr->Next;
+		m_address = new Samurai::IO::Net::InetAddress(ipstr->IpAddress.String,
+			Samurai::IO::Net::InetAddress::IPv4);
+		m_netmask = new Samurai::IO::Net::InetAddress(ipstr->IpMask.String,
+			Samurai::IO::Net::InetAddress::IPv4);
 	}
-	printf("\n");
 }
 
 
@@ -268,57 +285,56 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_I
 
 Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_ADDRESSES info)
 	: Samurai::IO::Net::NetworkInterface()
-
+	, m_name(info->AdapterName ? info->AdapterName : "")
+	, m_ifnumber((interface_t) info->IfIndex)
+	, m_mtu((int) info->Mtu)
 {
-	name = strdup(info->AdapterName); // AdapterName
-	ifnumber = info->IfIndex;
-
 	if (info->PhysicalAddressLength == 6)
 	{
 		uint8_t hwaddr_bytes[6];
 		memcpy(hwaddr_bytes, info->PhysicalAddress, 6);
 		if (hwaddr_bytes[0] || hwaddr_bytes[1] || hwaddr_bytes[2] || hwaddr_bytes[3] || hwaddr_bytes[4] || hwaddr_bytes[5])
-			hwaddr = new Samurai::IO::Net::HardwareAddress(hwaddr_bytes);
+			m_hwaddr = new Samurai::IO::Net::HardwareAddress(hwaddr_bytes);
 	}
-
-	mtu = info->Mtu;
 
 	if (info->OperStatus == IfOperStatusUp)
-		flags |= InterfaceEnabled;
+		m_flags |= InterfaceEnabled;
 
-	if (!info->Flags & IP_ADAPTER_NO_MULTICAST)
-		flags |= InterfaceMulticast;
+	/* The negation has to apply to the masked bit, not to Flags: '!' binds
+	   tighter than '&', so testing !Flags & BIT asks whether Flags is zero. */
+	if (!(info->Flags & IP_ADAPTER_NO_MULTICAST))
+		m_flags |= InterfaceMulticast;
 
 	if (info->IfType == IF_TYPE_SOFTWARE_LOOPBACK)
-		flags |= InterfaceLoopback;
+		m_flags |= InterfaceLoopback;
 
 	if (info->IfType == IF_TYPE_PPP || info->IfType == IF_TYPE_TUNNEL)
-		flags |= InterfacePointToPoint;
+		m_flags |= InterfacePointToPoint;
 
-	if (info->IfType == IF_TYPE_ETHERNET_CSMACD || info->IfType == IF_TYPE_IEE80211)
+	if (info->IfType == IF_TYPE_ETHERNET_CSMACD || info->IfType == IF_TYPE_IEEE80211)
 	{
-		flags |= InterfaceBroadcast;
+		m_flags |= InterfaceBroadcast;
 	}
 
-	PIP_ADAPTER_UNICAST_ADDRESSES ip = info->FirstUnicastAddress;
-	struct sockaddr* sa = (struct sockaddr*) info->Address->lpSockaddr;
-	struct sockaddr_in* addr4  = (struct sockaddr_in*) sa;
-	struct sockaddr_in6* addr6 = (struct sockaddr_in6*) sa;
+	/* The address lives on the adapter's first unicast entry; IP_ADAPTER_ADDRESSES
+	   itself has no sockaddr. */
+	PIP_ADAPTER_UNICAST_ADDRESS unicast = info->FirstUnicastAddress;
+	struct sockaddr* sa = unicast ? unicast->Address.lpSockaddr : 0;
 
-	if (sa->sa_family == AF_INET || sa->sa_family == AF_INET6)
+	if (sa && sa->sa_family == AF_INET)
 	{
-		address = new Samurai::IO::Net::InetAddress();
-		if (sa->sa_family == AF_INET)
-		{
-			address->setRawAddress(addr4.sin_addr, sizeof(addr4.sin_addr), Samurai::IO::Net::InetAddress::IPv4);
-		}
-		else
-		{
-			address->setRawAddress(addr6.sin6_addr, sizeof(addr6.sin6_addr), Samurai::IO::Net::InetAddress::IPv6);
-		}
+		struct sockaddr_in* addr4 = (struct sockaddr_in*) sa;
+		m_address = new Samurai::IO::Net::InetAddress();
+		m_address->setRawAddress(&addr4->sin_addr, sizeof(addr4->sin_addr),
+			Samurai::IO::Net::InetAddress::IPv4);
 	}
-	// netmask = new Samurai::IO::Net::InetAddress(info->IpAddressList.IpMask.String);
-	// netmask
+	else if (sa && sa->sa_family == AF_INET6)
+	{
+		struct sockaddr_in6* addr6 = (struct sockaddr_in6*) sa;
+		m_address = new Samurai::IO::Net::InetAddress();
+		m_address->setRawAddress(&addr6->sin6_addr, sizeof(addr6->sin6_addr),
+			Samurai::IO::Net::InetAddress::IPv6);
+	}
 }
 #endif // USE_ADAPTER_INFO
 #endif // SAMURAI_WINDOWS
@@ -385,17 +401,21 @@ bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<NetworkInterf
 	return true;
 #else // USE_ADAPTER_INFO
 
-	DWORD flags = GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_INCLUDE_PREFIX | GAA_SKIP_DNS_SERVER | GAA_FLAG_INCLUDE_ALL_INTERFACES;
+	DWORD flags = GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_INCLUDE_PREFIX | GAA_FLAG_SKIP_DNS_SERVER | GAA_FLAG_INCLUDE_ALL_INTERFACES;
 	PIP_ADAPTER_ADDRESSES adr = 0;
 	PIP_ADAPTER_ADDRESSES ptr = 0;
 	DWORD bufsize = sizeof(IP_ADAPTER_ADDRESSES);
 	adr = (PIP_ADAPTER_ADDRESSES) malloc(bufsize);
+	if (!adr) return false;
 
 	ret = GetAdaptersAddresses(AF_UNSPEC, flags, 0, adr, &bufsize);
 	if (ret == ERROR_BUFFER_OVERFLOW)
 	{
+		/* bufsize now holds the length the call wants, which is what the
+		   second allocation has to ask for. */
 		free(adr);
-		adr = (PIP_ADAPTER_ADDRESSES) malloc(&bufsize);
+		adr = (PIP_ADAPTER_ADDRESSES) malloc(bufsize);
+		if (!adr) return false;
 		ret = GetAdaptersAddresses(AF_UNSPEC, flags, 0, adr, &bufsize);
 	}
 
@@ -415,12 +435,11 @@ bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<NetworkInterf
 			ptr = ptr->Next;
 		}
 		free(adr);
-		return true:
+		return true;
 	}
 
 	free(adr);
 	return false;
-);
 
 #endif // USE_ADAPTER_INFO
 #endif // SAMURAI_WINDOWS
