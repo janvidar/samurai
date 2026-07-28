@@ -24,25 +24,11 @@ Samurai::IO::Net::DNS::Message::Message(Samurai::IO::Buffer* buffer_) {
  * The buffer is borrowed from whoever handed it to the constructor, but every
  * record, question and name server decoded out of it belongs to this message.
  */
-Samurai::IO::Net::DNS::Message::~Message() {
-	for (Question* question : questions)
-		delete question;
+Samurai::IO::Net::DNS::Message::~Message() = default;
 
-	for (ResourceRecord* record : records)
-		delete record;
-
-	for (ResourceRecord* record : nameservers)
-		delete record;
-
-	for (ResourceRecord* record : additional)
-		delete record;
-}
-
-std::vector<Samurai::IO::Net::DNS::ResourceRecord*> Samurai::IO::Net::DNS::Message::releaseRecords()
+std::vector<std::unique_ptr<Samurai::IO::Net::DNS::ResourceRecord>> Samurai::IO::Net::DNS::Message::releaseRecords()
 {
-	std::vector<ResourceRecord*> released;
-	released.swap(records);
-	return released;
+	return std::move(records);
 }
 
 bool Samurai::IO::Net::DNS::Message::isResponse()
@@ -321,7 +307,7 @@ Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode()
 			offset += record->rdLength;
 		}
 
-		records.push_back(record.release());
+		records.push_back(std::move(record));
 	}
 
 	return ResponseCode::Ok;
@@ -335,12 +321,12 @@ Samurai::IO::Net::DNS::ResourceRecord* Samurai::IO::Net::DNS::Message::getRecord
 	if (!name) return nullptr;
 	
 	QDBG("Records: %d\n", (int) records.size());
-	for (Samurai::IO::Net::DNS::ResourceRecord* record : records) {
+	for (const std::unique_ptr<ResourceRecord>& record : records) {
 		QDBG("Record: '%s' == '%s', %d\n", record->name.toString().c_str(), name->toString().c_str(), (int) record->type_class.rr_type);
 		if (record->name == *name /*&& record->type_class.rr_type == (uint16_t) Type::A*/)
 		{
 			QDBG("Match!\n");
-			return record;
+			return record.get();
 		}
 	}
 	return nullptr;
@@ -349,7 +335,7 @@ Samurai::IO::Net::DNS::ResourceRecord* Samurai::IO::Net::DNS::Message::getRecord
 Samurai::IO::Net::DNS::ResourceRecord* Samurai::IO::Net::DNS::Message::getRecord(size_t index)
 {
 	if (index >= records.size() || !records.size()) return nullptr;
-	return records[index];
+	return records[index].get();
 }
 
 
