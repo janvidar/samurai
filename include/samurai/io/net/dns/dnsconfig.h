@@ -17,10 +17,17 @@ namespace DNS {
 
 class ResolveConfiguration {
 	public:
-		ResolveConfiguration();
+		ResolveConfiguration(const char* resolv_conf = "/etc/resolv.conf");
 		virtual ~ResolveConfiguration();
 
+		/**
+		 * The configured name server to use for the given attempt, or 0 if
+		 * none could be read from the configuration. Callers must check:
+		 * a machine with no resolv.conf, or one listing only addresses that
+		 * fail to parse, has nowhere to send a query.
+		 */
 		Samurai::IO::Net::InetAddress* getNameServer(size_t num_try = 0);
+		size_t getNameServerCount() const { return num_nameservers; }
 		void skipNameServer();
 		char* getNameSearch();
 
@@ -32,7 +39,8 @@ class ResolveConfiguration {
 		bool   isDebug() const;
 
 	protected:
-		void parse();
+		void parse(const char* resolv_conf);
+		void parseLine(char* line);
 		void addNameServer(const char* server);
 
 	protected:
