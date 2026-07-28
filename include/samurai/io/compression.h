@@ -21,6 +21,7 @@ class BZip2Compressor final : public Samurai::IO::Codec {
 		~BZip2Compressor() override;
 		bool exec(char* input, size_t& input_len, char* output, size_t& output_len) override;
 		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec) override;
+		Status step(char* input, size_t& input_len, char* output, size_t& output_len) override;
 
 		/* Owns a zlib/bzip2 stream: copying would free it twice. */
 		BZip2Compressor(const BZip2Compressor&) = delete;
@@ -38,6 +39,7 @@ class BZip2Decompressor final : public Samurai::IO::Codec {
 		~BZip2Decompressor() override;
 		bool exec(char* input, size_t& input_len, char* output, size_t& output_len) override;
 		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec) override;
+		Status step(char* input, size_t& input_len, char* output, size_t& output_len) override;
 
 		/* Owns a zlib/bzip2 stream: copying would free it twice. */
 		BZip2Decompressor(const BZip2Decompressor&) = delete;
@@ -55,6 +57,7 @@ class GzipCompressor final : public Samurai::IO::Codec {
 		~GzipCompressor() override;
 		bool exec(char* input, size_t& input_len, char* output, size_t& output_len) override;
 		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec) override;
+		Status step(char* input, size_t& input_len, char* output, size_t& output_len) override;
 
 		/* Owns a zlib/bzip2 stream: copying would free it twice. */
 		GzipCompressor(const GzipCompressor&) = delete;
@@ -72,6 +75,7 @@ class GzipDecompressor final : public Samurai::IO::Codec {
 		~GzipDecompressor() override;
 		bool exec(char* input, size_t& input_len, char* output, size_t& output_len) override;
 		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec) override;
+		Status step(char* input, size_t& input_len, char* output, size_t& output_len) override;
 
 		/* Owns a zlib/bzip2 stream: copying would free it twice. */
 		GzipDecompressor(const GzipDecompressor&) = delete;

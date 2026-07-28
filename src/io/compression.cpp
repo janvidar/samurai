@@ -295,3 +295,28 @@ bool Samurai::IO::GzipDecompressor::exec(char* input, size_t& input_len,
 	ec = gz_error(m_last_status);
 	return false;
 }
+
+
+Samurai::IO::Codec::Status Samurai::IO::BZip2Compressor::step(char* input, size_t& input_len, char* output, size_t& output_len)
+{
+	if (!exec(input, input_len, output, output_len)) return Status::Error;
+	return m_last_status == BZ_STREAM_END ? Status::StreamEnd : Status::Ok;
+}
+
+Samurai::IO::Codec::Status Samurai::IO::BZip2Decompressor::step(char* input, size_t& input_len, char* output, size_t& output_len)
+{
+	if (!exec(input, input_len, output, output_len)) return Status::Error;
+	return m_last_status == BZ_STREAM_END ? Status::StreamEnd : Status::Ok;
+}
+
+Samurai::IO::Codec::Status Samurai::IO::GzipCompressor::step(char* input, size_t& input_len, char* output, size_t& output_len)
+{
+	if (!exec(input, input_len, output, output_len)) return Status::Error;
+	return m_last_status == Z_STREAM_END ? Status::StreamEnd : Status::Ok;
+}
+
+Samurai::IO::Codec::Status Samurai::IO::GzipDecompressor::step(char* input, size_t& input_len, char* output, size_t& output_len)
+{
+	if (!exec(input, input_len, output, output_len)) return Status::Error;
+	return m_last_status == Z_STREAM_END ? Status::StreamEnd : Status::Ok;
+}
