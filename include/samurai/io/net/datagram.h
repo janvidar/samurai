@@ -10,6 +10,7 @@
 #include <time.h>
 #include <samurai/io/net/socketbase.h>
 #include <memory>
+#include <span>
 #include <samurai/io/net/socketevent.h>
 #include <samurai/io/net/inetaddress.h>
 
@@ -39,8 +40,11 @@ class DatagramPacket {
 		
 		int peek(uint8_t*, size_t);
 		int read(uint8_t*, size_t);
+		int peek(std::span<uint8_t> out) { return peek(out.data(), out.size()); }
+		int read(std::span<uint8_t> out) { return read(out.data(), out.size()); }
 
 		void setData(const uint8_t* buf, size_t len);
+		void setData(std::span<const uint8_t> data) { setData(data.data(), data.size()); }
 		void clear();
 
 		void setAddress(SocketAddress*);

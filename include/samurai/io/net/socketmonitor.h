@@ -12,6 +12,7 @@
 #include <samurai/samurai.h>
 #include <samurai/io/net/socketglue.h>
 #include <samurai/bitmask.h>
+#include <string_view>
 
 namespace Samurai {
 namespace IO {
@@ -167,9 +168,9 @@ class SocketMonitor
 		void dispatchBufferedInput();
 
 	protected:
-		SocketMonitor(const char* name);
+		explicit SocketMonitor(std::string_view name);
 		static SocketMonitor* socket_monitor;
-		const char* name;
+		std::string_view name;
 
 		std::map<socket_t, std::weak_ptr<SocketBase> > registry;
 };

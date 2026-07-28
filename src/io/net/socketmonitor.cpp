@@ -18,7 +18,7 @@
 
 /* FIXME: Must not initialize SSL and WSA for each SocketMonitor created! */
 
-Samurai::IO::Net::SocketMonitor::SocketMonitor(const char* name_) : name(name_)
+Samurai::IO::Net::SocketMonitor::SocketMonitor(std::string_view name_) : name(name_)
 {
 /* NOTE: no socket call works on Windows until WSAStartup() has run. */
 #ifdef SAMURAI_WINSOCK
@@ -186,7 +186,7 @@ bool Samurai::IO::Net::SocketMonitor::setSocketMonitor(Samurai::IO::Net::SocketM
 	
 	socket_monitor = monitor;
 	
-	QDBG("SocketMonitor: Using %s backend", monitor->name);
+	QDBG("SocketMonitor: Using %.*s backend", (int) monitor->name.size(), monitor->name.data());
 	return true;
 }
 

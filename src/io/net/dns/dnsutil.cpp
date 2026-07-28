@@ -8,8 +8,11 @@
 #include <string>
 
 // FIXME: Handle "_" (underscore) correctly.
-bool Samurai::IO::Net::DNS::Validator::isValidLabel(const char* buf, size_t len)
+bool Samurai::IO::Net::DNS::Validator::isValidLabel(std::string_view label)
 {
+	const char* buf = label.data();
+	const size_t len = label.size();
+
 	if (!buf || !len) return false;
 
 	for (size_t n = 0; n < len; n++)
@@ -19,8 +22,11 @@ bool Samurai::IO::Net::DNS::Validator::isValidLabel(const char* buf, size_t len)
 }
 
 
-bool Samurai::IO::Net::DNS::Validator::isValidName(const char* buf, size_t len)
+bool Samurai::IO::Net::DNS::Validator::isValidName(std::string_view name)
 {
+	const char* buf = name.data();
+	const size_t len = name.size();
+
 	if (!buf || !len) return false;
 
 	bool period = true; // cannot start with a period, such as ".www.example.com"
@@ -74,7 +80,7 @@ Samurai::IO::Net::DNS::Label::~Label()
 bool Samurai::IO::Net::DNS::Label::isValid()
 {
 	if (size == 0 || size > DNS_LABEL_SIZE) return false;
-	return Samurai::IO::Net::DNS::Validator::isValidLabel((const char*) name, (size_t) size);
+	return Samurai::IO::Net::DNS::Validator::isValidLabel(std::string_view(name, size));
 }
 
 
@@ -147,7 +153,7 @@ int Samurai::IO::Net::DNS::Name::split() {
 
 bool Samurai::IO::Net::DNS::Name::isValid() {
 	if (countParts() == 0) return false;
-	return Samurai::IO::Net::DNS::Validator::isValidName((const char*) name, size);
+	return Samurai::IO::Net::DNS::Validator::isValidName(std::string_view(name, size));
 }
 
 
