@@ -68,6 +68,7 @@ set(SAMURAI_EXOTIC_INPUTS
     inetaddress.tcc
     interface.tcc
     misc.tcc
+    socketmonitor.tcc
     sockets.tcc
     tls.tcc
     url.tcc)
@@ -114,6 +115,8 @@ add_executable(autotest ${SAMURAI_EXOTIC_GENERATED})
 
 target_include_directories(autotest PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/exotic   # the .tcc files are #included by name
+    ${PROJECT_SOURCE_DIR}/src            # socketmonitor.tcc drives the backends,
+                                         # which are declared in a private header
     ${SAMURAI_EXOTIC_HEADER_DIR})
 
 # file.tcc reaches its data/ fixtures through this directory rather than by a
