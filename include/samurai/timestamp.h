@@ -7,6 +7,7 @@
 #define HAVE_SYSTEM_TIMESTAMP_H
 
 #include <time.h>
+#include <string>
 
 namespace Samurai {
 
@@ -32,7 +33,15 @@ class TimeStamp {
 		/**
 		 * Returns a printable timestamp
 		 */
-		const char* getTime(const char* format = nullptr);
+		/**
+		 * Render the timestamp, with strftime() syntax when a format is given
+		 * and ctime()'s default otherwise.
+		 *
+		 * Returns the string rather than a pointer into a shared buffer: the
+		 * previous form wrote into a function-local static (and ctime()'s own),
+		 * so two calls in one expression both yielded the same text.
+		 */
+		std::string getTime(const char* format = nullptr) const;
 		
 		
 		/**
