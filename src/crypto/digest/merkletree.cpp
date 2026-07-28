@@ -162,16 +162,16 @@ void Samurai::Crypto::Digest::MerkleTree::setLeavesLTR(Samurai::IO::Buffer& buff
 	
 	Samurai::Crypto::Digest::HashValue value(leaf_size);
 	
-	uint8_t* buf = new uint8_t[size()];
+	std::vector<uint8_t> buf(size());
 	for (size_t n = 0; n < leaves; n++)
 	{
-		buffer.pop((char*) buf, n*leaf_size, leaf_size);
-		value.setData(buf);
-		
-		MerkleNode* node = new MerkleNode(&value);
-		m_nodes->add(node);
+		buffer.pop((char*) buf.data(), n*leaf_size, leaf_size);
+		value.setData(buf.data());
+
+		/* Owned by the tree, which releases the stack's nodes in
+		   deleteNodes(); the stack itself holds them without owning them. */
+		m_nodes->add(new MerkleNode(&value));
 	}
-	delete[] buf;
 	m_count = file_size;
 }
 
@@ -186,16 +186,14 @@ void Samurai::Crypto::Digest::MerkleTree::setLeavesRTL(Samurai::IO::Buffer& buff
 	
 	Samurai::Crypto::Digest::HashValue value(leaf_size);
 	
-	uint8_t* buf = new uint8_t[size()];
+	std::vector<uint8_t> buf(size());
 	for (size_t n = leaves; n > 0; n--)
 	{
-		buffer.pop((char*) buf, ((n-1)*leaf_size), leaf_size);
-		value.setData(buf);
-		
-		MerkleNode* node = new MerkleNode(&value);
-		m_nodes->add(node);
+		buffer.pop((char*) buf.data(), ((n-1)*leaf_size), leaf_size);
+		value.setData(buf.data());
+
+		m_nodes->add(new MerkleNode(&value));
 	}
-	delete[] buf;
 	m_count = file_size;
 }
 
