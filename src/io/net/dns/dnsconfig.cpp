@@ -106,7 +106,7 @@ void Samurai::IO::Net::DNS::ResolveConfiguration::parseLine(char* line)
 		if (strstr(line, "attempts:")) {
 			char* pos = &(strstr(line, "attempts:"))[9];
 			if (strlen(pos)) {
-				int n = quickdc_atoi(pos);
+				int n = samurai_atoi(pos);
 				if (n > 0) option_attempts = (size_t) n;
 			}
 		}
@@ -114,7 +114,7 @@ void Samurai::IO::Net::DNS::ResolveConfiguration::parseLine(char* line)
 		if (strstr(line, "timeout:")) {
 			char* pos = &(strstr(line, "timeout:"))[8];
 			if (strlen(pos)) {
-				int n = quickdc_atoi(pos);
+				int n = samurai_atoi(pos);
 				if (n > 0) option_timeout = (size_t) n;
 			}
 		}
@@ -122,7 +122,7 @@ void Samurai::IO::Net::DNS::ResolveConfiguration::parseLine(char* line)
 		if (strstr(line, "ndots:")) {
 			char* pos = &(strstr(line, "ndots:"))[6];
 			if (strlen(pos)) {
-				int n = quickdc_atoi(pos);
+				int n = samurai_atoi(pos);
 				if (n > 0) option_ndots = (size_t) n;
 			}
 		}

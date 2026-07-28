@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const char* quickdc_skip_ws_sign(const char* value, bool* negative) {
+static const char* samurai_skip_ws_sign(const char* value, bool* negative) {
 	*negative = false;
 	if (!value) return 0;
 
@@ -26,9 +26,9 @@ static const char* quickdc_skip_ws_sign(const char* value, bool* negative) {
  * A very simple string to (64 bit) integer converter.
  * Stops at the first character that is not a digit. Overflow saturates.
  */
-int64_t quickdc_atoll(const char* value) {
+int64_t samurai_atoll(const char* value) {
 	bool negative = false;
-	const char* p = quickdc_skip_ws_sign(value, &negative);
+	const char* p = samurai_skip_ws_sign(value, &negative);
 	if (!p) return 0;
 
 	uint64_t val = 0;
@@ -50,9 +50,9 @@ int64_t quickdc_atoll(const char* value) {
 /**
  * A very simple string to (64 bit) integer converter.
  */
-uint64_t quickdc_atoull(const char* value) {
+uint64_t samurai_atoull(const char* value) {
 	bool negative = false;
-	const char* p = quickdc_skip_ws_sign(value, &negative);
+	const char* p = samurai_skip_ws_sign(value, &negative);
 	if (!p || negative) return 0;
 
 	uint64_t val = 0;
@@ -67,14 +67,14 @@ uint64_t quickdc_atoull(const char* value) {
 /**
  * A very simple string to (64 bit) integer converter.
  */
-int quickdc_atoi(const char* value) {
-	const int64_t val = quickdc_atoll(value);
+int samurai_atoi(const char* value) {
+	const int64_t val = samurai_atoll(value);
 	if (val > 2147483647LL)  return 2147483647;
 	if (val < -2147483648LL) return (-2147483647 - 1);
 	return (int) val;
 }
 
-unsigned int quickdc_abs(int n) {
+unsigned int samurai_abs(int n) {
 	return (n < 0) ? (0u - (unsigned int) n) : (unsigned int) n;
 }
 
@@ -93,7 +93,7 @@ char *strndup(const char *value, size_t len) {
 #endif
 
 #ifdef SAMURAI_OS_WINDOWS
-char* quickdc_strcasestr(const char* haystack, const char* needle) {
+char* samurai_strcasestr(const char* haystack, const char* needle) {
 	if (!haystack || !needle) return 0;
 
 	const size_t nlength = strlen(needle);
@@ -117,7 +117,7 @@ uint16_t Samurai::Util::Convert::to_uint16(const std::string& str)
 	for (std::string::const_iterator it = str.begin(); it != str.end(); ++it)
 		if (*it < '0' || *it > '9') return 0;
 
-	const int64_t n = quickdc_atoll(str.c_str());
+	const int64_t n = samurai_atoll(str.c_str());
 	if (n < 0 || n > 65535) return 0;
 	return (uint16_t) n;
 }

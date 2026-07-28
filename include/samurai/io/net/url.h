@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_URL_H
-#define HAVE_QUICKDC_URL_H
+#ifndef HAVE_SAMURAI_URL_H
+#define HAVE_SAMURAI_URL_H
 
 #include <string>
 #include <samurai/io/net/inetaddress.h>
@@ -62,5 +62,5 @@ class URL {
 }
 }
 
-#endif // HAVE_QUICKDC_URL_H
+#endif // HAVE_SAMURAI_URL_H
 

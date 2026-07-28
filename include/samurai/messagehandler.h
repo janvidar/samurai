@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_MESSAGE_HANDLER_H
-#define HAVE_QUICKDC_MESSAGE_HANDLER_H
+#ifndef HAVE_SAMURAI_MESSAGE_HANDLER_H
+#define HAVE_SAMURAI_MESSAGE_HANDLER_H
 
 #include <deque>
 #include <vector>
@@ -86,4 +86,4 @@ class MessageHandler {
 
 } // namespace
 
-#endif // HAVE_QUICKDC_MESSAGE_HANDLER_H
+#endif // HAVE_SAMURAI_MESSAGE_HANDLER_H

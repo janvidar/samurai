@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_DNSRESOLVER_FORKED_H
-#define HAVE_QUICKDC_DNSRESOLVER_FORKED_H
+#ifndef HAVE_SAMURAI_DNSRESOLVER_FORKED_H
+#define HAVE_SAMURAI_DNSRESOLVER_FORKED_H
 
 #include <samurai/io/net/dns/resolver.h>
 
@@ -36,4 +36,4 @@ class ForkResolver : public Resolver {
 
 #endif // SAMURAI_POSIX
 
-#endif // HAVE_QUICKDC_DNSRESOLVER_FORKED_H
+#endif // HAVE_SAMURAI_DNSRESOLVER_FORKED_H

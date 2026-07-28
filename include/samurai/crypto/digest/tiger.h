@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_HASH_TIGER_H
-#define HAVE_QUICKDC_HASH_TIGER_H
+#ifndef HAVE_SAMURAI_HASH_TIGER_H
+#define HAVE_SAMURAI_HASH_TIGER_H
 
 #include <samurai/samurai.h>
 #include <samurai/crypto/digest/hash.h>
@@ -45,5 +45,5 @@ class Tiger : public Hash {
 
 
 
-#endif // HAVE_QUICKDC_HASH_TIGER_H
+#endif // HAVE_SAMURAI_HASH_TIGER_H
 

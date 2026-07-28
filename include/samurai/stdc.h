@@ -23,20 +23,20 @@
 #ifdef SAMURAI_OS_WINDOWS
 
 extern "C" char* strndup(const char* s, size_t n);
-extern "C" char* quickdc_strcasestr(const char* haystack, const char* needle);
+extern "C" char* samurai_strcasestr(const char* haystack, const char* needle);
 
 #define strcasecmp  _stricmp
 #define strncasecmp _strnicmp
 #define strdup      _strdup
-#define strcasestr  quickdc_strcasestr
+#define strcasestr  samurai_strcasestr
 
 #endif // SAMURAI_OS_WINDOWS
 
-extern "C" int64_t quickdc_atoll(const char* value);
-extern "C" uint64_t quickdc_atoull(const char* value);
-extern "C" int quickdc_atoi(const char* value);
+extern "C" int64_t samurai_atoll(const char* value);
+extern "C" uint64_t samurai_atoull(const char* value);
+extern "C" int samurai_atoi(const char* value);
 
-extern "C" unsigned int quickdc_abs(int n);
+extern "C" unsigned int samurai_abs(int n);
 
 namespace Samurai {
 namespace Util {
@@ -51,7 +51,7 @@ class Convert
 /*		
 		{
 			int n = 0;
-			n = quickdc_atoi(str.c_str());
+			n = samurai_atoi(str.c_str());
 			if (n < 0 || n > 65535) return 0;
 			return (uint16_t) n;
 		}

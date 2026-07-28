@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_SOCKET_PORTABLE_WINSOCK2_H
-#define HAVE_QUICKDC_SOCKET_PORTABLE_WINSOCK2_H
+#ifndef HAVE_SAMURAI_SOCKET_PORTABLE_WINSOCK2_H
+#define HAVE_SAMURAI_SOCKET_PORTABLE_WINSOCK2_H
 
 /*
  * See Microsoft's reference on Winsock2:
@@ -70,5 +70,5 @@ typedef int interface_t;
 #define ESTALE          WSAESTALE
 #define EREMOTE         WSAEREMOTE
 
-#endif // HAVE_QUICKDC_SOCKET_PORTABLE_WINSOCK2_H
+#endif // HAVE_SAMURAI_SOCKET_PORTABLE_WINSOCK2_H
 

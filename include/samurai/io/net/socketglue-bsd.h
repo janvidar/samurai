@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_SOCKET_PORTABLE_BSDSOCKETS_H
-#define HAVE_QUICKDC_SOCKET_PORTABLE_BSDSOCKETS_H
+#ifndef HAVE_SAMURAI_SOCKET_PORTABLE_BSDSOCKETS_H
+#define HAVE_SAMURAI_SOCKET_PORTABLE_BSDSOCKETS_H
 
 #include <samurai/samurai.h>
 
@@ -37,6 +37,6 @@
 typedef int socket_t;
 typedef unsigned int interface_t;
 
-#endif // HAVE_QUICKDC_SOCKET_PORTABLE_BSDSOCKETS_H
+#endif // HAVE_SAMURAI_SOCKET_PORTABLE_BSDSOCKETS_H
 
 

@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_COMPRESSION_IO_H
-#define HAVE_QUICKDC_COMPRESSION_IO_H
+#ifndef HAVE_SAMURAI_COMPRESSION_IO_H
+#define HAVE_SAMURAI_COMPRESSION_IO_H
 
 #include <samurai/io/codec.h>
 
@@ -81,4 +81,4 @@ class GzipDecompressor : public Samurai::IO::Codec {
 }
 }
 
-#endif // HAVE_QUICKDC_COMPRESSION_IO_H
+#endif // HAVE_SAMURAI_COMPRESSION_IO_H

@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_MULTICAST_SOCKET_H
-#define HAVE_QUICKDC_MULTICAST_SOCKET_H
+#ifndef HAVE_SAMURAI_MULTICAST_SOCKET_H
+#define HAVE_SAMURAI_MULTICAST_SOCKET_H
 
 #include <sys/types.h>
 #include <samurai/io/net/socketbase.h>
@@ -95,6 +95,6 @@ namespace Samurai {
 	}
 }
 
-#endif // HAVE_QUICKDC_MULTICAST_SOCKET_H
+#endif // HAVE_SAMURAI_MULTICAST_SOCKET_H
 
 

@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_SERVERSOCKET_H
-#define HAVE_QUICKDC_SERVERSOCKET_H
+#ifndef HAVE_SAMURAI_SERVERSOCKET_H
+#define HAVE_SAMURAI_SERVERSOCKET_H
 
 #include <samurai/samurai.h>
 #include <samurai/io/net/socketbase.h>
@@ -82,4 +82,4 @@ class ServerSocket : public SocketBase {
 }
 }
 
-#endif // HAVE_QUICKDC_SERVERSOCKET_H
+#endif // HAVE_SAMURAI_SERVERSOCKET_H

@@ -2,8 +2,8 @@
  * Copyright (C) 2001-2008 Jan Vidar Krey, janvidar@extatic.org
  * See the file "COPYING" for licensing details.
  */
-#ifndef HAVE_QUICKDC_SOCKET_PORTABLE_H
-#define HAVE_QUICKDC_SOCKET_PORTABLE_H
+#ifndef HAVE_SAMURAI_SOCKET_PORTABLE_H
+#define HAVE_SAMURAI_SOCKET_PORTABLE_H
 
 #include <samurai/samurai.h>
 
@@ -75,6 +75,6 @@ namespace Samurai {
 }
 
 
-#endif // HAVE_QUICKDC_SOCKET_PORTABLE_H
+#endif // HAVE_SAMURAI_SOCKET_PORTABLE_H
 
 

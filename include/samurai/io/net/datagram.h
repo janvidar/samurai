@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_DATAGRAM_SOCKET_H
-#define HAVE_QUICKDC_DATAGRAM_SOCKET_H
+#ifndef HAVE_SAMURAI_DATAGRAM_SOCKET_H
+#define HAVE_SAMURAI_DATAGRAM_SOCKET_H
 
 #include <sys/types.h>
 #include <time.h>
@@ -131,4 +131,4 @@ class DatagramSocket : public SocketBase {
 }
 }
 
-#endif // HAVE_QUICKDC_DATAGRAM_SOCKET_H
+#endif // HAVE_SAMURAI_DATAGRAM_SOCKET_H

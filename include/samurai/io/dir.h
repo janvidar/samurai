@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_DIRECTORY_H
-#define HAVE_QUICKDC_DIRECTORY_H
+#ifndef HAVE_SAMURAI_DIRECTORY_H
+#define HAVE_SAMURAI_DIRECTORY_H
 
 #include <samurai/samurai.h>
 
@@ -69,4 +69,4 @@ class Directory {
 }
 }
 
-#endif // HAVE_QUICKDC_DIRECTORY_H
+#endif // HAVE_SAMURAI_DIRECTORY_H

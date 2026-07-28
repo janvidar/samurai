@@ -51,7 +51,7 @@ EXO_TEST(file_4, {
 });
 
 EXO_TEST(file_5, {
-	Samurai::IO::File f(PATH_PREFIX "//home////.jalla////../janv/../janv/../janvidar/.quickdc//..");  // expecting: /home/janvidar
+	Samurai::IO::File f(PATH_PREFIX "//home////.jalla////../janv/../janv/../janvidar/.samurai//..");  // expecting: /home/janvidar
 	return f.getName() == PATH_PREFIX "/home/janvidar";
 });
 

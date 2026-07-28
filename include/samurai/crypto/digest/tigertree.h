@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_TIGER_TREE_H
-#define HAVE_QUICKDC_TIGER_TREE_H
+#ifndef HAVE_SAMURAI_TIGER_TREE_H
+#define HAVE_SAMURAI_TIGER_TREE_H
 
 /* (PD) 2001 The Bitzi Corporation
  * Please see file COPYING or http://bitzi.com/publicdomain 
@@ -45,4 +45,4 @@ extern "C" {
 	void tt_copy(TT_CONTEXT* dest, TT_CONTEXT* src);
 }
 
-#endif // HAVE_QUICKDC_TIGER_TREE_H
+#endif // HAVE_SAMURAI_TIGER_TREE_H
