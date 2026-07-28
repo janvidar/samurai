@@ -211,7 +211,10 @@ class Message {
 		std::vector<std::unique_ptr<ResourceRecord>> additional;
 
 	private:
-		std::vector<uint8_t> compTbl;
+		/* Offsets of labels already decoded, which is what a compression
+		   pointer is allowed to point at. A pointer carries 14 bits, so this
+		   cannot be a byte. */
+		std::vector<uint16_t> compTbl;
 		Samurai::IO::Buffer* buffer;
 };
 

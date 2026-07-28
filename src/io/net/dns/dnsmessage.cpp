@@ -37,16 +37,27 @@ bool Samurai::IO::Net::DNS::Message::isResponse()
 }
 
 
+/*
+ * A compression pointer may only target a label this message has already
+ * decoded. That is what makes a pointer loop impossible: a name can never point
+ * forward, or at itself, so following one always makes progress backwards
+ * through ground already covered.
+ */
 bool Samurai::IO::Net::DNS::Message::isOffsetOK(size_t offset)
 {
-	if (offset > DNS_NAME_SIZE) return false;
-	const uint8_t t = (uint8_t) offset;
+	/* Bounded by the message, not by DNS_NAME_SIZE - that is the longest a
+	   name may be, which says nothing about where in the message it sits. */
+	if (!buffer || offset >= buffer->size()) return false;
+	if (offset > 0x3fff) return false;
+
+	const uint16_t t = (uint16_t) offset;
 	return std::ranges::find(compTbl, t) != compTbl.end();
 }
 
 void Samurai::IO::Net::DNS::Message::addOffset(size_t offset) {
 	if (isOffsetOK(offset)) return;
-	compTbl.push_back((uint8_t) offset);
+	if (offset > 0x3fff) return;
+	compTbl.push_back((uint16_t) offset);
 }
 
 
@@ -110,11 +121,6 @@ bool Samurai::IO::Net::DNS::Message::decodeName(size_t& offset, Name& name, size
 		uint8_t section = buffer->at(offset);
 		offset++;
 
-		if (offset >= buffer->size()) {
-			QDBG("decodeName: Offset >= buffer->size(): 2");
-			return false;
-		}
-
 		if (section == 0 || (offset >= maxlen && maxlen > 0)) {
 			QDBG("decodeName: Reaching max length of name");
 			if (recursion) {
@@ -124,13 +130,25 @@ bool Samurai::IO::Net::DNS::Message::decodeName(size_t& offset, Name& name, size
 			continue;
 		}
 
-		if (section == 0xc0) {
-			uint8_t ref = buffer->at(offset++);
-			if (!isOffsetOK((size_t) ref)) {
+		/* Everything past the terminator needs at least one more byte. */
+		if (offset >= buffer->size()) {
+			QDBG("decodeName: Offset >= buffer->size(): 2");
+			return false;
+		}
+
+		/*
+		 * A pointer is the top two bits set, and the remaining fourteen are the
+		 * offset - not the single byte 0xc0 followed by an eight bit offset,
+		 * which cannot express an offset past 255.
+		 */
+		if ((section & 0xc0) == 0xc0) {
+			const uint8_t low = (uint8_t) buffer->at(offset++);
+			const size_t ref = ((size_t) (section & 0x3f) << 8) | (size_t) low;
+			if (!isOffsetOK(ref)) {
 				QDBG("decodeName: Offset lookup is invalid: %d\n", (int) ref);
 				return false;
 			}
-			size_t old_offset = (size_t) ref;
+			size_t old_offset = ref;
 			
 			/*
 			if (recursion && ref < offset) {

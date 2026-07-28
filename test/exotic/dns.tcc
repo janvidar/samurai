@@ -4,6 +4,8 @@
  */
 
 #include <memory>
+#include <string>
+#include <vector>
 #include <samurai/io/net/dns/common.h>
 #include <samurai/io/net/dns/dnsmessage.h>
 #include <samurai/io/net/dns/dnsrrs.h>
@@ -501,4 +503,261 @@ EXO_TEST(dns_cache_add_null_is_harmless,
 	const size_t before = cache->size();
 	cache->add(nullptr);
 	return cache->size() == before;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Name compression                                                          */
+/*                                                                           */
+/* This is the part of the decoder an attacker controls most directly: a      */
+/* pointer says "the rest of this name is over there", and a decoder that     */
+/* follows one carelessly can be made to loop or to read out of bounds.       */
+/*                                                                           */
+/* Samurai's defence is that a pointer may only target a label the message    */
+/* has already decoded - compTbl - so a name can never point forward or at    */
+/* itself, and following one always moves back over ground already covered.   */
+/* The cases below pin that, and the fourteen bit pointer format.             */
+/* ------------------------------------------------------------------------- */
+
+namespace {
+
+/* Builders rather than literals: a braced initialiser inside EXO_TEST would be
+   split on its commas. */
+struct Wire
+{
+	std::vector<unsigned char> bytes;
+
+	void u8(unsigned v)  { bytes.push_back((unsigned char) v); }
+	void u16(unsigned v) { u8(v >> 8); u8(v & 0xff); }
+
+	void label(const std::string& text)
+	{
+		u8(text.size());
+		bytes.insert(bytes.end(), text.begin(), text.end());
+	}
+
+	/* qdcount 1, plus however many answers the case needs. */
+	void header(unsigned answers)
+	{
+		u16(0x1234);
+		u16(0x8180);
+		u16(1);
+		u16(answers);
+		u16(0);
+		u16(0);
+	}
+
+	/* type A, class IN, ttl 60, four bytes of address. */
+	void rdata_a()
+	{
+		u16(1); u16(1); u16(0); u16(60); u16(4);
+		u8(10); u8(0); u8(0); u8(1);
+	}
+
+	void pointer(size_t target)
+	{
+		u8(0xc0 | ((target >> 8) & 0x3f));
+		u8(target & 0xff);
+	}
+
+	size_t size() const { return bytes.size(); }
+};
+
+/* Decode and report the response code and the name of a given answer. */
+static bool dns_decodes_with_name(Wire& wire, size_t record, const char* expect)
+{
+	Samurai::IO::Buffer buf;
+	buf.append((const char*) wire.bytes.data(), wire.bytes.size());
+
+	Samurai::IO::Net::DNS::Message msg(&buf);
+	if (msg.decode() != Samurai::IO::Net::DNS::ResponseCode::Ok) return false;
+
+	Samurai::IO::Net::DNS::ResourceRecord* rr = msg.getRecord(record);
+	return rr && rr->name.toString() == expect;
+}
+
+static bool dns_decode_fails(Wire& wire)
+{
+	Samurai::IO::Buffer buf;
+	buf.append((const char*) wire.bytes.data(), wire.bytes.size());
+
+	Samurai::IO::Net::DNS::Message msg(&buf);
+	return msg.decode() != Samurai::IO::Net::DNS::ResponseCode::Ok;
+}
+
+/* A question whose name is 12 labels of 20 characters, which pushes everything
+   after it past offset 255 - the point of the exercise. */
+static void dns_long_question(Wire& wire)
+{
+	for (int n = 0; n < 12; n++)
+		wire.label(std::string(20, (char) ('a' + n)));
+	wire.u8(0);
+	wire.u16(1);
+	wire.u16(1);
+}
+
+}
+
+/* The ordinary case: an answer whose name points back at the question. */
+EXO_TEST(dns_compression_pointer_is_followed,
+{
+	Wire wire;
+	wire.header(1);
+	wire.label("example"); wire.label("com"); wire.u8(0);
+	wire.u16(1); wire.u16(1);
+
+	wire.pointer(12);   /* the question name, immediately after the header */
+	wire.rdata_a();
+
+	return dns_decodes_with_name(wire, 0, "example.com.");
+});
+
+/*
+ * A pointer carries fourteen bits, not eight. Treating it as the single byte
+ * 0xc0 followed by an eight bit offset cannot express a target past 255, so a
+ * perfectly ordinary response - one with enough records to push a name beyond
+ * that - failed to decode at all.
+ */
+EXO_TEST(dns_compression_pointer_past_offset_255,
+{
+	Wire wire;
+	wire.header(2);
+	dns_long_question(wire);
+
+	const size_t target = wire.size();
+	wire.label("host"); wire.label("example"); wire.u8(0);
+	wire.rdata_a();
+
+	wire.pointer(target);
+	wire.rdata_a();
+
+	/* The fixture is only meaningful if the target really is out of byte range. */
+	if (target <= 255) return false;
+
+	return dns_decodes_with_name(wire, 1, "host.example.");
+});
+
+EXO_TEST(dns_compression_far_pointer_matches_the_uncompressed_name,
+{
+	Wire wire;
+	wire.header(2);
+	dns_long_question(wire);
+
+	const size_t target = wire.size();
+	wire.label("host"); wire.label("example"); wire.u8(0);
+	wire.rdata_a();
+
+	wire.pointer(target);
+	wire.rdata_a();
+
+	Samurai::IO::Buffer buf;
+	buf.append((const char*) wire.bytes.data(), wire.bytes.size());
+	Samurai::IO::Net::DNS::Message msg(&buf);
+	if (msg.decode() != Samurai::IO::Net::DNS::ResponseCode::Ok) return false;
+
+	Samurai::IO::Net::DNS::ResourceRecord* a = msg.getRecord((size_t) 0);
+	Samurai::IO::Net::DNS::ResourceRecord* b = msg.getRecord((size_t) 1);
+	return a && b && a->name == b->name;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Pointers that must be refused                                             */
+/* ------------------------------------------------------------------------- */
+
+/* Nothing was decoded at offset 200, so the pointer has no legitimate target. */
+EXO_TEST(dns_compression_pointer_to_unseen_offset_is_refused,
+{
+	Wire wire;
+	wire.header(1);
+	wire.label("example"); wire.label("com"); wire.u8(0);
+	wire.u16(1); wire.u16(1);
+
+	wire.pointer(200);
+	wire.rdata_a();
+
+	return dns_decode_fails(wire);
+});
+
+/* A pointer at its own offset would loop forever if it were followed. */
+EXO_TEST(dns_compression_self_referential_pointer_terminates,
+{
+	Wire wire;
+	wire.header(1);
+	wire.label("example"); wire.label("com"); wire.u8(0);
+	wire.u16(1); wire.u16(1);
+
+	const size_t here = wire.size();
+	wire.pointer(here);
+	wire.rdata_a();
+
+	return dns_decode_fails(wire);
+});
+
+/* Two pointers at each other: the classic decompression loop. */
+EXO_TEST(dns_compression_mutual_pointers_terminate,
+{
+	Wire wire;
+	wire.header(1);
+	wire.label("example"); wire.label("com"); wire.u8(0);
+	wire.u16(1); wire.u16(1);
+
+	const size_t first = wire.size();
+	wire.pointer(first + 2);
+	wire.pointer(first);
+	wire.rdata_a();
+
+	return dns_decode_fails(wire);
+});
+
+/* A pointer past the end of the message must be refused, not read. */
+EXO_TEST(dns_compression_pointer_past_the_buffer_is_refused,
+{
+	Wire wire;
+	wire.header(1);
+	wire.label("example"); wire.label("com"); wire.u8(0);
+	wire.u16(1); wire.u16(1);
+
+	wire.pointer(0x3fff);
+	wire.rdata_a();
+
+	return dns_decode_fails(wire);
+});
+
+/*
+ * A trailing byte that begins a pointer but has nothing after it. decode()
+ * stops reading records once fewer than twelve bytes remain - the smallest a
+ * record header can be - so the stub never reaches decodeName. The message is
+ * accepted with the tail ignored, which is the tolerant reading; what matters
+ * is that nothing is read past the end and no half-built record appears.
+ */
+EXO_TEST(dns_compression_truncated_pointer_yields_no_record,
+{
+	Wire wire;
+	wire.header(1);
+	wire.label("example"); wire.label("com"); wire.u8(0);
+	wire.u16(1); wire.u16(1);
+
+	wire.u8(0xc0);   /* and nothing after it */
+
+	Samurai::IO::Buffer buf;
+	buf.append((const char*) wire.bytes.data(), wire.bytes.size());
+
+	Samurai::IO::Net::DNS::Message msg(&buf);
+	msg.decode();
+	return msg.getRecord((size_t) 0) == nullptr;
+});
+
+/* A pointer forward into a name not yet decoded is refused for the same reason
+   a self-reference is: only what is already behind us is a legal target. */
+EXO_TEST(dns_compression_forward_pointer_is_refused,
+{
+	Wire wire;
+	wire.header(1);
+	wire.label("example"); wire.label("com"); wire.u8(0);
+	wire.u16(1); wire.u16(1);
+
+	const size_t here = wire.size();
+	wire.pointer(here + 8);
+	wire.rdata_a();
+
+	return dns_decode_fails(wire);
 });
