@@ -39,8 +39,17 @@ enum class NetworkInterfaceFlags : unsigned
 class NetworkInterface
 {
 	public:
-		static NetworkInterface* getInterface(const InetAddress& addr);
-		static NetworkInterface* getInterface(const char* name);
+		/**
+		 * Find the interface holding 'addr', or null if no local interface
+		 * has that address.
+		 */
+		static std::unique_ptr<NetworkInterface> getInterface(const InetAddress& addr);
+
+		/**
+		 * Find the interface called 'name', or null if there is none. The name
+		 * is the one getName() reports.
+		 */
+		static std::unique_ptr<NetworkInterface> getInterface(const char* name);
 		/**
 		 * Enumerate the local interfaces.
 		 *
