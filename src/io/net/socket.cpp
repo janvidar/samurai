@@ -92,7 +92,7 @@ void Samurai::IO::Net::Socket::setEventHandler(Samurai::IO::Net::SocketEventHand
 
 void Samurai::IO::Net::Socket::lookup() {
 	if (state != Disconnected) return;
-	
+
 	if (address) {
 		if (eventHandler) eventHandler->EventHostLookup(this);
 		address->lookup(this);
@@ -216,7 +216,7 @@ void Samurai::IO::Net::Socket::internal_canRead()
 	{
 		TLSsendHandshake();
 	}
-	
+
 	if (state == SSLBye)
 	{
 		TLSsendGoodbye();
@@ -230,14 +230,14 @@ void Samurai::IO::Net::Socket::internal_canWrite()
 	)
 	{
 		if (eventHandler)
-			eventHandler->EventCanWrite(this);	
+			eventHandler->EventCanWrite(this);
 	}
 
 	if (state == SSLHandshake)
 	{
 		TLSsendHandshake();
 	}
-	
+
 	if (state == SSLBye)
 	{
 		TLSsendGoodbye();
@@ -261,7 +261,7 @@ void Samurai::IO::Net::Socket::internal_error(int socket_error) {
 		case EHOSTDOWN:     message = "Host is down"; break;
 		case EHOSTUNREACH:  message = "No route to host"; break;
 	}
-	
+
 	if (eventHandler) eventHandler->EventError(this, SocketUnknown, message);
 	disableMonitor();
 }
@@ -318,7 +318,7 @@ void Samurai::IO::Net::Socket::connect()
 		lookup();
 		return;
 	}
-	
+
 	if (!createDescriptor(addr->getSockAddrFamily())) {
 		state = Invalid;
 		disableMonitor();
@@ -363,10 +363,20 @@ void Samurai::IO::Net::Socket::connect()
 
 
 void Samurai::IO::Net::Socket::disconnect() {
-	if (state == Connected || state == Connecting) {
-		state = Disconnected;
-		if (eventHandler) eventHandler->EventDisconnected(this);
+	switch (state) {
+		case Connecting:
+		case Connected:
+		case SSLHandshake:
+		case SSLConnected:
+		case SSLBye:
+			state = Disconnected;
+			if (eventHandler) eventHandler->EventDisconnected(this);
+			break;
+
+		default:
+			break;
 	}
+
 	close();
 }
 
@@ -385,20 +395,20 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 	if (state == SSLConnected && tls)
 	{
 		enum Samurai::IO::Net::TlsFactory::TlsStatus status;
-		
+
 		ret = tls->write(data, length, status);
-		
+
 		switch (status) {
 			case Samurai::IO::Net::TlsFactory::TLS_STATUS_OK:
 				return ret;
-			
+
 			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE:
 				toggleWriteNotifier(true);
 				return 0;
-				
+
 			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_READ:
 				return 0;
-			
+
 			case Samurai::IO::Net::TlsFactory::TLS_STATUS_CLOSED:
 			case Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR:
 				if (eventHandler) eventHandler->EventTLSDisconnected(this);
@@ -450,11 +460,11 @@ ssize_t Samurai::IO::Net::Socket::read(char* data, size_t length) {
 	{
 		enum Samurai::IO::Net::TlsFactory::TlsStatus status;
 		ret = tls->read(data, length, status);
-		
+
 		switch (status) {
 			case Samurai::IO::Net::TlsFactory::TLS_STATUS_OK:
 				return ret;
-			
+
 			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE:
 				toggleWriteNotifier(true);
 				return 0;
@@ -480,7 +490,7 @@ ssize_t Samurai::IO::Net::Socket::read(char* data, size_t length) {
 				// try again later
 				return 0;
 			}
-			
+
 			state = Invalid;
 			disableMonitor();
 			if (eventHandler) eventHandler->EventError(this, SocketRead, strerror(NETERROR));
@@ -534,7 +544,7 @@ ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
 			// try again later
 			return 0;
 		}
-	
+
 		state = Invalid;
 		disableMonitor();
 		if (eventHandler) eventHandler->EventError(this, SocketRead, strerror(NETERROR));
@@ -549,7 +559,7 @@ void Samurai::IO::Net::Socket::EventHostFound(Samurai::IO::Net::InetAddress* res
 	/* NOTE: was new InetSocketAddress(resolved_addr->toString(), port, type),
 	   which formatted the address to text and re-parsed it. */
 	addr = new InetSocketAddress(*resolved_addr, port);
-	
+
 	state = HostFound;
 	if (eventHandler) eventHandler->EventHostFound(this);
 	if (autoConnectAfterLookup) connect();
@@ -567,14 +577,14 @@ void Samurai::IO::Net::Socket::EventTimeout(Samurai::Timer*) {
 	if (state == Connecting) {
 		internal_timeout();
 	}
-	
+
 	delete timer;
 	timer = 0;
 }
 
 
 void Samurai::IO::Net::Socket::toggleWriteNotifier(bool toggle) {
-	if (toggle) 
+	if (toggle)
 		setMonitor(Samurai::IO::Net::SocketMonitor::MRead | Samurai::IO::Net::SocketMonitor::MWrite);
 	else
 		setMonitor(Samurai::IO::Net::SocketMonitor::MRead);
@@ -585,7 +595,7 @@ void Samurai::IO::Net::Socket::toggleWriteNotifier(bool toggle) {
 
 bool Samurai::IO::Net::Socket::TLSInitialize(bool server) {
 	if (tls) return false;
-	
+
 #ifdef SSL_GNUTLS
 	tls = new GnuTLS();
 #endif
@@ -593,7 +603,7 @@ bool Samurai::IO::Net::Socket::TLSInitialize(bool server) {
 #ifdef SSL_OPENSSL
 	tls = new OpenSSL();
 #endif
-	
+
 	if (!tls) {
 		QERR("No TLS provider available");
 		return false;
@@ -628,7 +638,7 @@ void Samurai::IO::Net::Socket::TLSsendHandshake() {
 				state = SSLConnected;
 				if (eventHandler) eventHandler->EventTLSConnected(this);
 				break;
-			
+
 			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE:
 				toggleWriteNotifier(true);
 				state = SSLHandshake; /* try again */
@@ -638,13 +648,13 @@ void Samurai::IO::Net::Socket::TLSsendHandshake() {
 				toggleWriteNotifier(false);
 				state = SSLHandshake; /* try again */
 				break;
-			
+
 			case Samurai::IO::Net::TlsFactory::TLS_STATUS_CLOSED:
 				toggleWriteNotifier(false);
 				state = Connected;
 				/* wtf? */
 				break;
-			
+
 			case Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR:
 				toggleWriteNotifier(false);
 				QERR("TLS handshake failed.");
@@ -667,7 +677,7 @@ void Samurai::IO::Net::Socket::TLSsendGoodbye() {
 				state = Connected;
 				if (eventHandler) eventHandler->EventTLSDisconnected(this);
 				break;
-			
+
 			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE:
 				toggleWriteNotifier(true);
 				state = SSLBye; /* try again */
@@ -677,13 +687,13 @@ void Samurai::IO::Net::Socket::TLSsendGoodbye() {
 				toggleWriteNotifier(false);
 				state = SSLBye; /* try again */
 				break;
-			
+
 			case Samurai::IO::Net::TlsFactory::TLS_STATUS_CLOSED:
 				toggleWriteNotifier(false);
 				state = Connected;
 				/* wtf? */
 				break;
-			
+
 			case Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR:
 				toggleWriteNotifier(false);
 				QERR("TLS goodbye failed.");
