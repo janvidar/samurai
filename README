@@ -15,8 +15,15 @@ Samurai builds with CMake (3.16 or newer):
     cmake --build build -j
     ctest --test-dir build
 
-Requirements: a C++11 compiler, zlib, bzip2, and OpenSSL 1.0.2 or newer
-(TLS is mandatory).
+Requirements: a C++20 compiler, zlib, bzip2, and either OpenSSL 3.0 or newer or
+LibreSSL 3.5 or newer. TLS is mandatory, and the two are used through the same
+API. Connections require TLS 1.2 at a minimum and use TLS 1.3 whenever the peer
+supports it.
+
+Both are found through find_package(OpenSSL); pass -DOPENSSL_ROOT_DIR=... to
+pick a particular installation. The configure summary names the one that was
+found, which is worth checking: LibreSSL reports itself as "OpenSSL 2.0.0" to
+everything that reads OPENSSL_VERSION_NUMBER.
 
 
 Configuration
@@ -28,12 +35,6 @@ Configuration
     -DSAMURAI_BUILD_STATIC=ON|OFF         Build libsamurai.a. Default ON.
                                           Both flavours share one compile pass.
     -DSAMURAI_BUILD_TESTS=ON|OFF          Build the test programs. Default ON.
-    -DSAMURAI_TLS_PROVIDER=OPENSSL|GNUTLS TLS backend. Default OPENSSL. TLS is
-                                          mandatory: SSL_SUPPORT changes the
-                                          layout of Socket, so a build without
-                                          it is not ABI compatible with one
-                                          that has it. GNUTLS is unmaintained
-                                          and is not expected to compile.
     -DSAMURAI_DNS_PROVIDER=BLOCKING|FORKED|BUILTIN
                                           DNS resolver. Default BLOCKING,
                                           which is the only working backend.
