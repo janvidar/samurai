@@ -83,7 +83,7 @@ Samurai::IO::Buffer* Samurai::IO::Net::DatagramPacket::getBuffer() {
 	return buffer.get();
 }
 
-Samurai::IO::Net::DatagramSocket::DatagramSocket(DatagramEventHandler* eh, enum InetAddress::Version version) : SocketBase(SocketType::Datagram), eventHandler(eh), myPacket(nullptr)
+Samurai::IO::Net::DatagramSocket::DatagramSocket(DatagramEventHandler* eh, InetAddress::Version version) : SocketBase(SocketType::Datagram), eventHandler(eh), myPacket(nullptr)
 {
 	int af = (version == InetAddress::Version::IPv4 ? AF_INET : version == InetAddress::Version::IPv6 ? AF_INET6 : AF_UNSPEC);
 	createDescriptor(af);

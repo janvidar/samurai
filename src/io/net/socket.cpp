@@ -280,7 +280,7 @@ void Samurai::IO::Net::Socket::internal_connected() {
 	socklen_t valsize = sizeof(value);
 	int ret = getsockopt(sd, SOL_SOCKET, SO_ERROR, &value, &valsize);
 	if (ret != 0 || value != 0) {
-		enum Samurai::IO::Net::SocketError sockErr;
+		Samurai::IO::Net::SocketError sockErr;
 		const char* error = strerror(value);
 		switch (value) {
 			case ECONNREFUSED:   sockErr = Samurai::IO::Net::SocketError::ConnectionRefused; break;

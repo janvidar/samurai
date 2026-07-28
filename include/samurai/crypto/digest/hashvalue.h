@@ -50,7 +50,7 @@ class HashValue
 		 *
 		 * @return false if buf/buflen is not large enough to hold the string.
 		 */
-		bool getFormattedString(enum Format, char* buf, size_t buflen) const;
+		bool getFormattedString(Format, char* buf, size_t buflen) const;
 
 		bool operator==(const HashValue&) const;
 

@@ -219,7 +219,7 @@ void Samurai::IO::Net::DNS::BuiltinResolver::EventTimeout(Samurai::Timer* timer)
 	puts("DNS timeout\n");
 }
 
-void Samurai::IO::Net::DNS::BuiltinResolver::EventError(const Socket*, enum SocketError error, const char* msg)
+void Samurai::IO::Net::DNS::BuiltinResolver::EventError(const Socket*, SocketError error, const char* msg)
 {
 	(void) error;
 	(void) msg;

@@ -100,13 +100,13 @@ Samurai::IO::Net::InetAddress::InetAddress() : version(Version::Unspecified), da
 	memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
 }
 
-Samurai::IO::Net::InetAddress::InetAddress(enum Version ip_version) : version(ip_version), data(nullptr), resolver(nullptr), resolveState(ResolveState::Unresolved), dnsevent(nullptr)
+Samurai::IO::Net::InetAddress::InetAddress(Version ip_version) : version(ip_version), data(nullptr), resolver(nullptr), resolveState(ResolveState::Unresolved), dnsevent(nullptr)
 {
 	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
 	memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
 }
 
-Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Version ip_version) : version(Version::Unspecified), data(nullptr), resolver(nullptr), resolveState(ResolveState::Unresolved), dnsevent(nullptr)
+Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, Version ip_version) : version(Version::Unspecified), data(nullptr), resolver(nullptr), resolveState(ResolveState::Unresolved), dnsevent(nullptr)
 {
 	version = ip_version;
 	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
@@ -213,7 +213,7 @@ Samurai::IO::Net::InetAddress::~InetAddress()
 }
 
 
-bool Samurai::IO::Net::InetAddress::setRawAddress(void* data_, size_t length, enum Samurai::IO::Net::InetAddress::Version ip_version)
+bool Samurai::IO::Net::InetAddress::setRawAddress(void* data_, size_t length, Samurai::IO::Net::InetAddress::Version ip_version)
 {
 	if (ip_version == Samurai::IO::Net::InetAddress::Version::IPv4 && length < sizeof(struct in_addr)) return false;
 	if (ip_version == Samurai::IO::Net::InetAddress::Version::IPv6 && length < sizeof(struct in6_addr)) return false;
@@ -356,7 +356,7 @@ std::string Samurai::IO::Net::InetAddress::toString() const
 }
 
 
-enum Samurai::IO::Net::InetAddress::Version Samurai::IO::Net::InetAddress::getType() const {
+Samurai::IO::Net::InetAddress::Version Samurai::IO::Net::InetAddress::getType() const {
 	return version;
 }
 
@@ -539,7 +539,7 @@ static bool has_canonical_embedded_ipv4(const std::string& text)
 	return is_canonical_dotted_quad(text.c_str() + (colon == std::string::npos ? 0 : colon + 1));
 }
 
-bool Samurai::IO::Net::InetAddress::stringToAddress(enum Samurai::IO::Net::InetAddress::Version version, const char* address, struct __InternalAddress* data)
+bool Samurai::IO::Net::InetAddress::stringToAddress(Samurai::IO::Net::InetAddress::Version version, const char* address, struct __InternalAddress* data)
 {
 	if (!address || !*address || !data) return false;
 

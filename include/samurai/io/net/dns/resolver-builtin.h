@@ -52,7 +52,7 @@ class BuiltinResolver final :
 		void EventDisconnected(const Socket*) override;
 		void EventDataAvailable(const Socket*) override;
 		void EventCanWrite(const Socket*) override;
-		void EventError(const Socket*, enum SocketError error, const char* msg) override;
+		void EventError(const Socket*, SocketError error, const char* msg) override;
 		void EventTimeout(Samurai::Timer* timer) override;
 		
 		void query();

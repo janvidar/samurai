@@ -32,8 +32,8 @@ namespace Samurai {
 					
 				public:
 					InetAddress();
-					InetAddress(enum Version ip_version);
-					InetAddress(const std::string& host, enum Version ip_version = Version::Unspecified);
+					InetAddress(Version ip_version);
+					InetAddress(const std::string& host, Version ip_version = Version::Unspecified);
 					InetAddress(const InetAddress& address);
 					InetAddress(const InetAddress* address);
 					~InetAddress() override;
@@ -41,7 +41,7 @@ namespace Samurai {
 					/**
 					 * Set a RAW address.
 					 */
-					bool setRawAddress(void* data, size_t length, enum Version ip_version);
+					bool setRawAddress(void* data, size_t length, Version ip_version);
 					
 					/**
 					 * Returns true if this is a valid (and resolved) IP address.
@@ -89,7 +89,7 @@ namespace Samurai {
 					virtual std::string getAddress() const;
 					virtual std::string toString() const;
 					
-					enum Version getType() const;
+					Version getType() const;
 					
 					bool operator==(const InetAddress&) const;
 					InetAddress& operator=(const std::string& str);
@@ -110,11 +110,11 @@ namespace Samurai {
 					void EventHostError(Samurai::IO::Net::DNS::Resolver::Error error) override;
 					
 				protected:
-					static bool stringToAddress(enum Version, const char* address, struct __InternalAddress*);
+					static bool stringToAddress(Version, const char* address, struct __InternalAddress*);
 					
 					
 				protected:
-					enum Version version;
+					Version version;
 					/* Owning. Stays pointer-like because the X_IP* accessor macros in
 					   socketglue.h dereference it. */
 					std::unique_ptr<struct __InternalAddress> data;

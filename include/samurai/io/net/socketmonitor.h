@@ -142,7 +142,7 @@ class SocketMonitor
 		 * The default handler for the socket events.
 		 * This one will tell each socket what to do based on their status.
 		 *
-		 * @param trig see enum Triggers (ORed)
+		 * @param trig see Triggers (ORed)
 		 */
 		virtual void handleSocketEvent(SocketBase* socket, Triggers trig);
 
