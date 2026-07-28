@@ -131,6 +131,7 @@ class Buffer {
 		 */
 		char operator[](size_t offset) const;
 
+		/** Bounds checked; returns 0 past the end of the live data. */
 		char at(size_t offset) const;
 		
 		
