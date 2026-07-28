@@ -59,9 +59,11 @@ endif()
 
 set(SAMURAI_EXOTIC_INPUTS
     buffer.tcc
+    dns.tcc
     file.tcc
     hash_tiger.tcc
     inetaddress.tcc
+    misc.tcc
     sockets.tcc
     url.tcc)
 

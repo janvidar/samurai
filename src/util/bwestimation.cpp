@@ -9,7 +9,6 @@
 #define BANDWIDTH_ESTIMATION_TIMEOUT 3
 
 Samurai::Util::RateEstimator::RateEstimator() {
-	current = 0;
 	log = new size_t[BANDWIDTH_ESTIMATION_TIMEOUT];
 	for (size_t i = 0; i < BANDWIDTH_ESTIMATION_TIMEOUT; i++) 
 		log[i] = 0;
