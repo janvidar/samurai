@@ -22,6 +22,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <limits.h>
+
+#ifdef SAMURAI_POSIX
+#include <sys/uio.h>
+#endif
 
 Samurai::IO::Net::Socket::Socket(Samurai::IO::Net::SocketEventHandler* eh, const std::string& address_, uint16_t port_) :
 	SocketBase(),
@@ -810,6 +815,110 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length, std::er
 
 	ec = Samurai::system_error(NETERROR);
 	return -1;
+}
+
+
+/* POSIX only guarantees IOV_MAX is at least 16; Linux allows 1024. Staying
+   under whatever the platform allows keeps a long list from failing outright -
+   the surplus buffers are left for the caller to resend. */
+#if defined(IOV_MAX) && IOV_MAX < 64
+#define SAMURAI_MAX_IOV IOV_MAX
+#else
+#define SAMURAI_MAX_IOV 64
+#endif
+
+ssize_t Samurai::IO::Net::Socket::write(std::span<const std::string_view> buffers, std::error_code& ec)
+{
+	ec.clear();
+
+	if (state != Connected && state != SSLConnected)
+	{
+		ec = Samurai::system_error(ENOTCONN);
+		return -1;
+	}
+
+	/* TLS has no vectored write, so the buffers go out one record at a time.
+	   Stopping at the first short write keeps the partial-write contract: what
+	   is reported as written is a prefix of the whole sequence. */
+	if (state == SSLConnected && tls)
+	{
+		ssize_t total = 0;
+		for (size_t n = 0; n < buffers.size(); n++)
+		{
+			if (buffers[n].empty()) continue;
+
+			ssize_t ret = write(buffers[n].data(), buffers[n].size(), ec);
+			if (ret < 0)
+			{
+				if (total == 0) return -1;
+				ec.clear();
+				return total;
+			}
+
+			total += ret;
+			if ((size_t) ret < buffers[n].size()) break;
+		}
+		return total;
+	}
+
+#ifdef SAMURAI_WINSOCK
+	WSABUF vec[SAMURAI_MAX_IOV];
+#else
+	struct iovec vec[SAMURAI_MAX_IOV];
+#endif
+
+	size_t count = 0;
+	for (size_t n = 0; n < buffers.size() && count < SAMURAI_MAX_IOV; n++)
+	{
+		if (buffers[n].empty()) continue;
+
+#ifdef SAMURAI_WINSOCK
+		vec[count].buf = (CHAR*) buffers[n].data();
+		vec[count].len = (ULONG) buffers[n].size();
+#else
+		vec[count].iov_base = (void*) buffers[n].data();
+		vec[count].iov_len = buffers[n].size();
+#endif
+		count++;
+	}
+
+	if (!count) return 0;
+
+#ifdef SAMURAI_WINSOCK
+	DWORD sent = 0;
+	int ret = WSASend(sd, vec, (DWORD) count, &sent, 0, NULL, NULL);
+	if (ret == 0)
+	{
+		if (bandwidthManager) bandwidthManager->dataSendTCP((size_t) sent);
+		return (ssize_t) sent;
+	}
+#else
+	struct msghdr msg;
+	memset(&msg, 0, sizeof(msg));
+	msg.msg_iov = vec;
+	msg.msg_iovlen = count;
+
+	ssize_t ret = ::sendmsg(sd, &msg, SAMURAI_SENDFLAGS);
+	if (ret >= 0)
+	{
+		if (bandwidthManager) bandwidthManager->dataSendTCP((size_t) ret);
+		return ret;
+	}
+#endif
+
+	if (NETERROR == EAGAIN || NETERROR == EWOULDBLOCK || NETERROR == EINTR)
+		return 0;
+
+	ec = Samurai::system_error(NETERROR);
+	return -1;
+}
+
+
+ssize_t Samurai::IO::Net::Socket::write(std::span<const std::string_view> buffers)
+{
+	std::error_code ec;
+	ssize_t ret = write(buffers, ec);
+	return (ret < 0) ? 0 : ret;
 }
 
 // eof
