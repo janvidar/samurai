@@ -151,10 +151,8 @@ bool Samurai::IO::Net::MulticastSocket::getLoopbackMode()
 	return loop != 0;
 }
 
-bool Samurai::IO::Net::MulticastSocket::listen(size_t backlog)
+bool Samurai::IO::Net::MulticastSocket::listen()
 {
-	(void) backlog;
-
         if (!addr) return false;
 	if (!setReusePort(true)) return false;
         if (!setReuseAddress(true)) return false;

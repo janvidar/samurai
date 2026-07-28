@@ -103,7 +103,7 @@ Determining the tree depth when file_size and all leafs are known.
 
 */
 
-class MerkleNode : public Samurai::Crypto::Digest::HashValue
+class MerkleNode final : public Samurai::Crypto::Digest::HashValue
 {
 	public:
 		MerkleNode(Samurai::Crypto::Digest::HashValue* value);
@@ -156,18 +156,20 @@ class MerkleTree : public Samurai::Crypto::Digest::Hash
 		 */
 		MerkleTree(Samurai::Crypto::Digest::Hash* hasher, size_t block_size = 1024, size_t max_levels = 7);
 
-		virtual ~MerkleTree();
+		~MerkleTree() override;
 
-		virtual size_t size() const
-		{
-			return m_hasher->size();
-		}
+		/*
+		 * size() is inherited. Declaring one here would hide the base's rather
+		 * than override it - Hash::size() is not virtual - and it would return
+		 * the same value anyway, since the constructor passes m_hasher->size()
+		 * to Hash as the digest size.
+		 */
 
-		virtual void reset();
+		void reset() override;
 
-		virtual void finalize();
+		void finalize() override;
 
-		virtual Samurai::Crypto::Digest::HashValue* digest();
+		Samurai::Crypto::Digest::HashValue* digest() override;
 
 		size_t countLeaves();
 		size_t maxLeaves();
@@ -230,7 +232,7 @@ class MerkleTree : public Samurai::Crypto::Digest::Hash
 		 * Internal mehod for hashing leaf data.
 		 * length is always block_size, except for the last leaf which may be shorter.
 		 */
-		virtual void hash(uint8_t* data, size_t length);
+		void hash(uint8_t* data, size_t length) override;
 
 	private:
 		Samurai::Crypto::Digest::Hash* m_hasher;

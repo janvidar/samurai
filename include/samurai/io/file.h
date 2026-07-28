@@ -21,7 +21,7 @@ class Buffer;
 
 class FileBase;
 
-class File {
+class File final {
 
 	public:
 		File();
@@ -31,7 +31,7 @@ class File {
 		File(const File* file);
 		File(File&& other) noexcept;
 		File& operator=(File&& other) noexcept;
-		virtual ~File();
+		~File();
 		
 		enum Mode
 		{
@@ -48,7 +48,7 @@ class File {
 		/**
 		 * @short Open a file using a specified access mode.
 		 */
-		virtual bool open(int mode = Read);
+		bool open(int mode = Read);
 
 		/**
 		 * Open, reporting why on failure.
@@ -56,7 +56,7 @@ class File {
 		 * NOTE: the bool overload above cannot tell a missing file from a
 		 * permission problem from a full descriptor table.
 		 */
-		virtual bool open(int mode, std::error_code& ec);
+		bool open(int mode, std::error_code& ec);
 		
 		/**
 		 * @return true if the file is open.
@@ -66,31 +66,31 @@ class File {
 		/**
 		 * @short Close the file
 		 */
-		virtual bool close();
-		virtual bool close(std::error_code& ec);
+		bool close();
+		bool close(std::error_code& ec);
 		
 		/**
 		 * @short Flush any unwritten buffer data to disk.
 		 */
-		virtual bool flush();
-		virtual bool flush(std::error_code& ec);
+		bool flush();
+		bool flush(std::error_code& ec);
 		
 		/**
 		 * @short Seek to a position inside an open file.
 		 */
-		virtual bool seek(off_t offset);
-		virtual bool seek(off_t offset, std::error_code& ec);
+		bool seek(off_t offset);
+		bool seek(off_t offset, std::error_code& ec);
 
 		/**
 		 * @short Get current position
 		 */
-		virtual off_t getCurrentPosition();
+		off_t getCurrentPosition();
 
 		/**
 		 * @short delete the file
 		 */
-		virtual bool remove();
-		virtual bool remove(std::error_code& ec);
+		bool remove();
+		bool remove(std::error_code& ec);
 		
 		/**
 		 * @short delete a file
@@ -101,18 +101,18 @@ class File {
 		 * Rename file to the given new file name.
 		 * @return true if OK
 		 */
-		virtual bool rename(const std::string& new_name);
-		virtual bool rename(const std::string& new_name, std::error_code& ec);
+		bool rename(const std::string& new_name);
+		bool rename(const std::string& new_name, std::error_code& ec);
 		
 		// IO
-		virtual ssize_t read(char* data, size_t length);
-		virtual ssize_t write(const char* data, size_t length);
+		ssize_t read(char* data, size_t length);
+		ssize_t write(const char* data, size_t length);
 
 		/** @return bytes transferred, 0 at end of file, or -1 with 'ec' set. */
-		virtual ssize_t read(char* data, size_t length, std::error_code& ec);
-		virtual ssize_t write(const char* data, size_t length, std::error_code& ec);
-		virtual ssize_t read(Samurai::IO::Buffer* data, size_t length = 65536);
-		virtual ssize_t write(Samurai::IO::Buffer* data, size_t length = 65536, bool remove = true);
+		ssize_t read(char* data, size_t length, std::error_code& ec);
+		ssize_t write(const char* data, size_t length, std::error_code& ec);
+		ssize_t read(Samurai::IO::Buffer* data, size_t length = 65536);
+		ssize_t write(Samurai::IO::Buffer* data, size_t length = 65536, bool remove = true);
 
 		/** The same transfers with the extent carried by the argument. */
 		ssize_t read(std::span<char> data)
@@ -128,36 +128,36 @@ class File {
 		{ return write(data.data(), data.size(), ec); }
 		
 		// Returns the file size
-		virtual off_t size() const;
-		virtual mode_t getPermissions() const;
+		off_t size() const;
+		mode_t getPermissions() const;
 		
 		// This is Unix-specific
-		virtual uid_t getOwner() const;
-		virtual gid_t getGroup() const;
+		uid_t getOwner() const;
+		gid_t getGroup() const;
 		
-		virtual bool isReadable() const;
-		virtual bool isWritable() const;
-		virtual bool isDeleteable() const;
-		virtual bool isExcecutable() const;
-		virtual bool isRegular() const;
-		virtual bool isSymlink() const;
-		virtual bool isDirectory() const;
+		bool isReadable() const;
+		bool isWritable() const;
+		bool isDeleteable() const;
+		bool isExcecutable() const;
+		bool isRegular() const;
+		bool isSymlink() const;
+		bool isDirectory() const;
 		
 		static bool exists(const char* file);
-		virtual bool exists() const;
+		bool exists() const;
 		
-		virtual Samurai::TimeStamp getTimeAccessed() const;
-		virtual Samurai::TimeStamp getTimeCreated() const;
-		virtual Samurai::TimeStamp getTimeModified() const;
+		Samurai::TimeStamp getTimeAccessed() const;
+		Samurai::TimeStamp getTimeCreated() const;
+		Samurai::TimeStamp getTimeModified() const;
 		
-		virtual const std::string& getName() const { return filename; }
-		virtual const std::string& getBaseName() const;
+		const std::string& getName() const { return filename; }
+		const std::string& getBaseName() const;
 
 		/**
 		 * Returns the file extension or an empty
 		 * string if no extension can be found.
 		 */
-		virtual const std::string& getExtension() const;
+		const std::string& getExtension() const;
 		
 		/**
 		 * Returns true if the current file extension matches
@@ -165,7 +165,7 @@ class File {
 		 * since file extensions most likely are.
 		 * However, one exception is .c vs .C.
 		 */
-		virtual bool matchExtension(const std::string& ext) const;
+		bool matchExtension(const std::string& ext) const;
 		
 		static int mkdir(const char* dirname, int mode = 0755);
 		static int rmdir(const char* dirname);

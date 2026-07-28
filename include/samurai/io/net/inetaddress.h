@@ -36,7 +36,7 @@ namespace Samurai {
 					InetAddress(const std::string& host, enum Version ip_version = Unspecified);
 					InetAddress(const InetAddress& address);
 					InetAddress(const InetAddress* address);
-					virtual ~InetAddress();
+					~InetAddress() override;
 					
 					/**
 					 * Set a RAW address.
@@ -107,8 +107,8 @@ namespace Samurai {
 					
 					
 				protected:
-					void EventHostFound(InetAddress* addr);
-					void EventHostError(enum Samurai::IO::Net::DNS::Resolver::Error error);
+					void EventHostFound(InetAddress* addr) override;
+					void EventHostError(enum Samurai::IO::Net::DNS::Resolver::Error error) override;
 					
 				protected:
 					static bool stringToAddress(enum Version, const char* address, struct __InternalAddress*);

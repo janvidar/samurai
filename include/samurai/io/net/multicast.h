@@ -76,9 +76,12 @@ namespace Samurai {
 					bool getLoopbackMode();
 
 					/**
-					 * Hides DatagramSocket::listen(), which takes no backlog.
+					 * Bind and start receiving. Replaces
+					 * DatagramSocket::listen(); the backlog argument this used
+					 * to take was ignored, and taking one made this hide the
+					 * base's version rather than override it.
 					 */
-					bool listen(size_t backlog = 5);
+					bool listen() override;
 
 				protected:
 					/* Drop one group membership, ignoring whether it is

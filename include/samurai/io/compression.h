@@ -14,68 +14,72 @@ class GzPrivate;
 namespace Samurai {
 namespace IO {
 
-class BZip2Compressor : public Samurai::IO::Codec {
+class BZip2Compressor final : public Samurai::IO::Codec {
 	public:
 		BZip2Compressor();
-		virtual ~BZip2Compressor();
-		bool exec(char* input, size_t& input_len, char* output, size_t& output_len);
-		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec);
+		~BZip2Compressor() override;
+		bool exec(char* input, size_t& input_len, char* output, size_t& output_len) override;
+		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec) override;
+
+		/* Owns a zlib/bzip2 stream: copying would free it twice. */
+		BZip2Compressor(const BZip2Compressor&) = delete;
+		BZip2Compressor& operator=(const BZip2Compressor&) = delete;
+
 	protected:
 		Bz2Private* d;
 		int m_last_status;
 
-	private:
-		/* Owns a zlib/bzip2 stream: copying would free it twice. */
-		BZip2Compressor(const BZip2Compressor&);
-		BZip2Compressor& operator=(const BZip2Compressor&);
 };
 
-class BZip2Decompressor : public Samurai::IO::Codec {
+class BZip2Decompressor final : public Samurai::IO::Codec {
 	public:
 		BZip2Decompressor();
-		virtual ~BZip2Decompressor();
-		bool exec(char* input, size_t& input_len, char* output, size_t& output_len);
-		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec);
+		~BZip2Decompressor() override;
+		bool exec(char* input, size_t& input_len, char* output, size_t& output_len) override;
+		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec) override;
+
+		/* Owns a zlib/bzip2 stream: copying would free it twice. */
+		BZip2Decompressor(const BZip2Decompressor&) = delete;
+		BZip2Decompressor& operator=(const BZip2Decompressor&) = delete;
+
 	protected:
 		Bz2Private* d;
 		int m_last_status;
 
-	private:
-		/* Owns a zlib/bzip2 stream: copying would free it twice. */
-		BZip2Decompressor(const BZip2Decompressor&);
-		BZip2Decompressor& operator=(const BZip2Decompressor&);
 };
 
-class GzipCompressor : public Samurai::IO::Codec {
+class GzipCompressor final : public Samurai::IO::Codec {
 	public:
 		GzipCompressor();
-		virtual ~GzipCompressor();
-		bool exec(char* input, size_t& input_len, char* output, size_t& output_len);
-		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec);
+		~GzipCompressor() override;
+		bool exec(char* input, size_t& input_len, char* output, size_t& output_len) override;
+		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec) override;
+
+		/* Owns a zlib/bzip2 stream: copying would free it twice. */
+		GzipCompressor(const GzipCompressor&) = delete;
+		GzipCompressor& operator=(const GzipCompressor&) = delete;
+
 	protected:
 		GzPrivate* d;
 		int m_last_status;
 
-	private:
-		/* Owns a zlib/bzip2 stream: copying would free it twice. */
-		GzipCompressor(const GzipCompressor&);
-		GzipCompressor& operator=(const GzipCompressor&);
 };
 
-class GzipDecompressor : public Samurai::IO::Codec {
+class GzipDecompressor final : public Samurai::IO::Codec {
 	public:
 		GzipDecompressor();
-		virtual ~GzipDecompressor();
-		bool exec(char* input, size_t& input_len, char* output, size_t& output_len);
-		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec);
+		~GzipDecompressor() override;
+		bool exec(char* input, size_t& input_len, char* output, size_t& output_len) override;
+		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec) override;
+
+		/* Owns a zlib/bzip2 stream: copying would free it twice. */
+		GzipDecompressor(const GzipDecompressor&) = delete;
+		GzipDecompressor& operator=(const GzipDecompressor&) = delete;
+
 	protected:
 		GzPrivate* d;
 		int m_last_status;
 
-	private:
-		/* Owns a zlib/bzip2 stream: copying would free it twice. */
-		GzipDecompressor(const GzipDecompressor&);
-		GzipDecompressor& operator=(const GzipDecompressor&);
 };
 
 }

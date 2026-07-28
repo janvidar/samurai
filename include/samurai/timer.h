@@ -43,7 +43,7 @@ class Timer {
 		/** Sub-second granularity. */
 		Timer(TimerListener* listener, std::chrono::milliseconds timeout, bool single_shot);
 
-		virtual ~Timer();
+		~Timer();
 
 		/** When this timer is next due. */
 		clock::time_point deadline() const { return due; }
@@ -54,9 +54,11 @@ class Timer {
 	protected:
 		void internal_fire(clock::time_point now);
 
-	private:
-		Timer(const Timer&);
-		Timer& operator=(const Timer&);
+	public:
+		/* Registers itself with the TimerManager, which keys on the instance,
+		 * so a copy would appear in the manager twice. */
+		Timer(const Timer&) = delete;
+		Timer& operator=(const Timer&) = delete;
 
 		TimerListener* callback;
 		bool single_shot;

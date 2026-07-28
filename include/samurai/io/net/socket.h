@@ -60,7 +60,7 @@ class Socket :
 		Socket(SocketEventHandler* eh, const InetAddress& addr, uint16_t port);
 		Socket(SocketEventHandler* eh, const std::string& address, uint16_t port);
 	public:
-		virtual ~Socket();
+		~Socket() override;
 
 		void lookup();
 
@@ -169,8 +169,8 @@ class Socket :
 		void sslDeinitialize();
 
 	protected:
-		void handleMonitorEvent(int trig);
-		size_t bufferedInput() const;
+		void handleMonitorEvent(int trig) override;
+		size_t bufferedInput() const override;
 
 		void internal_canRead();
 		void internal_canWrite();
@@ -186,9 +186,9 @@ class Socket :
 
 		bool checkConnectTimeout();
 
-		void EventHostFound(InetAddress* addr);
-		void EventHostError(enum Samurai::IO::Net::DNS::Resolver::Error error);
-		void EventTimeout(Samurai::Timer* timer);
+		void EventHostFound(InetAddress* addr) override;
+		void EventHostError(enum Samurai::IO::Net::DNS::Resolver::Error error) override;
+		void EventTimeout(Samurai::Timer* timer) override;
 		
 	friend class ServerSocket;
 	friend class SocketMonitor;

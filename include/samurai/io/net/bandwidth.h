@@ -19,7 +19,7 @@ namespace Net {
 class BandwidthManager {
 	public:
 		BandwidthManager();
-		virtual ~BandwidthManager();
+		~BandwidthManager();
 		
 		void accept();
 		void connected();

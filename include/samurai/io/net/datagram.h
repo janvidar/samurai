@@ -27,7 +27,7 @@ class DatagramPacket {
 		DatagramPacket(const char* buf);
 		DatagramPacket(Samurai::IO::Buffer* buffer);
 		DatagramPacket();
-		virtual ~DatagramPacket();
+		~DatagramPacket();
 
 		size_t size();
 		
@@ -87,9 +87,11 @@ class DatagramSocket : public SocketBase {
 		 */
 		DatagramSocket(DatagramEventHandler* eh, enum Samurai::IO::Net::InetAddress::Version version);
 	public:
-		virtual ~DatagramSocket();
+		~DatagramSocket() override;
 
-		bool listen();
+		/* Virtual so that MulticastSocket, which has to set SO_REUSEPORT and
+		 * register with the monitor, replaces it rather than hiding it. */
+		virtual bool listen();
 
 		void setEventHandler(DatagramEventHandler* eh);
 
@@ -107,12 +109,12 @@ class DatagramSocket : public SocketBase {
 		uint8_t readbuf[65536];
 
 	protected:
-		void initialize();
+		void initialize() override;
 
 		DatagramSocket();
 		DatagramSocket(SocketAddress*);
 		
-		void handleMonitorEvent(int trig);
+		void handleMonitorEvent(int trig) override;
 
 		void internal_create();
 		void internal_canRead();

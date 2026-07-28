@@ -27,7 +27,7 @@ class Directory {
 		Directory(const Samurai::IO::File* file);
 		Directory(const std::string& path);
 		Directory(const char* path);
-		virtual ~Directory();
+		~Directory();
 
 	public:
 		bool open();

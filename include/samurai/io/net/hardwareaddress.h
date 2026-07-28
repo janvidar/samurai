@@ -25,7 +25,7 @@ class HardwareAddress
 		HardwareAddress(const char* text);
 		HardwareAddress(const uint8_t octets[6]);
 
-		virtual ~HardwareAddress();
+		~HardwareAddress();
 
 		const char* getAddress() const;
 		const uint8_t* getOctets() const;

@@ -13,11 +13,11 @@ namespace IO {
 namespace Net {
 namespace DNS {
 
-class BlockingResolver : public Resolver {
+class BlockingResolver final : public Resolver {
 	public:
-		virtual ~BlockingResolver();
+		~BlockingResolver() override;
 		BlockingResolver(ResolveEventHandler* eventHandler);
-		void lookup(const char* addr);
+		void lookup(const char* addr) override;
 
 	protected:
 		char* ipaddr;

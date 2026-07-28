@@ -37,7 +37,7 @@ class Hash {
 		/**
 		 * Returns the size of the produced digest (in raw bytes).
 		 */
-		size_t size() const { return m_size; };
+		size_t size() const { return m_size; }
 		
 		/**
 		 * Returns a pointer to the internal raw data of the digest.

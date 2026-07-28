@@ -28,7 +28,7 @@ class CacheStorage {
 	public:
 		static CacheStorage* getInstance();
 
-		virtual ~CacheStorage();
+		~CacheStorage();
 
 		/**
 		 * Takes ownership of 'e' and starts its lifetime. Passing null does

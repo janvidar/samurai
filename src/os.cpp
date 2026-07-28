@@ -40,19 +40,19 @@ class OSBase
 };
 
 #ifdef SAMURAI_POSIX
-class OSUnix : public OSBase
+class OSUnix final : public OSBase
 {
 	public:
 		OSUnix();
 
 	public:
-		size_t getMaxOpenSockets();
-		time_t getUptime();
-		pid_t getProcessID();
-		std::string getHostName();
-		std::string getDomainName();
-		const char* getName();
-		const char* getVersion();
+		size_t getMaxOpenSockets() override;
+		time_t getUptime() override;
+		pid_t getProcessID() override;
+		std::string getHostName() override;
+		std::string getDomainName() override;
+		const char* getName() override;
+		const char* getVersion() override;
 		
 	private:
 		struct rlimit  limits;
@@ -61,19 +61,19 @@ class OSUnix : public OSBase
 #endif
 
 #ifdef SAMURAI_OS_WINDOWS
-class OSWindows : public OSBase
+class OSWindows final : public OSBase
 {
 	public:
 		OSWindows();
 
 	public:
-		size_t getMaxOpenSockets();
-		time_t getUptime();
-		pid_t getProcessID();
-		std::string getHostName();
-		std::string getDomainName();
-		const char* getName();
-		const char* getVersion();
+		size_t getMaxOpenSockets() override;
+		time_t getUptime() override;
+		pid_t getProcessID() override;
+		std::string getHostName() override;
+		std::string getDomainName() override;
+		const char* getName() override;
+		const char* getVersion() override;
 };
 #endif
 

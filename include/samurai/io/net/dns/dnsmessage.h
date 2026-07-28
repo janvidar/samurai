@@ -154,7 +154,7 @@ class Message {
 	public:
 		Message();
 		Message(Samurai::IO::Buffer* buffer);
-		virtual ~Message();
+		~Message();
 
 		enum Samurai::IO::Net::DNS::ResponseCode decode();
 		bool encode();

@@ -41,19 +41,19 @@ class SocketBase;
 class SocketMonitor;
 
 #ifdef SOCKET_NOTIFY_POLL
-class PollSocketMonitor : public SocketMonitor
+class PollSocketMonitor final : public SocketMonitor
 {
 	public:
 		PollSocketMonitor();
-		virtual ~PollSocketMonitor();
+		~PollSocketMonitor() override;
 		
-		void internal_add(SocketBase* socket);
-		void internal_remove(SocketBase* socket);
-		void internal_modify(SocketBase* socket);
-		void internal_wait(int time_ms);
-		size_t size() { return num; }
-		size_t capacity() { return max; }
-		bool isValid();
+		void internal_add(SocketBase* socket) override;
+		void internal_remove(SocketBase* socket) override;
+		void internal_modify(SocketBase* socket) override;
+		void internal_wait(int time_ms) override;
+		size_t size() override { return num; }
+		size_t capacity() override { return max; }
+		bool isValid() override;
 		
 	private:
 		struct pollfd* list;
@@ -65,20 +65,20 @@ class PollSocketMonitor : public SocketMonitor
 #endif // SOCKET_NOTIFY_POLL
 
 #ifdef SOCKET_NOTIFY_EPOLL
-class EPollSocketMonitor : public SocketMonitor
+class EPollSocketMonitor final : public SocketMonitor
 {
 	public:
 		EPollSocketMonitor();
-		virtual ~EPollSocketMonitor();
+		~EPollSocketMonitor() override;
 		
-		void internal_add(SocketBase* socket);
-		void internal_remove(SocketBase* socket);
-		void internal_modify(SocketBase* socket);
+		void internal_add(SocketBase* socket) override;
+		void internal_remove(SocketBase* socket) override;
+		void internal_modify(SocketBase* socket) override;
 		
-		void internal_wait(int time_ms);
-		size_t size() { return num; }
-		size_t capacity() { return max; }
-		bool isValid();
+		void internal_wait(int time_ms) override;
+		size_t size() override { return num; }
+		size_t capacity() override { return max; }
+		bool isValid() override;
 		
 	private:
 		void debug();
@@ -90,19 +90,19 @@ class EPollSocketMonitor : public SocketMonitor
 #endif // SOCKET_NOTIFY_EPOLL
 
 #ifdef SOCKET_NOTIFY_KQUEUE
-class KQueueSocketMonitor : public SocketMonitor
+class KQueueSocketMonitor final : public SocketMonitor
 {
 	public:
 		KQueueSocketMonitor();
-		virtual ~KQueueSocketMonitor();
+		~KQueueSocketMonitor() override;
 		
-		void internal_add(SocketBase* socket);
-		void internal_remove(SocketBase* socket);
-		void internal_modify(SocketBase* socket);
-		void internal_wait(int time_ms);
-		size_t size() { return num; }
-		size_t capacity() { return max; }
-		bool isValid();
+		void internal_add(SocketBase* socket) override;
+		void internal_remove(SocketBase* socket) override;
+		void internal_modify(SocketBase* socket) override;
+		void internal_wait(int time_ms) override;
+		size_t size() override { return num; }
+		size_t capacity() override { return max; }
+		bool isValid() override;
 	
 	protected:
 		struct kevent* getChangeEventSlot();
@@ -121,19 +121,19 @@ class KQueueSocketMonitor : public SocketMonitor
 
 
 #ifdef SOCKET_NOTIFY_SELECT
-class SelectSocketMonitor : public SocketMonitor
+class SelectSocketMonitor final : public SocketMonitor
 {
 	public:
 		SelectSocketMonitor();
-		virtual ~SelectSocketMonitor();
+		~SelectSocketMonitor() override;
 		
-		void internal_add(SocketBase* socket);
-		void internal_remove(SocketBase* socket);
-		void internal_modify(SocketBase* socket);
-		void internal_wait(int time_ms);
-		size_t size() { return sockets.size(); }
-		size_t capacity() { return max; }
-		bool isValid();
+		void internal_add(SocketBase* socket) override;
+		void internal_remove(SocketBase* socket) override;
+		void internal_modify(SocketBase* socket) override;
+		void internal_wait(int time_ms) override;
+		size_t size() override { return sockets.size(); }
+		size_t capacity() override { return max; }
+		bool isValid() override;
 		
 	private:
 		std::vector<SocketBase*> sockets;

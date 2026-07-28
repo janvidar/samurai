@@ -23,7 +23,7 @@ struct timezone;
 /**
  * A very simple asynchronous server socket class.
  */
-class ServerSocket : public SocketBase {
+class ServerSocket final : public SocketBase {
 	public:
 		/**
 		 * Construct a ServerSocket owned by a shared_ptr. The constructors are
@@ -56,17 +56,16 @@ class ServerSocket : public SocketBase {
 		ServerSocket(Samurai::IO::Net::ServerSocketEventHandler* eh, const Samurai::IO::Net::InetAddress& addr, uint16_t port);
 		
 	public:
-		virtual ~ServerSocket();
+		~ServerSocket() override;
 
-		virtual bool listen(size_t backlog = 5);
-		virtual bool listen(size_t backlog, std::error_code& ec);
+		bool listen(size_t backlog = 5);
+		bool listen(size_t backlog, std::error_code& ec);
 
 	protected:
 		ServerSocket();
-		void handleMonitorEvent(int trig);
+		void handleMonitorEvent(int trig) override;
 		void internal_create();
 		void internal_accept();
-		bool isServer() const { return true; }
 		
 		ServerSocketEventHandler* eventHandler;
 		

@@ -27,7 +27,7 @@ class Buffer {
 		Buffer(Buffer&& other) noexcept;
 		Buffer& operator=(const Buffer& copy);
 		Buffer& operator=(Buffer&& other) noexcept;
-		virtual ~Buffer();
+		~Buffer();
 	
 		enum BinaryMode { BigEndian, LittleEndian, NativeEndian };
 		
