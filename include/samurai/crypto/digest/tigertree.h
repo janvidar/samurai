@@ -28,18 +28,18 @@ namespace Crypto {
 namespace Digest {
 
 /* tiger hash result size, in bytes */
-static const size_t TIGERSIZE = 24;
+inline constexpr size_t TIGERSIZE = 24;
 
 /* size of each block independently tiger-hashed, not counting leaf 0x00 prefix */
-static const size_t BLOCKSIZE = 1024;
+inline constexpr size_t BLOCKSIZE = 1024;
 
 /* size of input to each non-leaf hash-tree node, not counting node 0x01 prefix */
-static const size_t NODESIZE = TIGERSIZE * 2;
+inline constexpr size_t NODESIZE = TIGERSIZE * 2;
 
 /* default size of interim values stack, in TIGERSIZE
  * blocks. If this overflows (as it will for input
  * longer than 2^64 in size), havoc may ensue. */
-static const size_t STACKSIZE = TIGERSIZE * 56;
+inline constexpr size_t STACKSIZE = TIGERSIZE * 56;
 
 typedef struct tt_context {
   uint64_t count;                 /* total blocks processed */

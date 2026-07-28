@@ -46,7 +46,7 @@ class TlsFactory {
 		const std::string& getPeerName() const { return peer_name; }
 
 		/** Bytes in the digest the two calls below produce. */
-		static const size_t SHA256_LENGTH = 32;
+		static constexpr size_t SHA256_LENGTH = 32;
 
 		/**
 		 * The SHA-256 digest of the certificate the peer presented, taken over

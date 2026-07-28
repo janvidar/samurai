@@ -47,21 +47,21 @@ namespace Samurai {
 					 * Returns true if this is a valid (and resolved) IP address.
 					 * This can be either IPv4 or IPv6.
 					 */
-					virtual bool isValid();
+					virtual bool isValid() const;
 					
 					/**
 					 * Returns true if this if this is a valid multicast address.
 					 * For IPv4: this is 224.0.0.0-239.255.255.255
 					 * For IPv6: this is ff00::/8
 					 */
-					virtual bool isMulticast();
+					virtual bool isMulticast() const;
 					
 					/**
 					 * Returns true if this if this is a private address.
 					 * For IPv4: is 10.0.0.0/8, 172.16.0.0/12 or 192.168.0.0/16
 					 * For IPv6: is fc00::/7
 					 */
-					virtual bool isPrivate();
+					virtual bool isPrivate() const;
 
 					/**
 					 * Returns true if this if this is a local loopback address.
@@ -91,12 +91,11 @@ namespace Samurai {
 					
 					enum Version getType() const;
 					
-					bool operator==(const InetAddress&);
-					bool operator!=(const InetAddress&);
+					bool operator==(const InetAddress&) const;
 					InetAddress& operator=(const std::string& str);
 					InetAddress& operator=(const InetAddress&);
 
-					bool isResolved();
+					bool isResolved() const;
 
 					std::string getHostname() const { return hostname; }
 				

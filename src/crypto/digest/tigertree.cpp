@@ -33,7 +33,7 @@
 // #define DUMP_MERKLE_TREE_DEBUG
 #ifndef DUMP_MERKLE_TREE_DEBUG
 #undef QDBG
-#define QDBG(format, ...) do { } while(0);
+#define QDBG(format, ...) do { } while(0)
 #endif
 
 

@@ -23,7 +23,16 @@ class DatagramSocket;
 class DatagramPacket;
 
 
-class EventHandler { };
+/*
+ * Common base of the four handler interfaces below, and forward declared in
+ * socketbase.h. The destructor is virtual because a handler is only ever held
+ * as a base pointer, so destroying one through this type has to reach the
+ * derived destructor.
+ */
+class EventHandler {
+	public:
+		virtual ~EventHandler() = default;
+};
 	
 /**
  * Implement this class to handle socket events.

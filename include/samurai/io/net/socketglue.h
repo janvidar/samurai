@@ -11,9 +11,15 @@
 #define SAMURAI_WINSOCK
 #endif
 
-#define MAXSOCKETS 1024
-#define DEFAULT_CHUNK_SIZE 8192
-#define CONNECT_TIMEOUT 30
+namespace Samurai {
+namespace IO {
+namespace Net {
+inline constexpr size_t MAXSOCKETS = 1024;
+inline constexpr size_t DEFAULT_CHUNK_SIZE = 8192;
+inline constexpr int CONNECT_TIMEOUT = 30;
+}
+}
+}
 
 #ifdef SAMURAI_WINSOCK
 #include <samurai/io/net/socketglue-winsock2.h>

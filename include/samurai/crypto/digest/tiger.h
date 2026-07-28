@@ -13,7 +13,8 @@ namespace Samurai {
 namespace Crypto {
 namespace Digest {
 
-#define TIGER_HASH_SIZE 192/8
+/* Tiger digest size: 192 bits, expressed in bytes. */
+inline constexpr size_t TIGER_HASH_SIZE = 192 / 8;
 
 class Tiger final : public Hash {
 	public:

@@ -11,7 +11,12 @@
 #include <string_view>
 #include <vector>
 
-#define INITBUFSIZE 8192
+namespace Samurai {
+namespace IO {
+/* Default capacity a Buffer starts with. */
+inline constexpr size_t INITBUFSIZE = 8192;
+}
+}
 
 namespace Samurai {
 namespace IO {
@@ -52,7 +57,7 @@ class Buffer {
 		void appendBinary(uint64_t number, BinaryMode endiannes = NativeEndian);
 	
 		/** Returned by the find() family when there is no match. */
-		static const size_t npos = (size_t) -1;
+		static constexpr size_t npos = static_cast<size_t>(-1);
 
 		/**
 		 * Copy the first 'len' bytes into a char array, or string.
