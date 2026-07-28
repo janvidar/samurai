@@ -30,12 +30,10 @@ option(SAMURAI_BUILD_TESTS "Build the test and example programs" ON)
 option(SAMURAI_SANITIZE
     "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
-# LeakSanitizer rides along with AddressSanitizer, but is off by default for
-# two reasons: the library still has known leaks and one of them is reached by
-# the test suite, and LeakSanitizer stops the world through ptrace, which
-# stalls for minutes where /proc/sys/kernel/yama/ptrace_scope is not 0.
+# LeakSanitizer rides along with AddressSanitizer. Turn it off if the ptrace
+# restrictions on the host make stopping the world too slow to be useful.
 option(SAMURAI_SANITIZE_LEAKS
-    "Enable LeakSanitizer as well (requires SAMURAI_SANITIZE)" OFF)
+    "Enable LeakSanitizer as well (requires SAMURAI_SANITIZE)" ON)
 
 # The Makefile build had rules for both libsamurai.so and libsamurai.a, so
 # build both by default. They share a single compile pass.
