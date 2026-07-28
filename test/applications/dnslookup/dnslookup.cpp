@@ -11,6 +11,8 @@
 #include <samurai/io/net/inetaddress.h>
 #include <samurai/io/net/dns/resolver.h>
 
+#include <memory>
+
 static bool running = true;
 
 using namespace Samurai::IO::Net;
@@ -20,7 +22,9 @@ class DNSResolver : public ResolveEventHandler {
 	
 		void lookup(const char* host)
 		{
-			Samurai::IO::Net::DNS::Resolver::getHostByName(this, host);
+			/* Held for the duration of the lookup: an asynchronous backend
+			   needs the resolver to outlive this call. */
+			m_resolver = Samurai::IO::Net::DNS::Resolver::getHostByName(this, host);
 		}
 	
 		void EventHostFound(const InetAddress* addr) {
@@ -38,6 +42,9 @@ class DNSResolver : public ResolveEventHandler {
 			puts("Lookup failed\n");
 			running = false;
 		}
+
+	private:
+		std::unique_ptr<Samurai::IO::Net::DNS::Resolver> m_resolver;
 };
 
 

@@ -7,6 +7,8 @@
 #ifndef HAVE_SAMURAI_DNSRESOLVER_H
 #define HAVE_SAMURAI_DNSRESOLVER_H
 
+#include <memory>
+
 namespace Samurai {
 namespace IO {
 namespace Net {
@@ -32,8 +34,17 @@ class Resolver {
 		virtual ~Resolver();
 		
 	public:
-		static Resolver* getHostByName(Samurai::IO::Net::ResolveEventHandler*, const char* name);
-		static Resolver* getNameByAddress(Samurai::IO::Net::ResolveEventHandler*, InetAddress* address);
+		/**
+		 * Start a lookup.
+		 *
+		 * The caller owns the returned resolver and must keep it alive until
+		 * the event handler has been called: an asynchronous backend needs the
+		 * object to still exist when the reply arrives.
+		 *
+		 * @return null if no backend could be started.
+		 */
+		static std::unique_ptr<Resolver> getHostByName(Samurai::IO::Net::ResolveEventHandler*, const char* name);
+		static std::unique_ptr<Resolver> getNameByAddress(Samurai::IO::Net::ResolveEventHandler*, InetAddress* address);
 		
 	protected:
 		Resolver(Samurai::IO::Net::ResolveEventHandler*);

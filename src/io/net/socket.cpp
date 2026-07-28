@@ -8,6 +8,7 @@
 #include <samurai/io/net/bandwidth.h>
 #include <samurai/io/net/socketbase.h>
 #include <samurai/io/net/socket.h>
+#include <memory>
 #include <samurai/error.h>
 #include <samurai/io/net/socketaddress.h>
 #include <samurai/io/net/socketevent.h>
@@ -39,7 +40,7 @@ Samurai::IO::Net::Socket::Socket(Samurai::IO::Net::SocketEventHandler* eh, const
 	writable(false)
 	,tls(nullptr)
 {
-	address = new InetAddress(address_);
+	address = std::make_unique<InetAddress>(address_);
 }
 
 Samurai::IO::Net::Socket::Socket(SocketEventHandler* eh, const InetAddress& addr_, uint16_t port_) :
@@ -54,7 +55,7 @@ Samurai::IO::Net::Socket::Socket(SocketEventHandler* eh, const InetAddress& addr
 	writable(false)
 	,tls(nullptr)
 {
-	address = new InetAddress(addr_);
+	address = std::make_unique<InetAddress>(addr_);
 }
 
 Samurai::IO::Net::Socket::Socket(socket_t sd_, const Samurai::IO::Net::SocketAddress& addr_) :
@@ -76,8 +77,7 @@ Samurai::IO::Net::Socket::Socket(socket_t sd_, const Samurai::IO::Net::SocketAdd
 Samurai::IO::Net::Socket::~Socket() {
 	TLSDeinitialize();
 	close();
-	delete timer; timer = nullptr;
-	delete address;
+
 }
 
 void Samurai::IO::Net::Socket::setEventHandler(Samurai::IO::Net::SocketEventHandler* eh)
@@ -338,11 +338,10 @@ void Samurai::IO::Net::Socket::connect()
 	setMonitor(Samurai::IO::Net::SocketMonitor::MRead |  Samurai::IO::Net::SocketMonitor::MWrite);
 
 	// connect and reset connection timer.
-	delete timer;
-	timer = nullptr;
+	timer.reset();
 
 	int ret = ::connect(sd, addr->getSockAddr(), addr->getSockAddrSize());
-	timer = new Samurai::Timer(this, CONNECT_TIMEOUT, true);
+	timer = std::make_unique<Samurai::Timer>(this, CONNECT_TIMEOUT, true);
 	if (ret == -1) {
 		if (NETERROR == EINPROGRESS) {
 			state = Connecting;
@@ -555,8 +554,7 @@ ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
 
 
 void Samurai::IO::Net::Socket::EventHostFound(const Samurai::IO::Net::InetAddress* resolved_addr) {
-	if (addr) delete addr;
-	addr = new InetSocketAddress(*resolved_addr, port);
+	addr = std::make_unique<InetSocketAddress>(*resolved_addr, port);
 
 	state = HostFound;
 	if (eventHandler) eventHandler->EventHostFound(this);
@@ -576,8 +574,7 @@ void Samurai::IO::Net::Socket::EventTimeout(Samurai::Timer*) {
 		internal_timeout();
 	}
 
-	delete timer;
-	timer = nullptr;
+	timer.reset();
 }
 
 
@@ -594,7 +591,7 @@ void Samurai::IO::Net::Socket::toggleWriteNotifier(bool toggle) {
 bool Samurai::IO::Net::Socket::TLSInitialize(bool server) {
 	if (tls) return false;
 
-	tls = new OpenSSL();
+	tls = std::make_unique<OpenSSL>();
 
 	/* The name we asked for - not one derived from the connection - is the
 	   only thing a certificate can meaningfully be verified against. */
@@ -609,8 +606,7 @@ bool Samurai::IO::Net::Socket::TLSInitialize(bool server) {
 void Samurai::IO::Net::Socket::TLSDeinitialize() {
 	if (!tls) return;
 	tls->deinitialize();
-	delete tls;
-	tls = nullptr;
+	tls.reset();
 }
 
 

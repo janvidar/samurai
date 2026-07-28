@@ -5,6 +5,7 @@
 
 #include <samurai/samurai.h>
 #include <samurai/io/net/socketbase.h>
+#include <memory>
 #include <samurai/error.h>
 #include <samurai/io/net/inetaddress.h>
 #include <samurai/io/net/socketaddress.h>
@@ -16,7 +17,7 @@ Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::SocketAddress& 
 
 	if (const Samurai::IO::Net::InetSocketAddress* isa =
 		dynamic_cast<const Samurai::IO::Net::InetSocketAddress*>(&addr_))
-		addr = new Samurai::IO::Net::InetSocketAddress(*isa);
+		addr = std::make_unique<Samurai::IO::Net::InetSocketAddress>(*isa);
 	
 	bandwidthManager = Samurai::IO::Net::BandwidthManager::getInstance();
 }
@@ -26,13 +27,13 @@ Samurai::IO::Net::SocketBase::SocketBase(socket_t sd_, const Samurai::IO::Net::S
 {
 	if (const Samurai::IO::Net::InetSocketAddress* isa =
 		dynamic_cast<const Samurai::IO::Net::InetSocketAddress*>(&addr_))
-		addr = new Samurai::IO::Net::InetSocketAddress(*isa);
+		addr = std::make_unique<Samurai::IO::Net::InetSocketAddress>(*isa);
 
 	bandwidthManager = Samurai::IO::Net::BandwidthManager::getInstance();
 }
 
 Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::InetAddress& addr_, uint16_t port_, enum SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(0), monitored(false), type(type_) {
-	addr = new Samurai::IO::Net::InetSocketAddress(addr_, port_);
+	addr = std::make_unique<Samurai::IO::Net::InetSocketAddress>(addr_, port_);
 
 	bandwidthManager = Samurai::IO::Net::BandwidthManager::getInstance();
 }
@@ -45,9 +46,6 @@ Samurai::IO::Net::SocketBase::SocketBase(enum SocketType type_) : sd(INVALID_SOC
 
 Samurai::IO::Net::SocketBase::~SocketBase() {
 	disableMonitor();
-	delete addr;
-	delete ia;
-	delete local_ia;
 }
 
 const Samurai::IO::Net::InetAddress* Samurai::IO::Net::SocketBase::getLocalAddress() const {
@@ -64,20 +62,20 @@ const Samurai::IO::Net::InetAddress* Samurai::IO::Net::SocketBase::getLocalAddre
 
 	if (getsockname(sd, (sockaddr*) &localaddr, &len) != 0) return nullptr;
 
-	if (!local_ia) local_ia = new Samurai::IO::Net::InetAddress();
+	if (!local_ia) local_ia = std::make_unique<Samurai::IO::Net::InetAddress>();
 
 	if (localaddr.ss_family == AF_INET) {
 		struct sockaddr_in* sin = (struct sockaddr_in*) &localaddr;
 		if (!local_ia->setRawAddress(&sin->sin_addr, sizeof(sin->sin_addr),
 		                       Samurai::IO::Net::InetAddress::IPv4)) return nullptr;
-		return local_ia;
+		return local_ia.get();
 	}
 
 	if (localaddr.ss_family == AF_INET6) {
 		struct sockaddr_in6* sin6 = (struct sockaddr_in6*) &localaddr;
 		if (!local_ia->setRawAddress(&sin6->sin6_addr, sizeof(sin6->sin6_addr),
 		                       Samurai::IO::Net::InetAddress::IPv6)) return nullptr;
-		return local_ia;
+		return local_ia.get();
 	}
 
 	return nullptr;
@@ -151,20 +149,20 @@ uint16_t Samurai::IO::Net::SocketBase::getLocalPort() const {
  * result of an earlier call pointing at freed memory.
  */
 const Samurai::IO::Net::InetAddress* Samurai::IO::Net::SocketBase::getAddress() const {
-	InetSocketAddress* isa = dynamic_cast<InetSocketAddress*>(addr);
+	InetSocketAddress* isa = dynamic_cast<InetSocketAddress*>(addr.get());
 	if (!isa) return nullptr;
 
 	const Samurai::IO::Net::InetAddress* peer = isa->getAddress();
 	if (!peer) return nullptr;
 
-	if (!ia) ia = new Samurai::IO::Net::InetAddress();
+	if (!ia) ia = std::make_unique<Samurai::IO::Net::InetAddress>();
 	*ia = *peer;
-	return ia;
+	return ia.get();
 }
 
 
 uint16_t Samurai::IO::Net::SocketBase::getPort() const {
-	InetSocketAddress* isa = dynamic_cast<InetSocketAddress*>(addr);
+	InetSocketAddress* isa = dynamic_cast<InetSocketAddress*>(addr.get());
 	return  isa ? isa->getPort() : 0;
 }
 
@@ -335,7 +333,7 @@ size_t Samurai::IO::Net::SocketBase::getReceiveBufferSize() const {
    IPV6_UNICAST_HOPS. */
 bool Samurai::IO::Net::SocketBase::isIPv6() const
 {
-	InetSocketAddress* isa = dynamic_cast<InetSocketAddress*>(addr);
+	InetSocketAddress* isa = dynamic_cast<InetSocketAddress*>(addr.get());
 	return isa && isa->getAddress() &&
 	       isa->getAddress()->getType() == Samurai::IO::Net::InetAddress::IPv6;
 }

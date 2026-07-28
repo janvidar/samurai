@@ -157,7 +157,7 @@ bool Samurai::IO::Net::MulticastSocket::listen()
 	if (!setReusePort(true)) return false;
         if (!setReuseAddress(true)) return false;
         if (!setNonBlocking(true)) return false;
-        if (!bind(addr)) return false;
+        if (!bind(addr.get())) return false;
 
         setMonitor(SocketMonitor::MRead);
         return true;

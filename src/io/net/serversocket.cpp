@@ -56,7 +56,7 @@ bool Samurai::IO::Net::ServerSocket::listen(size_t backlog, std::error_code& ec)
 	if (!addr) { ec = Samurai::system_error(EDESTADDRREQ); return false; }
 	if (!setReuseAddress(true)) { ec = Samurai::system_error(NETERROR); return false; }
 	if (!setNonBlocking(true, ec)) return false;
-	if (!bind(addr, ec)) return false;
+	if (!bind(addr.get(), ec)) return false;
 
 	/* NOTE: backlog is a size_t here and an int in the syscall. */
 	if (::listen(sd, (int) backlog) == -1)

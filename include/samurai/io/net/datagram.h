@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <time.h>
 #include <samurai/io/net/socketbase.h>
+#include <memory>
 #include <samurai/io/net/socketevent.h>
 #include <samurai/io/net/inetaddress.h>
 
@@ -47,9 +48,9 @@ class DatagramPacket {
 		Samurai::IO::Buffer* getBuffer();
 
 	protected:
-		Samurai::IO::Buffer* buffer;
+		std::unique_ptr<Samurai::IO::Buffer> buffer;
 		DatagramSocket* socket;
-		SocketAddress* addr;
+		std::unique_ptr<SocketAddress> addr;
 
 	friend class DatagramSocket;
 };
@@ -112,7 +113,7 @@ class DatagramSocket : public SocketBase {
 	private:
 		// Misc internal stuff
 		DatagramEventHandler* eventHandler;
-		DatagramPacket* myPacket;
+		std::unique_ptr<DatagramPacket> myPacket;
 
 		/* Receive scratch. A member rather than a 64 KB stack array zeroed
 		   on every read(). */
