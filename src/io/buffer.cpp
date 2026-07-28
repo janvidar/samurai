@@ -103,19 +103,21 @@ void Samurai::IO::Buffer::append(const Buffer& buffer, size_t len)
 }
 
 
-void Samurai::IO::Buffer::pop(char* data, size_t len_) {
+size_t Samurai::IO::Buffer::pop(char* data, size_t len_) {
 	const size_t live = len - head;
-	if (live == 0) return;
+	if (live == 0) return 0;
 	size_t mylen = (len_ > live) ? live : len_;
 	memcpy(data, &buf[head], mylen);
+	return mylen;
 }
 
-void Samurai::IO::Buffer::pop(char* data, size_t offset, size_t len_) {
+size_t Samurai::IO::Buffer::pop(char* data, size_t offset, size_t len_) {
 	const size_t live = len - head;
-	if (offset >= live) return;
+	if (offset >= live) return 0;
 	size_t available = live - offset;
 	size_t mylen = (len_ > available) ? available : len_;
 	memcpy(data, &buf[head + offset], mylen);
+	return mylen;
 }
 
 /**
@@ -206,54 +208,54 @@ void Samurai::IO::Buffer::clear() {
 	len = 0;
 }
 
-int Samurai::IO::Buffer::find(char achar, size_t offset) {
+size_t Samurai::IO::Buffer::find(char achar, size_t offset) {
 	const size_t live = len - head;
-	if (offset >= live) return -1;
+	if (offset >= live) return npos;
 
 	char* pos = (char*) memchr(&buf[head + offset], achar, live - offset);
-	if (!pos) return -1;
-	return (int) (pos - &buf[head]);
+	if (!pos) return npos;
+	return (size_t) (pos - &buf[head]);
 }
 
-int Samurai::IO::Buffer::rfind(char achar) {
+size_t Samurai::IO::Buffer::rfind(char achar) {
 	const size_t live = len - head;
-	if (live == 0) return -1;
+	if (live == 0) return npos;
 
 #ifdef SAMURAI_HAVE_GNU_MEMSEARCH
 	char* pos = (char*) memrchr(&buf[head], achar, live);
-	if (!pos) return -1;
-	return (int) (pos - &buf[head]);
+	if (!pos) return npos;
+	return (size_t) (pos - &buf[head]);
 #else
 	/* NOTE: x is unsigned - 'x-- > 0' walks len-1 down to 0 inclusive. */
 	for (size_t x = live; x-- > 0; )
-		if (buf[head + x] == achar) return (int) x;
-	return -1;
+		if (buf[head + x] == achar) return x;
+	return npos;
 #endif
 }
 
-int Samurai::IO::Buffer::find(const char* str, size_t offset) {
+size_t Samurai::IO::Buffer::find(const char* str, size_t offset) {
 	size_t n = strlen(str);
 	const size_t live = len - head;
 
-	if (n == 0) return (offset <= live) ? (int) offset : -1;
-	if (offset >= live) return -1;
-	if (live - offset < n) return -1;
+	if (n == 0) return (offset <= live) ? offset : npos;
+	if (offset >= live) return npos;
+	if (live - offset < n) return npos;
 
 #ifdef SAMURAI_HAVE_GNU_MEMSEARCH
 	char* pos = (char*) memmem(&buf[head + offset], live - offset, str, n);
-	if (!pos) return -1;
-	return (int) (pos - &buf[head]);
+	if (!pos) return npos;
+	return (size_t) (pos - &buf[head]);
 #else
 	size_t p = offset;
 	for (;;) {
-		int found = find(str[0], p);
-		if (found == -1) return -1;
+		size_t found = find(str[0], p);
+		if (found == npos) return npos;
 
-		p = (size_t) found;
-		if (live - p < n) return -1;
+		p = found;
+		if (live - p < n) return npos;
 
 		/* NOTE: compare at p, not at the starting offset. */
-		if (memcmp(&buf[head + p], str, n) == 0) return (int) p;
+		if (memcmp(&buf[head + p], str, n) == 0) return p;
 		p++;
 	}
 #endif

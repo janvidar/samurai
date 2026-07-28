@@ -152,16 +152,16 @@ void Samurai::IO::Net::DNS::ResolveConfiguration::parse(const char* resolv_conf)
 		 * The last line is handled too; it need not end in a newline.
 		 */
 		size_t last = 0;
-		int offset = buffer.find("\n", last);
-		while (offset != -1) {
-			char* line = buffer.memdup(last, (size_t) offset);
+		size_t offset = buffer.find("\n", last);
+		while (offset != Samurai::IO::Buffer::npos) {
+			char* line = buffer.memdup(last, offset);
 			if (line)
 			{
 				parseLine(line);
 				free(line);
 			}
 
-			last = (size_t) offset + 1;
+			last = offset + 1;
 			offset = buffer.find("\n", last);
 		}
 
