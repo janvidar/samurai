@@ -76,12 +76,14 @@ void Samurai::Crypto::Digest::Hash::finalize()
 
 void Samurai::Crypto::Digest::Hash::finalize_count()
 {
-	uint8_t* pos = m_current_block + m_block_size - m_count_size;
-	
+	if (m_block_size < 8) return;
+
+	uint8_t* pos = m_current_block + m_block_size - 8;
+
 	for (size_t j = 0; j < 8; ++j)
 	{
-		const size_t choose = (m_big_byte_endian ? (j % 8) : (7 - (j % 8)));
-		pos[j + m_count_size - 8] = get_byte(choose, 8 * m_file_size);
+		const size_t choose = (m_big_byte_endian ? j : (7 - j));
+		pos[j] = get_byte(choose, 8 * m_file_size);
 	}
 }
 
