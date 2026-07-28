@@ -4,6 +4,10 @@
  */
 
 #include <algorithm>
+#include <format>
+#include <string>
+#include <string_view>
+#include <utility>
 #include <samurai/samurai.h>
 #include "socketmonitor-backend.h"
 
@@ -107,49 +111,66 @@ struct kevent* Samurai::IO::Net::KQueueSocketMonitor::getChangeEventSlot()
 	return ev;
 }
 
+static std::string kevent_filter_name(int16_t filter)
+{
+	switch (filter)
+	{
+		case EVFILT_READ:     return "EVFILT_READ";
+		case EVFILT_WRITE:    return "EVFILT_WRITE";
+		case EVFILT_AIO:      return "EVFILT_AIO";
+		case EVFILT_VNODE:    return "EVFILT_VNODE";
+		case EVFILT_PROC:     return "EVFILT_PROC";
+		case EVFILT_SIGNAL:   return "EVFILT_SIGNAL";
+		case EVFILT_TIMER:    return "EVFILT_TIMER";
+		case EVFILT_MACHPORT: return "EVFILT_MACHPORT";
+		case EVFILT_FS:       return "EVFILT_FS";
+		case EVFILT_SYSCOUNT: return "EVFILT_SYSCOUNT";
+		default:              return std::format("{}", filter);
+	}
+}
+
+static std::string kevent_flag_names(uint16_t flags)
+{
+	static constexpr std::pair<uint16_t, std::string_view> names[] = {
+		{ EV_ADD,     "EV_ADD"     },
+		{ EV_DELETE,  "EV_DELETE"  },
+		{ EV_ENABLE,  "EV_ENABLE"  },
+		{ EV_DISABLE, "EV_DISABLE" },
+		{ EV_RECEIPT, "EV_RECEIPT" },
+		{ EV_ONESHOT, "EV_ONESHOT" },
+		{ EV_CLEAR,   "EV_CLEAR"   },
+		{ EV_EOF,     "EV_EOF"     },
+		{ EV_ERROR,   "EV_ERROR"   },
+		{ EV_OOBAND,  "EV_OOBAND"  },
+	};
+
+	std::string out;
+	for (const auto& [bit, name] : names)
+	{
+		if (!(flags & bit))
+			continue;
+		if (!out.empty())
+			out += " | ";
+		out += name;
+	}
+
+	if (out.empty())
+		return std::format("{}", flags);
+
+	return out;
+}
+
 static void print_kevent(struct kevent* event)
 {
 	if (!event)
 		return;
 
-	/* Large enough to hold every EV_* name concatenated with " | " separators. */
-	char filter[128]; filter[0] = 0;
-	char flags[128]; flags[0] = 0;
+	const std::string filter = kevent_filter_name(event->filter);
+	const std::string flags = kevent_flag_names(event->flags);
 
-	switch (event->filter)
-	{
-		case EVFILT_READ:     strcat(filter, "EVFILT_READ");     break;
-		case EVFILT_WRITE:    strcat(filter, "EVFILT_WRITE");    break;
-		case EVFILT_AIO:      strcat(filter, "EVFILT_AIO");      break;
-		case EVFILT_VNODE:    strcat(filter, "EVFILT_VNODE");    break;
-		case EVFILT_PROC:     strcat(filter, "EVFILT_PROC");     break;
-		case EVFILT_SIGNAL:   strcat(filter, "EVFILT_SIGNAL");   break;
-		case EVFILT_TIMER:    strcat(filter, "EVFILT_TIMER");    break;
-		case EVFILT_MACHPORT: strcat(filter, "EVFILT_MACHPORT"); break;
-		case EVFILT_FS:       strcat(filter, "EVFILT_FS");       break;
-		case EVFILT_SYSCOUNT: strcat(filter, "EVFILT_SYSCOUNT"); break;
-		default:
-			snprintf(filter, sizeof(filter), "%d", event->filter);
-			break;
-	}
-
-	if (event->flags & EV_ADD)  strcat(flags, "EV_ADD");
-	if (event->flags & EV_DELETE)  { if (strlen(flags)) strcat(flags, " | "); strcat(flags, "EV_DELETE"); }
-	if (event->flags & EV_ENABLE)  { if (strlen(flags)) strcat(flags, " | "); strcat(flags, "EV_ENABLE"); }
-	if (event->flags & EV_DISABLE) { if (strlen(flags)) strcat(flags, " | "); strcat(flags, "EV_DISABLE"); }
-	if (event->flags & EV_RECEIPT) { if (strlen(flags)) strcat(flags, " | "); strcat(flags, "EV_RECEIPT"); }
-	if (event->flags & EV_ONESHOT) { if (strlen(flags)) strcat(flags, " | "); strcat(flags, "EV_ONESHOT"); }
-	if (event->flags & EV_CLEAR)   { if (strlen(flags)) strcat(flags, " | "); strcat(flags, "EV_CLEAR"); }
-	if (event->flags & EV_EOF)     { if (strlen(flags)) strcat(flags, " | "); strcat(flags, "EV_EOF"); }
-	if (event->flags & EV_ERROR)   { if (strlen(flags)) strcat(flags, " | "); strcat(flags, "EV_ERROR"); }
-	if (event->flags & EV_OOBAND)  { if (strlen(flags)) strcat(flags, " | "); strcat(flags, "EV_OOBAND"); }
-
-	if (!strlen(flags))
-	{
-		snprintf(flags, sizeof(flags), "%d", (int) event->flags);
-	}
-
-	QDBG("print_kevent: ev=%p, { %d, %s, %s, %u, %d, %p }", event, (int) event->ident, filter, flags, (unsigned int) event->fflags, (int) event->data, (void*) event->udata);
+	QDBG("print_kevent: ev=%p, { %d, %s, %s, %u, %d, %p }", event, (int) event->ident,
+		filter.c_str(), flags.c_str(), (unsigned int) event->fflags, (int) event->data,
+		(void*) event->udata);
 }
 
 

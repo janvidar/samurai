@@ -8,15 +8,16 @@
 #include <stdio.h>
 #include <string.h>
 #include <algorithm>
+#include <format>
 
 namespace {
 
-/* %02x takes an unsigned int, so the octets cannot be passed straight through. */
 void formatOctets(char (&out)[18], const uint8_t (&octets)[6])
 {
-	snprintf(out, sizeof(out), "%02x:%02x:%02x:%02x:%02x:%02x",
-		(unsigned) octets[0], (unsigned) octets[1], (unsigned) octets[2],
-		(unsigned) octets[3], (unsigned) octets[4], (unsigned) octets[5]);
+	char* at = out;
+	for (size_t n = 0; n < 6; n++)
+		at = std::format_to(at, "{}{:02x}", n ? ":" : "", octets[n]);
+	*at = 0;
 }
 
 }

@@ -5,6 +5,7 @@
 
 #include <samurai/samurai.h>
 #include <samurai/crypto/digest/hashvalue.h>
+#include <format>
 #include <samurai/util/base32.h>
 #include <span>
 #include <stdio.h>
@@ -64,9 +65,10 @@ bool Samurai::Crypto::Digest::HashValue::getFormattedString(Format format, char*
 		/* Two characters per byte, plus the terminator. */
 		if (buflen < (size*2)+1)
 			return false;
-		for (size_t n = 0; n < size; n++)
-			snprintf(&buf[n*2], 3, "%02x", (unsigned) m_data[n]);
-		buf[size*2] = 0;
+		char* out = buf;
+		for (const uint8_t byte : m_data)
+			out = std::format_to(out, "{:02x}", byte);
+		*out = 0;
 
 	} else  if (format == Format::Base32) {
 		/* NOTE: base32 expands rather than contracts - every 5 bits become
