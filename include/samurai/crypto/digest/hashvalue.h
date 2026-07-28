@@ -8,6 +8,7 @@
 
 #include <samurai/samurai.h>
 #include <vector>
+#include <span>
 
 namespace Samurai {
 namespace Crypto {
@@ -42,8 +43,17 @@ class HashValue
 		uint8_t* getData();
 		const uint8_t* getData() const;
 
-		/** Overwrites the existing bytes; the size is fixed at construction. */
-		void setData(const uint8_t*);
+		/** The digest bytes, with their extent attached. */
+		std::span<const uint8_t> bytes() const { return m_data; }
+
+		/**
+		 * Overwrite the digest bytes. The size is fixed at construction, so
+		 * 'data' must be exactly size() long - which a span states and a bare
+		 * pointer did not.
+		 *
+		 * @return false, leaving the value untouched, if the extent differs.
+		 */
+		bool setData(std::span<const uint8_t> data);
 
 		/**
 		 * This will return a printable string of the hash.

@@ -649,9 +649,9 @@ void Samurai::IO::Net::Socket::TLSsendHandshake() {
 }
 
 
-bool Samurai::IO::Net::Socket::TLSgetPeerCertificateSHA256(uint8_t* digest, size_t length) {
-	if (!tls) return false;
-	return tls->getPeerCertificateSHA256(digest, length);
+std::optional<Samurai::IO::Net::TlsFactory::Sha256Digest> Samurai::IO::Net::Socket::TLSgetPeerCertificateSHA256() {
+	if (!tls) return std::nullopt;
+	return tls->getPeerCertificateSHA256();
 }
 
 

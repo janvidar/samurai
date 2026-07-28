@@ -11,33 +11,31 @@
 #include <samurai/io/file.h>
 #include <samurai/util/base32.h>
 
+#include <span>
+
+#include <algorithm>
+
 #define HASH 40
 
-void hash_tiger(uint8_t* buffer, size_t length, uint8_t* hash) {
+void hash_tiger(std::span<const uint8_t> buffer, std::span<uint8_t, Samurai::Crypto::Digest::TIGERSIZE> hash) {
 	Samurai::Crypto::Digest::Tiger tiger;
-	tiger.update((uint8_t*) buffer, (uint64_t) length);
-	Samurai::Crypto::Digest::HashValue* value = tiger.digest();
-	memcpy(hash, value->getData(), value->size());
+	tiger.update(buffer);
+	std::ranges::copy(tiger.digest()->bytes(), hash.begin());
 }
 
-void hash_tth_old(uint8_t* buffer, size_t length, uint8_t* hash) {
+void hash_tth_old(std::span<const uint8_t> buffer, std::span<uint8_t, Samurai::Crypto::Digest::TIGERSIZE> hash) {
 	Samurai::Crypto::Digest::TT_CONTEXT tigerCtx;
 	Samurai::Crypto::Digest::tt_init(&tigerCtx);
-	Samurai::Crypto::Digest::tt_update(&tigerCtx, buffer, length);
+	Samurai::Crypto::Digest::tt_update(&tigerCtx, buffer);
 	Samurai::Crypto::Digest::tt_digest(&tigerCtx, hash);
 }
 
-void hash_tth_new(uint8_t* buffer, size_t length, uint8_t* hash, bool tthl)
+void hash_tth_new(std::span<const uint8_t> buffer, std::span<uint8_t, Samurai::Crypto::Digest::TIGERSIZE> hash, bool tthl)
 {
-	(void) length;
-	(void) buffer;
-	
-	/* QDBG("Buffer size: %d (buf=%p)", (int) length, buffer); */
 	Samurai::Crypto::Digest::Tiger tiger;
 	Samurai::Crypto::Digest::MerkleTree merkle(&tiger);
-	merkle.update((uint8_t*) buffer, length);
-	Samurai::Crypto::Digest::HashValue* value = merkle.digest();
-	memcpy(hash, value->getData(), value->size());
+	merkle.update(buffer);
+	std::ranges::copy(merkle.digest()->bytes(), hash.begin());
 	
 	if (tthl)
 	{
@@ -112,17 +110,17 @@ int main(int argc, char* argv[]) {
 		ssize_t sz = file.read((char*) buffer, size);
 		
 		if (use_tiger)
-			hash_tiger(buffer, sz, hash);
+			hash_tiger(std::span(buffer, sz), hash);
 		else {
 			if (use_old_tth)
-				hash_tth_old(buffer, sz, hash);
+				hash_tth_old(std::span(buffer, sz), hash);
 			else
-				hash_tth_new(buffer, sz, hash, flag_tthl);
+				hash_tth_new(std::span(buffer, sz), hash, flag_tthl);
 		}
 		
 		delete[] buffer;
 
-		base32_encode(hash, Samurai::Crypto::Digest::TIGERSIZE, digest, sizeof(digest));
+		Samurai::Util::base32_encode(std::span<const unsigned char>(hash, Samurai::Crypto::Digest::TIGERSIZE), std::span<char>(digest, sizeof(digest)));
 		printf("%s  %s\n", digest, argv[i]);
 	}
 	

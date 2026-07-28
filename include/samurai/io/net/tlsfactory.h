@@ -49,6 +49,9 @@ class TlsFactory {
 		/** Bytes in the digest the two calls below produce. */
 		static constexpr size_t SHA256_LENGTH = 32;
 
+		/** A SHA-256 certificate fingerprint. */
+		using Sha256Digest = std::array<uint8_t, SHA256_LENGTH>;
+
 		/**
 		 * The SHA-256 digest of the certificate the peer presented, taken over
 		 * its DER encoding - what X.509 tools call the certificate fingerprint.
@@ -57,7 +60,12 @@ class TlsFactory {
 		 * not, if the peer presented no certificate, or if the buffer is
 		 * smaller than SHA256_LENGTH.
 		 */
-		virtual bool getPeerCertificateSHA256(uint8_t* digest, size_t length) = 0;
+		/**
+		 * @return the peer certificate's fingerprint, or nothing if there is no
+		 *         peer certificate. Returning the digest removes the buffer and
+		 *         length the caller previously had to size correctly.
+		 */
+		virtual std::optional<Sha256Digest> getPeerCertificateSHA256() = 0;
 
 		/**
 		 * Initialize SSL contexts, etc.
@@ -104,7 +112,7 @@ class TlsFactory {
 		 * the file handed to setKeys(). False if there is no certificate, or
 		 * it cannot be read.
 		 */
-		static bool getOwnCertificateSHA256(uint8_t* digest, size_t length);
+		static std::optional<Sha256Digest> getOwnCertificateSHA256();
 
 		static bool allowUntrustedConnections();
 		static void setAllowUntrustedConnections(bool toggle);

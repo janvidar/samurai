@@ -7,6 +7,7 @@
 #include <samurai/io/net/hardwareaddress.h>
 #include <stdio.h>
 #include <string.h>
+#include <algorithm>
 
 namespace {
 
@@ -34,9 +35,9 @@ Samurai::IO::Net::HardwareAddress::HardwareAddress(const char* text)
 	formatOctets(macaddr, octets);
 }
 
-Samurai::IO::Net::HardwareAddress::HardwareAddress(const uint8_t octets_[6])
+Samurai::IO::Net::HardwareAddress::HardwareAddress(std::span<const uint8_t, 6> octets_)
 {
-	memcpy(octets, octets_, 6);
+	std::copy(octets_.begin(), octets_.end(), octets);
 	formatOctets(macaddr, octets);
 }
 
@@ -48,7 +49,7 @@ const char* Samurai::IO::Net::HardwareAddress::getAddress() const
 {
 	return macaddr;
 }
-const uint8_t* Samurai::IO::Net::HardwareAddress::getOctets() const
+std::span<const uint8_t, 6> Samurai::IO::Net::HardwareAddress::getOctets() const
 {
 	return octets;
 }

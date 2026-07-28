@@ -7,19 +7,21 @@
 #include <string.h>
 
 #include <samurai/util/base32.h>
+#include <span>
 
 #define HASH 40
 
 static const char* ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
-size_t base32_encode_size(size_t len) {
-	/* Every 5 bits become one character; plus the terminator. */
-	return ((len * 8 + 4) / 5) + 1;
-}
 
-size_t base32_encode(const unsigned char* buffer, size_t len, char* result, size_t result_len) {
+size_t Samurai::Util::base32_encode(std::span<const unsigned char> input, std::span<char> out) {
+	const unsigned char* buffer = input.data();
+	const size_t len = input.size();
+	char* result = out.data();
+	const size_t result_len = out.size();
+
 	if (!result || !result_len) return 0;
-	if (result_len < base32_encode_size(len)) { result[0] = '\0'; return 0; }
+	if (result_len < Samurai::Util::base32_encode_size(len)) { result[0] = '\0'; return 0; }
 	if (!buffer || !len) { result[0] = '\0'; return 0; }
 
 	unsigned char word = 0;
@@ -43,7 +45,11 @@ size_t base32_encode(const unsigned char* buffer, size_t len, char* result, size
 	return n;
 }
 
-size_t base32_decode(const char* src, unsigned char* dst, size_t len) {
+size_t Samurai::Util::base32_decode(std::string_view source, std::span<unsigned char> out) {
+	const char* src = source.data();
+	unsigned char* dst = out.data();
+	const size_t len = out.size();
+
 	size_t index = 0;
 	size_t offset = 0;
 	if (!src || !dst || !len) return 0;

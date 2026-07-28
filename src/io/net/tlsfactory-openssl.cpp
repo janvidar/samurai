@@ -62,10 +62,8 @@ static void ssl_error_string(char* buf, size_t buflen)
  * X509_digest() hashes the DER encoding of the whole certificate, which is what
  * a certificate fingerprint is defined over.
  */
-static bool sha256_of(X509* cert, uint8_t* digest, size_t length)
+static std::optional<Samurai::IO::Net::TlsFactory::Sha256Digest> sha256_of(X509* cert)
 {
-	if (length < Samurai::IO::Net::TlsFactory::SHA256_LENGTH) return false;
-
 	unsigned char buf[EVP_MAX_MD_SIZE];
 	unsigned int size = 0;
 
@@ -74,24 +72,25 @@ static bool sha256_of(X509* cert, uint8_t* digest, size_t length)
 		char msg[SSL_ERRBUF_SIZE];
 		ssl_error_string(msg, sizeof(msg));
 		QERR("Unable to hash the certificate: %s", msg);
-		return false;
+		return std::nullopt;
 	}
 
 	if (size != Samurai::IO::Net::TlsFactory::SHA256_LENGTH)
 	{
 		QERR("SHA-256 produced %u bytes rather than %u", size,
 			(unsigned int) Samurai::IO::Net::TlsFactory::SHA256_LENGTH);
-		return false;
+		return std::nullopt;
 	}
 
-	memcpy(digest, buf, size);
-	return true;
+	Samurai::IO::Net::TlsFactory::Sha256Digest digest;
+	memcpy(digest.data(), buf, digest.size());
+	return digest;
 }
 
-bool Samurai::IO::Net::TlsFactory::getOwnCertificateSHA256(uint8_t* digest, size_t length)
+std::optional<Samurai::IO::Net::TlsFactory::Sha256Digest> Samurai::IO::Net::TlsFactory::getOwnCertificateSHA256()
 {
 	Samurai::IO::File* pem = TlsFactory::getCertificate();
-	if (!pem || !pem->exists()) return false;
+	if (!pem || !pem->exists()) return std::nullopt;
 
 	BIO* bio = BIO_new_file(pem->getName().c_str(), "r");
 	if (!bio)
@@ -99,7 +98,7 @@ bool Samurai::IO::Net::TlsFactory::getOwnCertificateSHA256(uint8_t* digest, size
 		char msg[SSL_ERRBUF_SIZE];
 		ssl_error_string(msg, sizeof(msg));
 		QERR("Unable to open '%s': %s", pem->getName().c_str(), msg);
-		return false;
+		return std::nullopt;
 	}
 
 	X509* cert = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
@@ -110,10 +109,10 @@ bool Samurai::IO::Net::TlsFactory::getOwnCertificateSHA256(uint8_t* digest, size
 		char msg[SSL_ERRBUF_SIZE];
 		ssl_error_string(msg, sizeof(msg));
 		QERR("Unable to read a certificate from '%s': %s", pem->getName().c_str(), msg);
-		return false;
+		return std::nullopt;
 	}
 
-	bool found = sha256_of(cert, digest, length);
+	auto found = sha256_of(cert);
 	X509_free(cert);
 	return found;
 }
@@ -362,18 +361,18 @@ Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendHandshake
 	return Samurai::IO::Net::TlsFactory::TlsStatus::Ok;
 }
 
-bool Samurai::IO::Net::OpenSSL::getPeerCertificateSHA256(uint8_t* digest, size_t length)
+std::optional<Samurai::IO::Net::TlsFactory::Sha256Digest> Samurai::IO::Net::OpenSSL::getPeerCertificateSHA256()
 {
-	if (!ssl) return false;
+	if (!ssl) return std::nullopt;
 
 	X509* cert = SSL_get1_peer_certificate(ssl);
 	if (!cert)
 	{
 		ERR_clear_error();
-		return false;
+		return std::nullopt;
 	}
 
-	bool found = sha256_of(cert, digest, length);
+	auto found = sha256_of(cert);
 	X509_free(cert);
 	return found;
 }

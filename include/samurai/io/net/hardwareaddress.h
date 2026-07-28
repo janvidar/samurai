@@ -7,6 +7,7 @@
 #define HAVE_SAMURAI_HARDWARE_ADDRESS_H
 
 #include <stdint.h>
+#include <span>
 
 namespace Samurai {
 namespace IO {
@@ -23,12 +24,14 @@ class HardwareAddress
 		 * getAddress() then renders as "00:00:00:00:00:00".
 		 */
 		HardwareAddress(const char* text);
-		HardwareAddress(const uint8_t octets[6]);
+		/* The '[6]' in a parameter is decoration - the compiler sees a plain
+		 * pointer. A fixed-extent span is the length the caller must supply. */
+		explicit HardwareAddress(std::span<const uint8_t, 6> octets);
 
 		~HardwareAddress();
 
 		const char* getAddress() const;
-		const uint8_t* getOctets() const;
+		std::span<const uint8_t, 6> getOctets() const;
 
 	protected:
 		/* Both are always set by every constructor, so getAddress() returns a

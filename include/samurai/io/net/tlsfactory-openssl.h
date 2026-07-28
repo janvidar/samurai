@@ -29,7 +29,7 @@ class OpenSSL final : public TlsFactory {
 		TlsStatus sendHandshake() override;
 		TlsStatus sendGoodbye() override;
 
-		bool getPeerCertificateSHA256(uint8_t* digest, size_t length) override;
+		std::optional<Sha256Digest> getPeerCertificateSHA256() override;
 
 		ssize_t write(const char* data, size_t length, TlsStatus& status) override;
 		ssize_t read(char* data, size_t length, TlsStatus& status) override;

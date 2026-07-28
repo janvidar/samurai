@@ -141,7 +141,7 @@ class SocketListener :
 			debug(__PRETTY_FUNCTION__);
 		}
 		
-		void EventError(const Samurai::IO::Net::Socket*, enum Samurai::IO::Net::SocketError error, const char* msg) {
+		void EventError(const Samurai::IO::Net::Socket*, Samurai::IO::Net::SocketError error, const char* msg) {
 			(void) error;
 			(void) msg;
 			flag_error = true;
