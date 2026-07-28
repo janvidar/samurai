@@ -10,6 +10,7 @@
 
 #include <memory>
 #include <samurai/error.h>
+#include <samurai/io/net/socketmonitor.h>
 
 namespace Samurai {
 namespace IO {
@@ -177,9 +178,9 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		void close();
 		
 		bool isMonitored() { return monitored; }
-		int getMonitorTrigger() { return monitor_trigger; }
+		SocketMonitor::Triggers getMonitorTrigger() const { return monitor_trigger; }
 
-		void setMonitor(int trigger);
+		void setMonitor(SocketMonitor::Triggers trigger);
 		void disableMonitor();
 	
 	protected:
@@ -200,7 +201,7 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		 *
 		 * @param trig see SocketMonitor::Triggers (ORed)
 		 */
-		virtual void handleMonitorEvent(int trig) { (void) trig; }
+		virtual void handleMonitorEvent(SocketMonitor::Triggers trig) { (void) trig; }
 
 		/**
 		 * Input already buffered above the descriptor, which a readiness poll
@@ -239,8 +240,7 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		mutable std::unique_ptr<InetAddress> ia;
 		mutable std::unique_ptr<InetAddress> local_ia;
 
-		// See SocketMonitor::Triggers
-		int monitor_trigger;
+		SocketMonitor::Triggers monitor_trigger;
 		bool monitored;
 		SocketType type;
 		Samurai::IO::Net::BandwidthManager* bandwidthManager;

@@ -13,7 +13,7 @@
 #include <samurai/io/net/bandwidth.h>
 
 
-Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::SocketAddress& addr_, SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(SocketState::Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(0), monitored(false), type(type_) {
+Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::SocketAddress& addr_, SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(SocketState::Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(SocketMonitor::Triggers::None), monitored(false), type(type_) {
 
 	if (const Samurai::IO::Net::InetSocketAddress* isa =
 		dynamic_cast<const Samurai::IO::Net::InetSocketAddress*>(&addr_))
@@ -23,7 +23,7 @@ Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::SocketAddress& 
 }
 
 
-Samurai::IO::Net::SocketBase::SocketBase(socket_t sd_, const Samurai::IO::Net::SocketAddress& addr_, SocketType type_) : sd(sd_), addr(nullptr), state(SocketState::Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(0), monitored(false), type(type_)
+Samurai::IO::Net::SocketBase::SocketBase(socket_t sd_, const Samurai::IO::Net::SocketAddress& addr_, SocketType type_) : sd(sd_), addr(nullptr), state(SocketState::Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(SocketMonitor::Triggers::None), monitored(false), type(type_)
 {
 	if (const Samurai::IO::Net::InetSocketAddress* isa =
 		dynamic_cast<const Samurai::IO::Net::InetSocketAddress*>(&addr_))
@@ -32,14 +32,14 @@ Samurai::IO::Net::SocketBase::SocketBase(socket_t sd_, const Samurai::IO::Net::S
 	bandwidthManager = Samurai::IO::Net::BandwidthManager::getInstance();
 }
 
-Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::InetAddress& addr_, uint16_t port_, SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(SocketState::Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(0), monitored(false), type(type_) {
+Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::InetAddress& addr_, uint16_t port_, SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(SocketState::Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(SocketMonitor::Triggers::None), monitored(false), type(type_) {
 	addr = std::make_unique<Samurai::IO::Net::InetSocketAddress>(addr_, port_);
 
 	bandwidthManager = Samurai::IO::Net::BandwidthManager::getInstance();
 }
 
 
-Samurai::IO::Net::SocketBase::SocketBase(SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(SocketState::Disconnected), ia(nullptr), local_ia(nullptr), monitor_trigger(0), monitored(false), type(type_)
+Samurai::IO::Net::SocketBase::SocketBase(SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(SocketState::Disconnected), ia(nullptr), local_ia(nullptr), monitor_trigger(SocketMonitor::Triggers::None), monitored(false), type(type_)
 {
 	bandwidthManager = Samurai::IO::Net::BandwidthManager::getInstance();
 }
@@ -391,7 +391,7 @@ void Samurai::IO::Net::SocketBase::close() {
 	}
 }
 
-void Samurai::IO::Net::SocketBase::setMonitor(int trigger)
+void Samurai::IO::Net::SocketBase::setMonitor(Samurai::IO::Net::SocketMonitor::Triggers trigger)
 {
 	monitor_trigger = trigger;
 	if (monitored)

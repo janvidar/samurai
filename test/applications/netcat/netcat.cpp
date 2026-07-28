@@ -274,7 +274,7 @@ class Connection :
 
 			sock->setNonBlocking(true);
 			sock->setEventHandler(this);
-			sock->setMonitor(Samurai::IO::Net::SocketMonitor::MRead);
+			sock->setMonitor(Samurai::IO::Net::SocketMonitor::Triggers::Read);
 			socket = sock;
 
 			if (arg_ssl)

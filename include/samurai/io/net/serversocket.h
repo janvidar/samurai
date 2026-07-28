@@ -63,7 +63,7 @@ class ServerSocket final : public SocketBase {
 
 	protected:
 		ServerSocket();
-		void handleMonitorEvent(int trig) override;
+		void handleMonitorEvent(SocketMonitor::Triggers trig) override;
 		void internal_create();
 		void internal_accept();
 		

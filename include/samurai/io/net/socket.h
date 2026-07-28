@@ -175,7 +175,7 @@ class Socket :
 		void sslDeinitialize();
 
 	protected:
-		void handleMonitorEvent(int trig) override;
+		void handleMonitorEvent(SocketMonitor::Triggers trig) override;
 		size_t bufferedInput() const override;
 
 		void internal_canRead();

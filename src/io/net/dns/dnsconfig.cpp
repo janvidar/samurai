@@ -125,7 +125,7 @@ void Samurai::IO::Net::DNS::ResolveConfiguration::parse(const char* resolv_conf)
 
 	QDBG("[DNS] Reading %s...", resolv_conf);
 	Samurai::IO::File conf(resolv_conf);
-	if (conf.open(Samurai::IO::File::Read)) {
+	if (conf.open(Samurai::IO::File::Mode::Read)) {
 		Samurai::IO::Buffer buffer(conf.size());
 		conf.read(&buffer, conf.size());
 		QDBG("[DNS] Read %d bytes", (int) buffer.size());

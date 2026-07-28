@@ -66,17 +66,17 @@ bool Samurai::IO::Net::ServerSocket::listen(size_t backlog, std::error_code& ec)
 		return false;
 	}
 
-	setMonitor(SocketMonitor::MRead);
+	setMonitor(Samurai::IO::Net::SocketMonitor::Triggers::Read);
 	return true;
 }
 
 /** accept() will now have something to accept, if called from SocketMonitor at least. */
-void Samurai::IO::Net::ServerSocket::handleMonitorEvent(int trig)
+void Samurai::IO::Net::ServerSocket::handleMonitorEvent(Samurai::IO::Net::SocketMonitor::Triggers trig)
 {
-	if (trig & SocketMonitor::MRead)
+	if (any(trig & Samurai::IO::Net::SocketMonitor::Triggers::Read))
 		internal_accept();
 
-	if (trig & (SocketMonitor::MError | SocketMonitor::MClose))
+	if (any(trig & (Samurai::IO::Net::SocketMonitor::Triggers::Error | Samurai::IO::Net::SocketMonitor::Triggers::Close)))
 	{
 		QERR("SocketState::Listening socket signalled error/hangup, disabling monitor");
 		disableMonitor();

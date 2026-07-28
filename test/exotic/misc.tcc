@@ -6,6 +6,8 @@
 #include <samurai/io/net/hardwareaddress.h>
 #include <samurai/io/net/bandwidth.h>
 #include <samurai/util/bwestimation.h>
+#include <samurai/io/file.h>
+#include <samurai/io/net/socketmonitor.h>
 #include <string.h>
 
 /*
@@ -98,4 +100,79 @@ EXO_TEST(bandwidth_manager_starts_at_zero,
 {
 	Samurai::IO::Net::BandwidthManager mgr;
 	return mgr.getSendBps() == 0 && mgr.getRecvBps() == 0;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Bitmask operators on the scoped flag enums                                */
+/*                                                                           */
+/* A scoped enum has no built-in bitwise operators and does not convert to    */
+/* bool, so a flag set has to opt in; see samurai/bitmask.h.                 */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(bitmask_or_combines,
+{
+	using Mode = Samurai::IO::File::Mode;
+	const Mode m = Mode::Write | Mode::Truncate;
+	return any(m & Mode::Write) && any(m & Mode::Truncate);
+});
+
+EXO_TEST(bitmask_and_excludes_unset,
+{
+	using Mode = Samurai::IO::File::Mode;
+	const Mode m = Mode::Write | Mode::Truncate;
+	return !any(m & Mode::Read) && !any(m & Mode::Append);
+});
+
+EXO_TEST(bitmask_all_requires_every_bit,
+{
+	using Mode = Samurai::IO::File::Mode;
+	const Mode m = Mode::Write | Mode::Truncate;
+	return all(m, Mode::Write | Mode::Truncate)
+		&& !all(m, Mode::Write | Mode::Read);
+});
+
+EXO_TEST(bitmask_or_assign,
+{
+	using Mode = Samurai::IO::File::Mode;
+	Mode m = Mode::Read;
+	m |= Mode::Append;
+	return any(m & Mode::Read) && any(m & Mode::Append);
+});
+
+EXO_TEST(bitmask_and_assign_masks,
+{
+	using Mode = Samurai::IO::File::Mode;
+	Mode m = Mode::Read | Mode::Append | Mode::Paranoid;
+	m &= Mode::Read | Mode::Append;
+	return any(m & Mode::Read) && any(m & Mode::Append) && !any(m & Mode::Paranoid);
+});
+
+EXO_TEST(bitmask_complement_clears,
+{
+	using Mode = Samurai::IO::File::Mode;
+	Mode m = Mode::Read | Mode::Append;
+	m &= ~Mode::Append;
+	return any(m & Mode::Read) && !any(m & Mode::Append);
+});
+
+EXO_TEST(bitmask_empty_set_is_not_any,
+{
+	using Trig = Samurai::IO::Net::SocketMonitor::Triggers;
+	return !any(Trig::None) && any(Trig::Read);
+});
+
+EXO_TEST(bitmask_triggers_combine,
+{
+	using Trig = Samurai::IO::Net::SocketMonitor::Triggers;
+	const Trig t = Trig::Read | Trig::Write;
+	return any(t & Trig::Read) && any(t & Trig::Write) && !any(t & Trig::Error);
+});
+
+/* The operators are constant expressions, so a flag set can bound an array. */
+EXO_TEST(bitmask_is_constexpr,
+{
+	using Mode = Samurai::IO::File::Mode;
+	static_assert(any(Mode::Write | Mode::Read), "operators must be constexpr");
+	static_assert(!any(Mode::Write & Mode::Read), "distinct flags must not overlap");
+	return true;
 });

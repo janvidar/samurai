@@ -50,10 +50,10 @@ void samurai_debug_init() {
 	samurai_dump_sch = std::make_unique<Samurai::IO::File>(DUMP_FILE_SEARCH);
 	samurai_dump_dbg = std::make_unique<Samurai::IO::File>(DUMP_FILE_DEBUG);
 	samurai_dump_hub = std::make_unique<Samurai::IO::File>(DUMP_FILE_HUB);
-	samurai_dump_net->open(Samurai::IO::File::Write | Samurai::IO::File::Truncate);
-	samurai_dump_sch->open(Samurai::IO::File::Write | Samurai::IO::File::Append);
-	samurai_dump_dbg->open(Samurai::IO::File::Write | Samurai::IO::File::Truncate);
-	samurai_dump_hub->open(Samurai::IO::File::Write | Samurai::IO::File::Append);
+	samurai_dump_net->open(Samurai::IO::File::Mode::Write | Samurai::IO::File::Mode::Truncate);
+	samurai_dump_sch->open(Samurai::IO::File::Mode::Write | Samurai::IO::File::Mode::Append);
+	samurai_dump_dbg->open(Samurai::IO::File::Mode::Write | Samurai::IO::File::Mode::Truncate);
+	samurai_dump_hub->open(Samurai::IO::File::Mode::Write | Samurai::IO::File::Mode::Append);
 	
 }
 

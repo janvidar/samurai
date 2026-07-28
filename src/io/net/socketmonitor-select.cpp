@@ -27,7 +27,7 @@ Samurai::IO::Net::SelectSocketMonitor::SelectSocketMonitor() : Samurai::IO::Net:
 	for (size_t n = 0; n < max; n++)
 	{
 		act[n].fd = INVALID_SOCKET;
-		act[n].trig = 0;
+		act[n].trig = Samurai::IO::Net::SocketMonitor::Triggers::None;
 	}
 }
 
@@ -119,19 +119,19 @@ void Samurai::IO::Net::SelectSocketMonitor::internal_wait(int time_ms) {
 			continue;
 		}
 
-		const int trigger = sock->getMonitorTrigger();
+		const Samurai::IO::Net::SocketMonitor::Triggers trigger = sock->getMonitorTrigger();
 
 		/* NOTE: not mutually exclusive: connect() and
 		   toggleWriteNotifier(true) register a socket for read and write at
 		   once, so both sets have to be set. */
-		if (trigger & MWrite)  FD_SET(fd, &wfds);
-		if (trigger & MRead)   FD_SET(fd, &rfds);
+		if (any(trigger & Samurai::IO::Net::SocketMonitor::Triggers::Write))  FD_SET(fd, &wfds);
+		if (any(trigger & Samurai::IO::Net::SocketMonitor::Triggers::Read))   FD_SET(fd, &rfds);
 
-		/* select()'s third set is out-of-band data, which is what MUrgent
+		/* select()'s third set is out-of-band data, which is what Samurai::IO::Net::SocketMonitor::Triggers::Urgent
 		   means. */
-		if (trigger & MUrgent) FD_SET(fd, &efds);
+		if (any(trigger & Samurai::IO::Net::SocketMonitor::Triggers::Urgent)) FD_SET(fd, &efds);
 
-		if (!(trigger & (MRead | MWrite | MUrgent))) continue;
+		if (!any(trigger & (Samurai::IO::Net::SocketMonitor::Triggers::Read | Samurai::IO::Net::SocketMonitor::Triggers::Write | Samurai::IO::Net::SocketMonitor::Triggers::Urgent))) continue;
 
 		if (maxfd == INVALID_SOCKET || maxfd < fd)
 			maxfd = fd;
@@ -170,7 +170,7 @@ void Samurai::IO::Net::SelectSocketMonitor::internal_wait(int time_ms) {
 			     (unsigned long) bad.size());
 
 			for (size_t n = 0; n < bad.size(); n++)
-				dispatch(bad[n], MError);
+				dispatch(bad[n], Samurai::IO::Net::SocketMonitor::Triggers::Error);
 
 			return;
 		}
@@ -189,12 +189,12 @@ void Samurai::IO::Net::SelectSocketMonitor::internal_wait(int time_ms) {
 		/* Same bound as above: FD_ISSET reads the bitmap too. */
 		if (!fd_fits_in_set(fd)) continue;
 
-		int trig = 0;
-		if (FD_ISSET(fd, &wfds)) trig |= MWrite;
-		if (FD_ISSET(fd, &rfds)) trig |= MRead;
-		if (FD_ISSET(fd, &efds)) trig |= MUrgent;
+		Samurai::IO::Net::SocketMonitor::Triggers trig = Samurai::IO::Net::SocketMonitor::Triggers::None;
+		if (FD_ISSET(fd, &wfds)) trig |= Samurai::IO::Net::SocketMonitor::Triggers::Write;
+		if (FD_ISSET(fd, &rfds)) trig |= Samurai::IO::Net::SocketMonitor::Triggers::Read;
+		if (FD_ISSET(fd, &efds)) trig |= Samurai::IO::Net::SocketMonitor::Triggers::Urgent;
 
-		if (!trig) continue;
+		if (!any(trig)) continue;
 
 		if (act_num == max)
 		{

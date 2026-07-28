@@ -36,7 +36,7 @@ Samurai::IO::Net::PollSocketMonitor::PollSocketMonitor() : Samurai::IO::Net::Soc
 		list[n].events = 0;
 		list[n].revents = 0;
 		act[n].fd = INVALID_SOCKET;
-		act[n].trig = 0;
+		act[n].trig = Samurai::IO::Net::SocketMonitor::Triggers::None;
 	}
 	num = 0;
 }
@@ -62,10 +62,10 @@ bool Samurai::IO::Net::PollSocketMonitor::isValid()
  */
 void Samurai::IO::Net::PollSocketMonitor::internal_add(Samurai::IO::Net::SocketBase* socket)
 {
-	int trigger = socket->getMonitorTrigger();
+	Samurai::IO::Net::SocketMonitor::Triggers trigger = socket->getMonitorTrigger();
 	short ev = POLLHUP | POLLERR | POLLNVAL;
-	if (trigger & MRead)  ev |= POLLIN;
-	if (trigger & MWrite) ev |= POLLOUT;
+	if (any(trigger & Samurai::IO::Net::SocketMonitor::Triggers::Read))  ev |= POLLIN;
+	if (any(trigger & Samurai::IO::Net::SocketMonitor::Triggers::Write)) ev |= POLLOUT;
 	
 	if (num == max)
 	{
@@ -116,11 +116,11 @@ void Samurai::IO::Net::PollSocketMonitor::internal_modify(Samurai::IO::Net::Sock
 
 	if (n == num) return; // not found
 	
-	int trigger = socket->getMonitorTrigger();
+	Samurai::IO::Net::SocketMonitor::Triggers trigger = socket->getMonitorTrigger();
 	
 	short ev = POLLHUP | POLLERR | POLLNVAL;
-	if (trigger & MRead)  ev |= POLLIN;
-	if (trigger & MWrite) ev |= POLLOUT;
+	if (any(trigger & Samurai::IO::Net::SocketMonitor::Triggers::Read))  ev |= POLLIN;
+	if (any(trigger & Samurai::IO::Net::SocketMonitor::Triggers::Write)) ev |= POLLOUT;
 	list[n].events = ev;
 }
 
@@ -147,15 +147,15 @@ void Samurai::IO::Net::PollSocketMonitor::internal_wait(int time_ms)
 		Samurai::IO::Net::SocketBase* sock = sockets[n];
 		if (!sock) continue;
 
-		int trig = 0;
+		Samurai::IO::Net::SocketMonitor::Triggers trig = Samurai::IO::Net::SocketMonitor::Triggers::None;
 		const short f = list[n].revents;
-		if (f & POLLOUT) trig |= MWrite;
-		if (f & POLLIN)  trig |= MRead;
+		if (f & POLLOUT) trig |= Samurai::IO::Net::SocketMonitor::Triggers::Write;
+		if (f & POLLIN)  trig |= Samurai::IO::Net::SocketMonitor::Triggers::Read;
 
-		if (f & (POLLERR | POLLNVAL)) trig |= MError;
-		if (f & POLLHUP)              trig |= MClose;
+		if (f & (POLLERR | POLLNVAL)) trig |= Samurai::IO::Net::SocketMonitor::Triggers::Error;
+		if (f & POLLHUP)              trig |= Samurai::IO::Net::SocketMonitor::Triggers::Close;
 
-		if (!trig) continue;
+		if (!any(trig)) continue;
 
 		act[act_num].fd = list[n].fd;
 		act[act_num].trig = trig;

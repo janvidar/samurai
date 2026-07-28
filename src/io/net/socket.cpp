@@ -84,7 +84,7 @@ void Samurai::IO::Net::Socket::setEventHandler(Samurai::IO::Net::SocketEventHand
 {
 	if (!eventHandler && eh && sd != INVALID_SOCKET)
 	{
-		setMonitor(Samurai::IO::Net::SocketMonitor::MRead);
+		setMonitor(Samurai::IO::Net::SocketMonitor::Triggers::Read);
 	}
 	eventHandler = eh;
 }
@@ -99,9 +99,9 @@ void Samurai::IO::Net::Socket::lookup() {
 }
 
 
-void Samurai::IO::Net::Socket::handleMonitorEvent(int trig)
+void Samurai::IO::Net::Socket::handleMonitorEvent(Samurai::IO::Net::SocketMonitor::Triggers trig)
 {
-	if (trig & SocketMonitor::MRead)
+	if (any(trig & Samurai::IO::Net::SocketMonitor::Triggers::Read))
 	{
 		switch (state)
 		{
@@ -154,7 +154,7 @@ void Samurai::IO::Net::Socket::handleMonitorEvent(int trig)
 		}
 	}
 
-	if (trig & SocketMonitor::MWrite)
+	if (any(trig & Samurai::IO::Net::SocketMonitor::Triggers::Write))
 	{
 		switch (state)
 		{
@@ -177,13 +177,13 @@ void Samurai::IO::Net::Socket::handleMonitorEvent(int trig)
 
 	/* NOTE: Handled last, so that data still buffered on a socket that has
 	   also errored is delivered before the connection is torn down. */
-	if (trig & (SocketMonitor::MError | SocketMonitor::MClose))
+	if (any(trig & (Samurai::IO::Net::SocketMonitor::Triggers::Error | Samurai::IO::Net::SocketMonitor::Triggers::Close)))
 	{
-		/* The MRead path may already have torn this down; do not report twice. */
+		/* The Samurai::IO::Net::SocketMonitor::Triggers::Read path may already have torn this down; do not report twice. */
 		if (state == SocketState::Invalid || state == SocketState::Disconnected)
 			return;
 
-		if (trig & SocketMonitor::MError)
+		if (any(trig & Samurai::IO::Net::SocketMonitor::Triggers::Error))
 		{
 			int value = 0;
 			socklen_t valsize = sizeof(value);
@@ -335,7 +335,7 @@ void Samurai::IO::Net::Socket::connect()
 		return;
 	}
 
-	setMonitor(Samurai::IO::Net::SocketMonitor::MRead |  Samurai::IO::Net::SocketMonitor::MWrite);
+	setMonitor(Samurai::IO::Net::SocketMonitor::Triggers::Read |  Samurai::IO::Net::SocketMonitor::Triggers::Write);
 
 	// connect and reset connection timer.
 	timer.reset();
@@ -580,9 +580,9 @@ void Samurai::IO::Net::Socket::EventTimeout(Samurai::Timer*) {
 
 void Samurai::IO::Net::Socket::toggleWriteNotifier(bool toggle) {
 	if (toggle)
-		setMonitor(Samurai::IO::Net::SocketMonitor::MRead | Samurai::IO::Net::SocketMonitor::MWrite);
+		setMonitor(Samurai::IO::Net::SocketMonitor::Triggers::Read | Samurai::IO::Net::SocketMonitor::Triggers::Write);
 	else
-		setMonitor(Samurai::IO::Net::SocketMonitor::MRead);
+		setMonitor(Samurai::IO::Net::SocketMonitor::Triggers::Read);
 }
 
 

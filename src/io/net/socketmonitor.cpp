@@ -138,11 +138,11 @@ void Samurai::IO::Net::SocketMonitor::dispatchBufferedInput()
 	}
 
 	for (size_t n = 0; n < ready.size(); n++)
-		dispatch(ready[n], MRead);
+		dispatch(ready[n], Samurai::IO::Net::SocketMonitor::Triggers::Read);
 }
 
 
-void Samurai::IO::Net::SocketMonitor::dispatch(socket_t fd, int trig)
+void Samurai::IO::Net::SocketMonitor::dispatch(socket_t fd, Triggers trig)
 {
 	std::map<socket_t, std::weak_ptr<SocketBase> >::iterator it = registry.find(fd);
 	if (it == registry.end())
@@ -162,7 +162,7 @@ void Samurai::IO::Net::SocketMonitor::dispatch(socket_t fd, int trig)
 }
 
 
-void Samurai::IO::Net::SocketMonitor::handleSocketEvent(Samurai::IO::Net::SocketBase* sock, int trig)
+void Samurai::IO::Net::SocketMonitor::handleSocketEvent(Samurai::IO::Net::SocketBase* sock, Triggers trig)
 {
 	sock->handleMonitorEvent(trig);
 }
