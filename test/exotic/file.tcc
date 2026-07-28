@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <utility>
+#include <span>
 
 #ifdef SAMURAI_WINDOWS
 #define PATH_PREFIX "C:"
@@ -177,4 +178,33 @@ EXO_TEST(dir_iterate_counts_agree, {
 EXO_TEST(dir_iterate_unopened, {
 	Samurai::IO::Directory dir(EXOTIC_DATA_PATH("data/nosuchdir"));
 	return !dir.first().has_value();
+});
+
+EXO_TEST(file_read_span, {
+	Samurai::IO::File f(EXOTIC_DATA_PATH("data/file1"));
+	if (!f.open(Samurai::IO::File::Read)) return false;
+
+	char buf[16];
+	ssize_t n = f.read(std::span<char>(buf, sizeof(buf)));
+	f.close();
+	return n > 0;
+});
+
+EXO_TEST(file_write_span_roundtrip, {
+	const std::string path = std::string(EXOTIC_DATA_PATH("data")) + "/span-test";
+	const char payload[] = "span round trip";
+
+	Samurai::IO::File w(path);
+	if (!w.open(Samurai::IO::File::Write | Samurai::IO::File::Truncate)) return false;
+	ssize_t written = w.write(std::span<const char>(payload, sizeof(payload) - 1));
+	w.close();
+
+	Samurai::IO::File r(path);
+	if (!r.open(Samurai::IO::File::Read)) return false;
+	char buf[32] = { 0 };
+	ssize_t got = r.read(std::span<char>(buf, sizeof(buf) - 1));
+	r.close();
+	Samurai::IO::File::remove(path.c_str());
+
+	return written == (ssize_t) (sizeof(payload) - 1) && got == written && strcmp(buf, payload) == 0;
 });
