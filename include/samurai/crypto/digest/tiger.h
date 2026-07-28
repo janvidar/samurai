@@ -15,20 +15,21 @@ namespace Digest {
 
 #define TIGER_HASH_SIZE 192/8
 
-class Tiger : public Hash {
+class Tiger final : public Hash {
 	public:
 		Tiger();
 		Tiger(size_t passes, size_t block_size);
-		virtual ~Tiger();
-		
-		void reset();
-		HashValue* digest();
-		
+		~Tiger() override;
+
+		void reset() override;
+		HashValue* digest() override;
+
 	private:
 		void pass(uint64_t& a, uint64_t& b, uint64_t& c, uint8_t mul);
 		void round(uint64_t& a, uint64_t& b, uint64_t& c, uint64_t x, uint8_t mul);
 		void key_schedule();
-		void hash(uint8_t* data, size_t length);
+		/* Narrows the base's protected hash() to private. */
+		void hash(uint8_t* data, size_t length) override;
 		void internal_finalize();
 		
 	private:

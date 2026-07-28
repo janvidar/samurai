@@ -23,7 +23,7 @@ namespace DNS {
 
 class Name;
 
-class BuiltinResolver :
+class BuiltinResolver final :
 	public Samurai::IO::Net::DNS::Resolver,
 	public Samurai::IO::Net::SocketEventHandler,
 	public Samurai::IO::Net::DatagramEventHandler,
@@ -31,23 +31,23 @@ class BuiltinResolver :
 {
 	public:
 		BuiltinResolver(ResolveEventHandler* eventHandler);
-		virtual ~BuiltinResolver();
-		void lookup(const char* addr);
+		~BuiltinResolver() override;
+		void lookup(const char* addr) override;
 
 	protected:
-		void EventGotDatagram(DatagramSocket*, DatagramPacket* packet);
-		void EventDatagramError(const DatagramSocket*, const char*);
+		void EventGotDatagram(DatagramSocket*, DatagramPacket* packet) override;
+		void EventDatagramError(const DatagramSocket*, const char*) override;
 
-		void EventHostLookup(const Socket*) { };
-		void EventHostFound(const Socket*) { };
-		void EventConnecting(const Socket*) { };
-		void EventConnected(const Socket*);
-		void EventTimeout(const Socket*);
-		void EventDisconnected(const Socket*);
-		void EventDataAvailable(const Socket*);
-		void EventCanWrite(const Socket*);
-		void EventError(const Socket*, enum SocketError error, const char* msg);
-		void EventTimeout(Samurai::Timer* timer);
+		void EventHostLookup(const Socket*) override { };
+		void EventHostFound(const Socket*) override { };
+		void EventConnecting(const Socket*) override { };
+		void EventConnected(const Socket*) override;
+		void EventTimeout(const Socket*) override;
+		void EventDisconnected(const Socket*) override;
+		void EventDataAvailable(const Socket*) override;
+		void EventCanWrite(const Socket*) override;
+		void EventError(const Socket*, enum SocketError error, const char* msg) override;
+		void EventTimeout(Samurai::Timer* timer) override;
 		
 		void query();
 

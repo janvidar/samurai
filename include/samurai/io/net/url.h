@@ -20,7 +20,7 @@ class URL {
 		URL(const std::string& str);
 		URL(const URL& url);
 		URL(URL* url);
-		virtual ~URL();
+		~URL();
 		
 		Samurai::IO::Net::InetAddress getHost() const { return host; }
 		uint16_t getPort() const { return port; }

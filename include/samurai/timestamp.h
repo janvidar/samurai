@@ -19,7 +19,7 @@ class TimeStamp {
 		TimeStamp();
 		TimeStamp(time_t);
 		TimeStamp(const TimeStamp&);
-		virtual ~TimeStamp();
+		~TimeStamp();
 		
 		/**
 		 * Returns the internal timestamp value.

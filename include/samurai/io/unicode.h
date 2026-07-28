@@ -14,21 +14,20 @@ namespace IO {
 
 class UnicodePrivate;
 
-class Unicode : public Codec
+class Unicode final : public Codec
 {
 	public:
 		Unicode(const char* to, const char* from);
-		virtual ~Unicode();
-		virtual bool exec(char* input, size_t& input_len, char* output, size_t& output_len);
-		virtual bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec);
+		~Unicode() override;
+		bool exec(char* input, size_t& input_len, char* output, size_t& output_len) override;
+		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec) override;
+
+		/* Owns an iconv descriptor: copying would close it twice. */
+		Unicode(const Unicode&) = delete;
+		Unicode& operator=(const Unicode&) = delete;
 
 	protected:
 		UnicodePrivate* cvt;
-
-	private:
-		/* Owns an iconv descriptor: copying would close it twice. */
-		Unicode(const Unicode&);
-		Unicode& operator=(const Unicode&);
 };
 	
 

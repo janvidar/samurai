@@ -14,23 +14,23 @@ namespace Samurai {
 namespace IO {
 namespace Net {
 
-class OpenSSL : public TlsFactory {
+class OpenSSL final : public TlsFactory {
 	public:
 		OpenSSL();
-		virtual ~OpenSSL();
+		~OpenSSL() override;
 	
-		enum TlsStatus initialize(enum TlsOperation mode, socket_t sd);
-		enum TlsStatus deinitialize();
-		enum TlsStatus sendHandshake();
-		enum TlsStatus sendGoodbye();
+		enum TlsStatus initialize(enum TlsOperation mode, socket_t sd) override;
+		enum TlsStatus deinitialize() override;
+		enum TlsStatus sendHandshake() override;
+		enum TlsStatus sendGoodbye() override;
 
-		bool getPeerCertificateSHA256(uint8_t* digest, size_t length);
+		bool getPeerCertificateSHA256(uint8_t* digest, size_t length) override;
 
-		ssize_t write(const char* data, size_t length, enum TlsStatus& status);
-		ssize_t read(char* data, size_t length, enum TlsStatus& status);
-		ssize_t peek(char* data, size_t length, enum TlsStatus& status);
+		ssize_t write(const char* data, size_t length, enum TlsStatus& status) override;
+		ssize_t read(char* data, size_t length, enum TlsStatus& status) override;
+		ssize_t peek(char* data, size_t length, enum TlsStatus& status) override;
 
-		size_t pending() const;
+		size_t pending() const override;
 
 	protected:
 		SSL_CTX *ctx;

@@ -30,7 +30,7 @@ namespace Samurai {
 					virtual bool isLinkLocal() = 0;
 			};
 
-			class InetSocketAddress : public SocketAddress {
+			class InetSocketAddress final : public SocketAddress {
 				public:
 					InetSocketAddress();
 					InetSocketAddress(const InetSocketAddress*);
@@ -38,7 +38,7 @@ namespace Samurai {
 					InetSocketAddress(const InetAddress& addr, uint16_t port);
 					InetSocketAddress(uint16_t port);
 					InetSocketAddress(const char* ip, uint16_t port, enum Samurai::IO::Net::InetAddress::Version version);
-					virtual ~InetSocketAddress();
+					~InetSocketAddress() override;
 
 					/* Declared because the class owns 'addr': the implicit
 					 * assignment would copy the pointer and release it twice. */
@@ -47,12 +47,12 @@ namespace Samurai {
 					void setRawSocketAddress(void* sockaddr_data, size_t sockaddr_len, uint16_t port, enum Samurai::IO::Net::InetAddress::Version version);
 					InetAddress* getAddress() const;
 					uint16_t     getPort();
-					std::string  toString();
-					bool isLinkLocal();
+					std::string  toString() override;
+					bool isLinkLocal() override;
 
-					int getSockAddrFamily();
-					struct sockaddr* getSockAddr();
-					size_t getSockAddrSize();
+					int getSockAddrFamily() override;
+					struct sockaddr* getSockAddr() override;
+					size_t getSockAddrSize() override;
 					
 				protected:
 					/*

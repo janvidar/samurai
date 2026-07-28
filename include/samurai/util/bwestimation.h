@@ -18,7 +18,7 @@ namespace Util {
 class RateEstimator {
 	public:
 		RateEstimator();
-		virtual ~RateEstimator();
+		~RateEstimator();
 		
 		void add(size_t bytesTransfered);
 		size_t getBps();

@@ -26,7 +26,7 @@ class RR {
 class ResourceRecord {
 	public:
 		ResourceRecord();
-		virtual ~ResourceRecord();
+		~ResourceRecord();
 
 		/**
 		 * A record is only expirable once it has been stamped; an unstamped
@@ -57,10 +57,10 @@ class ResourceRecord {
 
 
 
-class RR_SOA : public RR {
+class RR_SOA final : public RR {
 	public:
 		RR_SOA(const Name& sone, const Name& email, uint32_t serial, uint32_t refresh, uint32_t retry, uint32_t expire, int32_t ttl);
-		virtual ~RR_SOA();
+		~RR_SOA() override;
 		
 	protected:
 		Name* primary;
@@ -73,10 +73,10 @@ class RR_SOA : public RR {
 };
 
 
-class RR_CNAME : public RR {
+class RR_CNAME final : public RR {
 	public:
 		RR_CNAME(const Name& name);
-		virtual ~RR_CNAME();
+		~RR_CNAME() override;
 		
 		Name* getName() { return name; }
 		
@@ -85,10 +85,10 @@ class RR_CNAME : public RR {
 };
 
 
-class RR_PTR : public RR {
+class RR_PTR final : public RR {
 	public:
 		RR_PTR(const Name& name);
-		virtual ~RR_PTR();
+		~RR_PTR() override;
 		
 		Name* getName() { return name; }
 		
@@ -97,10 +97,10 @@ class RR_PTR : public RR {
 };
 
 
-class RR_NS : public RR {
+class RR_NS final : public RR {
 	public:
 		RR_NS(const Name& name);
-		virtual ~RR_NS();
+		~RR_NS() override;
 		
 		Name* getName() { return name; }
 		
@@ -109,10 +109,10 @@ class RR_NS : public RR {
 };
 
 
-class RR_A : public RR {
+class RR_A final : public RR {
 	public:
 		RR_A(const InetAddress& addr);
-		virtual ~RR_A();
+		~RR_A() override;
 		
 		InetAddress* getAddress();
 		
@@ -121,10 +121,10 @@ class RR_A : public RR {
 };
 
 
-class RR_AAAA : public RR {
+class RR_AAAA final : public RR {
 	public:
 		RR_AAAA(const InetAddress& addr);
-		virtual ~RR_AAAA();
+		~RR_AAAA() override;
 		
 		InetAddress* getAddress();
 		
@@ -133,10 +133,10 @@ class RR_AAAA : public RR {
 };
 
 
-class RR_TXT : public RR {
+class RR_TXT final : public RR {
 	public:
 		RR_TXT(const char* txt);
-		virtual ~RR_TXT();
+		~RR_TXT() override;
 
 		const std::string& getText() const { return txt; }
 

@@ -18,7 +18,7 @@ namespace DNS {
 class ResolveConfiguration {
 	public:
 		ResolveConfiguration(const char* resolv_conf = "/etc/resolv.conf");
-		virtual ~ResolveConfiguration();
+		~ResolveConfiguration();
 
 		/**
 		 * The configured name server to use for the given attempt, or 0 if

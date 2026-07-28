@@ -41,7 +41,7 @@ class Label {
 		Label(const char* val, uint8_t sz);
 		Label(const Label& copy);
 		Label(Label* copy);
-		virtual ~Label();
+		~Label();
 		
 		bool isValid();
 		const char* getName() const;
@@ -63,7 +63,7 @@ class Name {
 		Name(const Name& copy);
 		Name& operator=(const Name& copy);
 		Name(const char* hostname);
-		virtual ~Name();
+		~Name();
 
 		int split();
 		bool isValid();
