@@ -12,10 +12,6 @@
 
 Samurai::IO::Net::DNS::ResolveConfiguration::ResolveConfiguration(const char* resolv_conf)
 {
-	for (size_t n = 0; n < MAXNS; n++) {
-		nameservers[n] = 0;
-	}
-
 	num_nameservers  = 0;
 	cur_nameserver   = 0;
 
@@ -30,19 +26,14 @@ Samurai::IO::Net::DNS::ResolveConfiguration::ResolveConfiguration(const char* re
 }
 
 
-Samurai::IO::Net::DNS::ResolveConfiguration::~ResolveConfiguration()
-{
-	for (size_t n = 0; n < num_nameservers; n++) {
-		delete nameservers[n];
-	}
-}
+Samurai::IO::Net::DNS::ResolveConfiguration::~ResolveConfiguration() = default;
 
 
 void Samurai::IO::Net::DNS::ResolveConfiguration::skipNameServer() {
 	cur_nameserver++;
 }
 
-Samurai::IO::Net::InetAddress* Samurai::IO::Net::DNS::ResolveConfiguration::getNameServer(size_t n)
+const Samurai::IO::Net::InetAddress* Samurai::IO::Net::DNS::ResolveConfiguration::getNameServer(size_t n)
 {
 	if (!num_nameservers) return nullptr;
 
@@ -52,7 +43,7 @@ Samurai::IO::Net::InetAddress* Samurai::IO::Net::DNS::ResolveConfiguration::getN
 	   is one past the last configured server - and off the end of the array once
 	   MAXNS are configured. */
 	if (cur_nameserver >= num_nameservers) cur_nameserver = 0;
-	return nameservers[cur_nameserver];
+	return &nameservers[cur_nameserver];
 }
 
 
@@ -177,12 +168,9 @@ void Samurai::IO::Net::DNS::ResolveConfiguration::parse(const char* resolv_conf)
 void Samurai::IO::Net::DNS::ResolveConfiguration::addNameServer(const char* server)
 {
 	if (num_nameservers >= MAXNS) return; // too many found!
-	Samurai::IO::Net::InetAddress* addr = new Samurai::IO::Net::InetAddress(server);
-	if (addr->isValid()) {
+	Samurai::IO::Net::InetAddress addr(server);
+	if (addr.isValid())
 		nameservers[num_nameservers++] = addr;
-	} else {
-		delete addr;
-	}
 }
 
 

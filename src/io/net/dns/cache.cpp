@@ -7,13 +7,15 @@
 #include <samurai/timestamp.h>
 #include <samurai/io/net/dns/cache.h>
 
-Samurai::IO::Net::DNS::CacheStorage* Samurai::IO::Net::DNS::CacheStorage::g_dns_cache = nullptr;
-
+/*
+ * A function-local static is initialised once, and without the check-then-assign
+ * race the raw pointer version had. It is also destroyed at exit, which releases
+ * the cached records.
+ */
 Samurai::IO::Net::DNS::CacheStorage* Samurai::IO::Net::DNS::CacheStorage::getInstance()
 {
-	if (!g_dns_cache)
-		g_dns_cache = new Samurai::IO::Net::DNS::CacheStorage();
-	return g_dns_cache;
+	static Samurai::IO::Net::DNS::CacheStorage cache;
+	return &cache;
 }
 
 

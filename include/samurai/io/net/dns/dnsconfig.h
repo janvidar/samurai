@@ -8,11 +8,12 @@
 
 #include <samurai/samurai.h>
 #include <samurai/io/net/dns/common.h>
+#include <samurai/io/net/inetaddress.h>
+#include <array>
 
 namespace Samurai {
 namespace IO {
 namespace Net {
-class InetAddress;
 namespace DNS {
 
 class ResolveConfiguration {
@@ -20,18 +21,13 @@ class ResolveConfiguration {
 		ResolveConfiguration(const char* resolv_conf = "/etc/resolv.conf");
 		~ResolveConfiguration();
 
-		/* Releases raw pointers in its destructor, so the implicit copy
-		 * operations would release them a second time. */
-		ResolveConfiguration(const ResolveConfiguration&) = delete;
-		ResolveConfiguration& operator=(const ResolveConfiguration&) = delete;
-
 		/**
 		 * The configured name server to use for the given attempt, or 0 if
 		 * none could be read from the configuration. Callers must check:
 		 * a machine with no resolv.conf, or one listing only addresses that
 		 * fail to parse, has nowhere to send a query.
 		 */
-		Samurai::IO::Net::InetAddress* getNameServer(size_t num_try = 0);
+		const Samurai::IO::Net::InetAddress* getNameServer(size_t num_try = 0);
 		size_t getNameServerCount() const { return num_nameservers; }
 		void skipNameServer();
 		char* getNameSearch();
@@ -51,7 +47,9 @@ class ResolveConfiguration {
 	protected:
 		size_t num_nameservers;
 		size_t cur_nameserver;
-		Samurai::IO::Net::InetAddress* nameservers[MAXNS];
+		/* Held by value: InetAddress owns its own storage, so the array does
+		   not have to be a set of pointers the destructor walks. */
+		std::array<Samurai::IO::Net::InetAddress, MAXNS> nameservers;
 
 		bool option_rotate;
 		bool option_ipv6;

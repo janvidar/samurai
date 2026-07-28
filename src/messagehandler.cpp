@@ -6,13 +6,14 @@
 #include <samurai/samurai.h>
 #include <samurai/messagehandler.h>
 
-static Samurai::MessageHandler* g_message_handler = nullptr;
-
+/*
+ * A function-local static is initialised once, and without the check-then-assign
+ * race the raw pointer version had.
+ */
 Samurai::MessageHandler* Samurai::MessageHandler::getInstance()
 {
-	if (!g_message_handler)
-		g_message_handler = new Samurai::MessageHandler();
-	return g_message_handler;
+	static Samurai::MessageHandler handler;
+	return &handler;
 }
 
 void Samurai::postMessage(size_t id, void* data, size_t arg1, size_t arg2)
