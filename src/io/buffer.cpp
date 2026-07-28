@@ -32,12 +32,31 @@ Samurai::IO::Buffer::Buffer(const Samurai::IO::Buffer& copy) : buf(copy.buf), he
 Samurai::IO::Buffer::Buffer(const Samurai::IO::Buffer* copy) : buf(copy->buf), head(copy->head), len(copy->len), initialCapasity(copy->initialCapasity) {
 }
 
+Samurai::IO::Buffer::Buffer(Samurai::IO::Buffer&& other) noexcept
+	: buf(std::move(other.buf)), head(other.head), len(other.len), initialCapasity(other.initialCapasity) {
+	other.head = 0;
+	other.len = 0;
+}
+
+
 Samurai::IO::Buffer& Samurai::IO::Buffer::operator=(const Samurai::IO::Buffer& copy) {
 	if (this == &copy) return *this;
 	buf = copy.buf;
 	head = copy.head;
 	len = copy.len;
 	initialCapasity = copy.initialCapasity;
+	return *this;
+}
+
+
+Samurai::IO::Buffer& Samurai::IO::Buffer::operator=(Samurai::IO::Buffer&& other) noexcept {
+	if (this == &other) return *this;
+	buf = std::move(other.buf);
+	head = other.head;
+	len = other.len;
+	initialCapasity = other.initialCapasity;
+	other.head = 0;
+	other.len = 0;
 	return *this;
 }
 

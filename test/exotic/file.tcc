@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <utility>
 
 #ifdef SAMURAI_WINDOWS
 #define PATH_PREFIX "C:"
@@ -116,4 +117,24 @@ EXO_TEST(file_extension_5, {
 EXO_TEST(file_match_extension_1, {
 	Samurai::IO::File f("/home/user.name/file");
 	return !f.matchExtension("name/file");
+});
+
+EXO_TEST(file_move_construct, {
+	Samurai::IO::File a(EXOTIC_DATA_PATH("data/file1"));
+	const std::string name = a.getName();
+	Samurai::IO::File b(std::move(a));
+	return b.getName() == name && b.exists();
+});
+
+EXO_TEST(file_move_assign_open, {
+	Samurai::IO::File a(EXOTIC_DATA_PATH("data/file1"));
+	if (!a.open(Samurai::IO::File::Read)) return false;
+
+	Samurai::IO::File b;
+	b = std::move(a);
+
+	char buf[8] = { 0 };
+	ssize_t n = b.read(buf, 4);
+	b.close();
+	return n > 0;
 });
