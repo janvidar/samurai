@@ -8,6 +8,7 @@
 #include <samurai/io/net/dns/dnsrrs.h>
 #include <samurai/io/net/inetaddress.h>
 #include <samurai/io/buffer.h>
+#include <samurai/io/net/dns/cache.h>
 
 /*
  * Wire fixtures. These live at file scope because EXO_TEST takes two macro
@@ -313,4 +314,191 @@ EXO_TEST(dns_decode_short_a_record_rejected,
 	buf.append(dns_answer_a_short, sizeof(dns_answer_a_short));
 	Samurai::IO::Net::DNS::Message msg(&buf);
 	return msg.decode() == Samurai::IO::Net::DNS::DNS_STATUS_FORMAT_ERROR;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Name comparison                                                           */
+/*                                                                           */
+/* Name(const char*) only stores the text; split() is what produces the       */
+/* labels that the comparison operators work on.                             */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(dns_name_equal_to_itself,
+{
+	Samurai::IO::Net::DNS::Name a("www.example.com");
+	a.split();
+	Samurai::IO::Net::DNS::Name b("www.example.com");
+	b.split();
+	return a == b && !(a != b);
+});
+
+EXO_TEST(dns_name_case_insensitive,
+{
+	Samurai::IO::Net::DNS::Name a("WWW.Example.COM");
+	a.split();
+	Samurai::IO::Net::DNS::Name b("www.example.com");
+	b.split();
+	return a == b;
+});
+
+/*
+ * These share their first two labels and differ only in the last. An
+ * operator!= that returns as soon as it finds one *matching* label reports
+ * them as equal.
+ */
+EXO_TEST(dns_name_differing_last_label,
+{
+	Samurai::IO::Net::DNS::Name a("www.example.com");
+	a.split();
+	Samurai::IO::Net::DNS::Name b("www.example.org");
+	b.split();
+	return (a != b) && !(a == b);
+});
+
+EXO_TEST(dns_name_differing_first_label,
+{
+	Samurai::IO::Net::DNS::Name a("www.example.com");
+	a.split();
+	Samurai::IO::Net::DNS::Name b("ftp.example.com");
+	b.split();
+	return (a != b) && !(a == b);
+});
+
+EXO_TEST(dns_name_differing_label_count,
+{
+	Samurai::IO::Net::DNS::Name a("example.com");
+	a.split();
+	Samurai::IO::Net::DNS::Name b("www.example.com");
+	b.split();
+	return (a != b) && !(a == b);
+});
+
+/* ------------------------------------------------------------------------- */
+/* Record expiry                                                             */
+/* ------------------------------------------------------------------------- */
+
+/* An unstamped record has never been through a cache and does not expire. */
+EXO_TEST(dns_record_unstamped_never_expires,
+{
+	Samurai::IO::Net::DNS::ResourceRecord rec;
+	rec.ttl = 0;
+	return !rec.isExpired() && rec.getExpiryTime() == 0;
+});
+
+EXO_TEST(dns_record_zero_ttl_expires_at_once,
+{
+	Samurai::IO::Net::DNS::ResourceRecord rec;
+	rec.ttl = 0;
+	rec.stampExpiry();
+	return rec.isExpired();
+});
+
+EXO_TEST(dns_record_negative_ttl_expires_at_once,
+{
+	Samurai::IO::Net::DNS::ResourceRecord rec;
+	rec.ttl = -1;
+	rec.stampExpiry();
+	return rec.isExpired();
+});
+
+EXO_TEST(dns_record_live_ttl_does_not_expire,
+{
+	Samurai::IO::Net::DNS::ResourceRecord rec;
+	rec.ttl = 3600;
+	rec.stampExpiry();
+	return !rec.isExpired() && rec.getExpiryTime() != 0;
+});
+
+/* ------------------------------------------------------------------------- */
+/* CacheStorage                                                              */
+/*                                                                           */
+/* The store is a singleton, so each case uses a name of its own rather than  */
+/* assuming an empty cache.                                                  */
+/* ------------------------------------------------------------------------- */
+
+static Samurai::IO::Net::DNS::ResourceRecord* dns_make_record(const char* host, int32_t ttl)
+{
+	Samurai::IO::Net::DNS::ResourceRecord* rec =
+		new Samurai::IO::Net::DNS::ResourceRecord();
+	Samurai::IO::Net::DNS::Name want(host);
+	want.split();
+	*rec->name = want;
+	rec->ttl = ttl;
+	return rec;
+}
+
+EXO_TEST(dns_cache_lookup_finds_added_record,
+{
+	Samurai::IO::Net::DNS::CacheStorage* cache =
+		Samurai::IO::Net::DNS::CacheStorage::getInstance();
+	cache->add(dns_make_record("found.cachetest.invalid", 3600));
+
+	Samurai::IO::Net::DNS::Name want("found.cachetest.invalid");
+	want.split();
+	return cache->lookup(want) != 0;
+});
+
+EXO_TEST(dns_cache_lookup_misses_unknown_name,
+{
+	Samurai::IO::Net::DNS::CacheStorage* cache =
+		Samurai::IO::Net::DNS::CacheStorage::getInstance();
+
+	Samurai::IO::Net::DNS::Name want("absent.cachetest.invalid");
+	want.split();
+	return cache->lookup(want) == 0;
+});
+
+/* A record whose time to live has run out must not be handed back. */
+EXO_TEST(dns_cache_does_not_return_expired_record,
+{
+	Samurai::IO::Net::DNS::CacheStorage* cache =
+		Samurai::IO::Net::DNS::CacheStorage::getInstance();
+	cache->add(dns_make_record("stale.cachetest.invalid", 0));
+
+	Samurai::IO::Net::DNS::Name want("stale.cachetest.invalid");
+	want.split();
+	return cache->lookup(want) == 0;
+});
+
+EXO_TEST(dns_cache_expire_drops_expired_records,
+{
+	Samurai::IO::Net::DNS::CacheStorage* cache =
+		Samurai::IO::Net::DNS::CacheStorage::getInstance();
+	const size_t before = cache->size();
+	cache->add(dns_make_record("dropme.cachetest.invalid", 0));
+	cache->expire();
+	return cache->size() <= before;
+});
+
+EXO_TEST(dns_cache_keeps_live_record_across_expire,
+{
+	Samurai::IO::Net::DNS::CacheStorage* cache =
+		Samurai::IO::Net::DNS::CacheStorage::getInstance();
+	cache->add(dns_make_record("keepme.cachetest.invalid", 3600));
+	cache->expire();
+
+	Samurai::IO::Net::DNS::Name want("keepme.cachetest.invalid");
+	want.split();
+	return cache->lookup(want) != 0;
+});
+
+/* The store is bounded, so a flood of live records must not grow it without
+ * limit. */
+EXO_TEST(dns_cache_is_bounded,
+{
+	Samurai::IO::Net::DNS::CacheStorage* cache =
+		Samurai::IO::Net::DNS::CacheStorage::getInstance();
+	for (size_t n = 0; n < DNS_CACHE_MAX_STORAGE * 2; n++)
+		cache->add(dns_make_record("flood.cachetest.invalid", 3600));
+
+	return cache->size() <= DNS_CACHE_MAX_STORAGE;
+});
+
+EXO_TEST(dns_cache_add_null_is_harmless,
+{
+	Samurai::IO::Net::DNS::CacheStorage* cache =
+		Samurai::IO::Net::DNS::CacheStorage::getInstance();
+	const size_t before = cache->size();
+	cache->add(0);
+	return cache->size() == before;
 });

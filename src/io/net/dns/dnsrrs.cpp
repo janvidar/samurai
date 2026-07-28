@@ -17,8 +17,15 @@ Samurai::IO::Net::DNS::ResourceRecord::~ResourceRecord() {
 	delete rr;
 }
 
+void Samurai::IO::Net::DNS::ResourceRecord::stampExpiry() {
+	/* A negative TTL would put the expiry in the past, which is the same as
+	   asking for the record not to be cached at all. */
+	expireTime = time(0) + (ttl > 0 ? (time_t) ttl : 0);
+}
+
 bool Samurai::IO::Net::DNS::ResourceRecord::isExpired() const {
-	return false;
+	if (!expireTime) return false;
+	return time(0) >= expireTime;
 }
 
 Samurai::IO::Net::DNS::RR::RR()

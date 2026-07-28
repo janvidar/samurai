@@ -90,18 +90,16 @@ uint8_t Samurai::IO::Net::DNS::Label::getSize() const
 }
 
 
-bool Samurai::IO::Net::DNS::Label::operator==(const Samurai::IO::Net::DNS::Label& label)
+bool Samurai::IO::Net::DNS::Label::operator==(const Samurai::IO::Net::DNS::Label& label) const
 {
 	if (&label == this) return true;
 	if (label.size != size) return false;
 	return strncasecmp(label.name, name, size) == 0;
 }
 
-bool Samurai::IO::Net::DNS::Label::operator!=(const Samurai::IO::Net::DNS::Label& label)
+bool Samurai::IO::Net::DNS::Label::operator!=(const Samurai::IO::Net::DNS::Label& label) const
 {
-	if (&label == this) return false;
-	if (label.size != size) return true;
-	return strncasecmp(label.name, name, size) != 0;
+	return !(*this == label);
 }
 
 Samurai::IO::Net::DNS::Name::Name()
@@ -218,26 +216,26 @@ void Samurai::IO::Net::DNS::Name::clear() {
 	name[0] = 0;
 }
 
-bool Samurai::IO::Net::DNS::Name::operator==(const Samurai::IO::Net::DNS::Name& name)
+bool Samurai::IO::Net::DNS::Name::operator==(const Samurai::IO::Net::DNS::Name& name) const
 {
 	if (this == &name) return true;
 	if (name.parts.size() != parts.size()) return false;
-	
+
 	for (size_t n = 0; n < parts.size(); n++) {
 		if (*parts[n] != *name.parts[n]) return false;
 	}
 	return true;
 }
 
-bool Samurai::IO::Net::DNS::Name::operator!=(const Samurai::IO::Net::DNS::Name& name)
+/*
+ * Deferred to operator== rather than written out again: a loop that returns
+ * early on the first *matching* label reports two names as equal as soon as
+ * they share any one label, so "www.example.com" and "www.google.com" would
+ * compare equal.
+ */
+bool Samurai::IO::Net::DNS::Name::operator!=(const Samurai::IO::Net::DNS::Name& name) const
 {
-	if (this == &name) return false;
-	if (name.parts.size() != parts.size()) return true;
-	
-	for (size_t n = 0; n < parts.size(); n++) {
-		if (*parts[n] == *name.parts[n]) return false;
-	}
-	return true;
+	return !(*this == name);
 }
 
 

@@ -9,6 +9,7 @@
 #include <samurai/io/net/dns/dnsutil.h>
 #include <samurai/io/net/dns/common.h>
 #include <string>
+#include <time.h>
 
 namespace Samurai {
 namespace IO {
@@ -27,18 +28,31 @@ class ResourceRecord {
 		ResourceRecord();
 		virtual ~ResourceRecord();
 
+		/**
+		 * A record is only expirable once it has been stamped; an unstamped
+		 * one - anything that has not been through a cache - never expires.
+		 */
 		bool isExpired() const;
 		int32_t getTimeToLive() const { return ttl; }
-		
+
+		/**
+		 * Start the record's lifetime now. A TTL is counted from the moment
+		 * the response arrived, so this is called on the way into the cache
+		 * rather than during decoding.
+		 */
+		void stampExpiry();
+
+		time_t getExpiryTime() const { return expireTime; }
+
 	public:
 		Name* name = nullptr;
 		TypeClass type_class;
-		/* getTimeToLive() and isExpired() read these before the decoder has
-		 * necessarily filled them in, so an unset record must read as expired
-		 * rather than as an arbitrary lifetime. */
 		int32_t ttl = 0;
 		uint16_t rdLength = 0;
 		RR* rr = nullptr;
+
+		/* Absolute time this record stops being usable; 0 until stamped. */
+		time_t expireTime = 0;
 };
 
 

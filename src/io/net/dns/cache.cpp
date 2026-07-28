@@ -9,7 +9,7 @@
 
 Samurai::IO::Net::DNS::CacheStorage* Samurai::IO::Net::DNS::CacheStorage::g_dns_cache = 0;
 
-Samurai::IO::Net::DNS::CacheStorage* Samurai::IO::Net::DNS::CacheStorage::getInstance() 
+Samurai::IO::Net::DNS::CacheStorage* Samurai::IO::Net::DNS::CacheStorage::getInstance()
 {
 	if (!g_dns_cache)
 		g_dns_cache = new Samurai::IO::Net::DNS::CacheStorage();
@@ -25,46 +25,59 @@ Samurai::IO::Net::DNS::CacheStorage::CacheStorage()
 Samurai::IO::Net::DNS::CacheStorage::~CacheStorage()
 {
 	QDBG("Shutting down DNS cache storage\n");
+	for (ResourceRecord* record : cache)
+		delete record;
+	cache.clear();
 }
 
 void Samurai::IO::Net::DNS::CacheStorage::add(ResourceRecord* e)
 {
 	if (!e) return;
-	
+
+	e->stampExpiry();
+
+	/* Make room by dropping what has run out first, and only evict a live
+	   record if that was not enough. */
+	expire();
+	while (cache.size() >= DNS_CACHE_MAX_STORAGE) {
+		delete cache.front();
+		cache.erase(cache.begin());
+	}
+
 	QDBG("Adding RR to cache. Expire: %d", e->getTimeToLive());
 	cache.push_back(e);
 }
 
 void Samurai::IO::Net::DNS::CacheStorage::expire()
 {
-	Samurai::TimeStamp now;
-	for (std::vector<Samurai::IO::Net::DNS::ResourceRecord*>::iterator it = cache.begin(); it != cache.end(); it++)
-	{
-		/*
-		Samurai::IO::Net::DNS::ResourceRecord* cached = (*it);
-		if (now >= cached->expireTime) {
-			// FIXME: Make sure we delete these.
-			cache.erase(it);
-			delete cached;
+	/*
+	 * erase() invalidates the iterator it is given, so the survivors are
+	 * gathered into a new vector rather than erased in place - which is what
+	 * makes advancing past an erased element impossible to get wrong.
+	 */
+	std::vector<ResourceRecord*> live;
+	live.reserve(cache.size());
+
+	for (ResourceRecord* record : cache) {
+		if (record->isExpired()) {
+			QDBG("Expiring cached RR");
+			delete record;
+		} else {
+			live.push_back(record);
 		}
-		*/
 	}
+
+	cache.swap(live);
 }
 
 Samurai::IO::Net::DNS::ResourceRecord* Samurai::IO::Net::DNS::CacheStorage::lookup(const Samurai::IO::Net::DNS::Name& name)
 {
-	(void) name;
+	expire();
 
-	Samurai::TimeStamp now;
-	for (std::vector<ResourceRecord*>::iterator it = cache.begin(); it != cache.end(); it++)
-	{
-		/*
-			Samurai::IO::Net::DNS::ResourceRecord* cached = (*it);
-			if (!strcasecmp(name, (const char*) cached->hostname) && now < cached->expireTime) {
-				return cached;
-			}
-		*/
+	for (ResourceRecord* record : cache) {
+		if (record->name && *record->name == name)
+			return record;
 	}
+
 	return 0;
 }
-
