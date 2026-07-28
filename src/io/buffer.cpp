@@ -9,6 +9,8 @@
 #include <string>
 #include <string_view>
 #include <bit>
+#include <array>
+#include <concepts>
 #include <stdlib.h>
 #include <new>
 
@@ -300,26 +302,6 @@ char Samurai::IO::Buffer::at(size_t offset) const {
 	return buf[head + offset];
 }
 
-#define SWAP16(x) ((uint16_t) (\
-			(((x) & (uint16_t) 0x00ff) << 8) | \
-			(((x) & (uint16_t) 0xff00) >> 8)))
-
-#define SWAP32(x) ((uint32_t) (\
-			(((x) & 0x000000ffUL) << 24) | \
-			(((x) & 0x0000ff00UL) <<  8) | \
-			(((x) & 0x00ff0000UL) >>  8) | \
-			(((x) & 0xff000000UL) >> 24)))
-
-#define SWAP64(x) ((uint64_t) (\
-			(((x) & 0x00000000000000ffULL) << 56) | \
-			(((x) & 0x000000000000ff00ULL) << 40) | \
-			(((x) & 0x0000000000ff0000ULL) << 24) | \
-			(((x) & 0x00000000ff000000ULL) <<  8) | \
-			(((x) & 0x000000ff00000000ULL) >>  8) | \
-			(((x) & 0x0000ff0000000000ULL) >> 24) | \
-			(((x) & 0x00ff000000000000ULL) >> 40) | \
-			(((x) & 0xff00000000000000ULL) >> 56)))
-
 /*
  * NOTE: endianness is taken from std::endian, which the compiler supplies, so a
  * misspelling here is a build error rather than byte swapping that silently does
@@ -327,52 +309,63 @@ char Samurai::IO::Buffer::at(size_t offset) const {
  */
 static constexpr bool host_is_big_endian = (std::endian::native == std::endian::big);
 
-void Samurai::IO::Buffer::appendBinary(uint16_t number_, BinaryMode endiannes) {
-	uint16_t number = number_;
-	switch (endiannes) {
-		case BinaryMode::LittleEndian:
-			if constexpr (host_is_big_endian) number = SWAP16(number);
-			break;
+namespace {
 
-		case BinaryMode::BigEndian:
-			if constexpr (!host_is_big_endian) number = SWAP16(number);
-			break;
-		case BinaryMode::NativeEndian:
-			break;
+template<typename T>
+concept ByteOrdered = std::same_as<T, uint16_t>
+                   || std::same_as<T, uint32_t>
+                   || std::same_as<T, uint64_t>;
+
+/* std::byteswap is C++23 and this library builds as C++20, so the swap is
+   spelled out. Both GCC and Clang fold this loop to a single instruction. */
+template<ByteOrdered T>
+constexpr T byteswap(T value) noexcept
+{
+	T swapped = 0;
+	for (size_t n = 0; n < sizeof(T); n++)
+	{
+		swapped = (T) ((swapped << 8) | (value & 0xff));
+		value >>= 8;
 	}
-	 append((char*) &number, sizeof(number));
+	return swapped;
 }
 
-void Samurai::IO::Buffer::appendBinary(uint32_t number_, BinaryMode endiannes) {
-	uint32_t number = number_;
-	switch (endiannes) {
-		case BinaryMode::LittleEndian:
-			if constexpr (host_is_big_endian) number = SWAP32(number);
-			break;
+/* Swapping is its own inverse, so one function serves both directions. */
+template<ByteOrdered T>
+constexpr T reorder(T value, Samurai::IO::Buffer::BinaryMode mode) noexcept
+{
+	using Mode = Samurai::IO::Buffer::BinaryMode;
 
-		case BinaryMode::BigEndian:
-			if constexpr (!host_is_big_endian) number = SWAP32(number);
-			break;
-		case BinaryMode::NativeEndian:
-			break;
-	}
-	 append((char*) &number, sizeof(number));
+	if (mode == Mode::BigEndian)
+		return host_is_big_endian ? value : byteswap(value);
+
+	if (mode == Mode::LittleEndian)
+		return host_is_big_endian ? byteswap(value) : value;
+
+	return value;
 }
 
-void Samurai::IO::Buffer::appendBinary(uint64_t number_, BinaryMode endiannes) {
-	uint64_t number = number_;
-	switch (endiannes) {
-		case BinaryMode::LittleEndian:
-			if constexpr (host_is_big_endian) number = SWAP64(number);
-			break;
+/* bit_cast rather than a cast to char*, which reads the object through an
+   unrelated type. */
+template<ByteOrdered T>
+void appendValue(Samurai::IO::Buffer& target, T number, Samurai::IO::Buffer::BinaryMode mode)
+{
+	const auto bytes = std::bit_cast<std::array<char, sizeof(T)>>(reorder(number, mode));
+	target.append(bytes.data(), bytes.size());
+}
 
-		case BinaryMode::BigEndian:
-			if constexpr (!host_is_big_endian) number = SWAP64(number);
-			break;
-		case BinaryMode::NativeEndian:
-			break;
-	}
-	 append((char*) &number, sizeof(number));
+}
+
+void Samurai::IO::Buffer::appendBinary(uint16_t number, BinaryMode endiannes) {
+	appendValue(*this, number, endiannes);
+}
+
+void Samurai::IO::Buffer::appendBinary(uint32_t number, BinaryMode endiannes) {
+	appendValue(*this, number, endiannes);
+}
+
+void Samurai::IO::Buffer::appendBinary(uint64_t number, BinaryMode endiannes) {
+	appendValue(*this, number, endiannes);
 }
 
 /*
@@ -393,58 +386,27 @@ bool Samurai::IO::Buffer::popBinary(size_t offset, uint8_t& number) {
 bool Samurai::IO::Buffer::popBinary(size_t offset, uint16_t& number, BinaryMode endianness) {
 	if (offset > (len - head) || (len - head) - offset < sizeof(number)) return false;
 
-	memcpy(&number, &buf[head + offset], sizeof(number));
-	switch (endianness) {
-		case BinaryMode::LittleEndian:
-			if constexpr (host_is_big_endian) number = SWAP16(number);
-			break;
-
-		case BinaryMode::BigEndian:
-			if constexpr (!host_is_big_endian) number = SWAP16(number);
-			break;
-
-		case BinaryMode::NativeEndian:
-			break;
-	}
-
+	uint16_t wire;
+	memcpy(&wire, &buf[head + offset], sizeof(wire));
+	number = reorder(wire, endianness);
 	return true;
 }
 
 bool Samurai::IO::Buffer::popBinary(size_t offset, uint32_t& number, BinaryMode endianness) {
 	if (offset > (len - head) || (len - head) - offset < sizeof(number)) return false;
 
-	memcpy(&number, &buf[head + offset], sizeof(number));
-	switch (endianness) {
-		case BinaryMode::LittleEndian:
-			if constexpr (host_is_big_endian) number = SWAP32(number);
-			break;
-
-		case BinaryMode::BigEndian:
-			if constexpr (!host_is_big_endian) number = SWAP32(number);
-			break;
-
-		case BinaryMode::NativeEndian:
-			break;
-	}
+	uint32_t wire;
+	memcpy(&wire, &buf[head + offset], sizeof(wire));
+	number = reorder(wire, endianness);
 	return true;
 }
 
 bool Samurai::IO::Buffer::popBinary(size_t offset, uint64_t& number, BinaryMode endianness) {
 	if (offset > (len - head) || (len - head) - offset < sizeof(number)) return false;
 
-	memcpy(&number, &buf[head + offset], sizeof(number));
-	switch (endianness) {
-		case BinaryMode::LittleEndian:
-			if constexpr (host_is_big_endian) number = SWAP64(number);
-			break;
-
-		case BinaryMode::BigEndian:
-			if constexpr (!host_is_big_endian) number = SWAP64(number);
-			break;
-
-		case BinaryMode::NativeEndian:
-			break;
-	}
+	uint64_t wire;
+	memcpy(&wire, &buf[head + offset], sizeof(wire));
+	number = reorder(wire, endianness);
 	return true;
 }
 
