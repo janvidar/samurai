@@ -227,7 +227,7 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 
 	protected:
 		socket_t sd;
-		Samurai::IO::Net::SocketAddress* addr;
+		std::unique_ptr<Samurai::IO::Net::SocketAddress> addr;
 		enum SocketState state;
 
 		/*
@@ -236,8 +236,8 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		 * still be holding when the other is called; sharing one would make
 		 * each call silently rewrite the other's result.
 		 */
-		mutable InetAddress* ia;
-		mutable InetAddress* local_ia;
+		mutable std::unique_ptr<InetAddress> ia;
+		mutable std::unique_ptr<InetAddress> local_ia;
 
 		// See SocketMonitor::Triggers
 		int monitor_trigger;

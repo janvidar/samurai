@@ -40,12 +40,10 @@ namespace Samurai {
 					InetSocketAddress(const char* ip, uint16_t port, enum Samurai::IO::Net::InetAddress::Version version);
 					~InetSocketAddress() override;
 
-					/* Declared because the class owns 'addr': the implicit
-					 * assignment would copy the pointer and release it twice. */
 					InetSocketAddress& operator=(const InetSocketAddress& isa);
 
 					void setRawSocketAddress(void* sockaddr_data, size_t sockaddr_len, uint16_t port, enum Samurai::IO::Net::InetAddress::Version version);
-					InetAddress* getAddress() const;
+					const InetAddress* getAddress() const;
 					uint16_t     getPort();
 					std::string  toString() override;
 					bool isLinkLocal() override;
@@ -64,7 +62,8 @@ namespace Samurai {
 					 * getSockAddr() builds it.
 					 */
 					std::vector<char> data;
-					InetAddress* addr;
+					/* Held by value: InetAddress owns its own storage. */
+					InetAddress addr;
 					uint16_t port;
 			};
 			

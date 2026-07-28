@@ -8,6 +8,7 @@
 
 #include <samurai/samurai.h>
 #include <samurai/io/net/socketbase.h>
+#include <memory>
 #include <samurai/io/net/dns/resolver.h>
 #include <samurai/io/net/socketevent.h>
 #include <samurai/io/net/socketaddress.h>
@@ -157,14 +158,14 @@ class Socket :
 		bool TLSgetPeerCertificateSHA256(uint8_t* digest, size_t length);
 
 	protected:
-		InetAddress* address;
+		std::unique_ptr<InetAddress> address;
 		uint16_t port;
 		
 	private:
 		// Misc internal stuff
 		bool autoConnectAfterLookup;
 		SocketEventHandler* eventHandler;
-		Samurai::Timer* timer;
+		std::unique_ptr<Samurai::Timer> timer;
 		bool outbound;
 		
 		int readable;
@@ -187,7 +188,7 @@ class Socket :
 		
 		void internal_tls_handshake();
 		void internal_tls_bye();
-		TlsFactory* tls;
+		std::unique_ptr<TlsFactory> tls;
 
 		bool checkConnectTimeout();
 

@@ -23,26 +23,27 @@
 #include <time.h>
 #include <stdlib.h>
 #include <string.h>
+#include <memory>
 
 #define MAX_BUF_SIZE 65536
 
-Samurai::IO::Net::DatagramPacket::DatagramPacket() : buffer(nullptr), socket(nullptr), addr(nullptr) {
-	buffer = new Samurai::IO::Buffer(MAX_BUF_SIZE);
+Samurai::IO::Net::DatagramPacket::DatagramPacket() : socket(nullptr) {
+	buffer = std::make_unique<Samurai::IO::Buffer>(MAX_BUF_SIZE);
 }
 
-Samurai::IO::Net::DatagramPacket::DatagramPacket(const uint8_t* buf, size_t len) : buffer(nullptr), socket(nullptr), addr(nullptr) {
-	buffer = new Samurai::IO::Buffer(len);
+Samurai::IO::Net::DatagramPacket::DatagramPacket(const uint8_t* buf, size_t len) : socket(nullptr) {
+	buffer = std::make_unique<Samurai::IO::Buffer>(len);
 	buffer->append((char*) buf, len);
 }
 
-Samurai::IO::Net::DatagramPacket::DatagramPacket(const char* buf) : buffer(nullptr), socket(nullptr), addr(nullptr) {
-	buffer = new Samurai::IO::Buffer(strlen(buf));
+Samurai::IO::Net::DatagramPacket::DatagramPacket(const char* buf) : socket(nullptr) {
+	buffer = std::make_unique<Samurai::IO::Buffer>(strlen(buf));
 	buffer->append(buf);
 
 }
 
-Samurai::IO::Net::DatagramPacket::DatagramPacket(Samurai::IO::Buffer* buf) : buffer(nullptr), socket(nullptr), addr(nullptr) {
-	buffer = new Samurai::IO::Buffer(buf);
+Samurai::IO::Net::DatagramPacket::DatagramPacket(Samurai::IO::Buffer* buf) : socket(nullptr) {
+	buffer = std::make_unique<Samurai::IO::Buffer>(buf);
 }
 
 void Samurai::IO::Net::DatagramPacket::setData(const uint8_t* buf, size_t len) {
@@ -52,8 +53,7 @@ void Samurai::IO::Net::DatagramPacket::setData(const uint8_t* buf, size_t len) {
 
 void Samurai::IO::Net::DatagramPacket::setAddress(Samurai::IO::Net::SocketAddress* addr_)
 {
-	delete addr;
-	addr = nullptr;
+	addr.reset();
 
 	/*
 	 * Only an InetSocketAddress can be copied here, and the cast has to be
@@ -61,29 +61,26 @@ void Samurai::IO::Net::DatagramPacket::setAddress(Samurai::IO::Net::SocketAddres
 	 * dereferences its argument, so a failed cast would go straight through it.
 	 */
 	if (InetSocketAddress* isa = dynamic_cast<InetSocketAddress*>(addr_))
-		addr = new InetSocketAddress(*isa);
+		addr = std::make_unique<InetSocketAddress>(*isa);
 }
 
 Samurai::IO::Net::SocketAddress* Samurai::IO::Net::DatagramPacket::getAddress()
 {
-	return addr;
+	return addr.get();
 }
 
 void Samurai::IO::Net::DatagramPacket::clear() {
 	buffer->clear();
 }
 
-Samurai::IO::Net::DatagramPacket::~DatagramPacket() {
-	delete buffer;
-	delete addr;
-}
+Samurai::IO::Net::DatagramPacket::~DatagramPacket() = default;
 
 size_t Samurai::IO::Net::DatagramPacket::size() {
 	return buffer->size();
 }
 
 Samurai::IO::Buffer* Samurai::IO::Net::DatagramPacket::getBuffer() {
-	return buffer;
+	return buffer.get();
 }
 
 Samurai::IO::Net::DatagramSocket::DatagramSocket(DatagramEventHandler* eh, enum InetAddress::Version version) : SocketBase(Datagram), eventHandler(eh), myPacket(nullptr)
@@ -136,7 +133,6 @@ void Samurai::IO::Net::DatagramSocket::initialize() {
 Samurai::IO::Net::DatagramSocket::~DatagramSocket() {
 	disableMonitor();
 	close();
-	delete myPacket;
 }
 
 void Samurai::IO::Net::DatagramSocket::setEventHandler(DatagramEventHandler* eh) {
@@ -147,7 +143,7 @@ bool Samurai::IO::Net::DatagramSocket::listen() {
 	if (!addr || sd == INVALID_SOCKET) return false;
 	if (!setReuseAddress(true)) return false;
 	if (!setNonBlocking(true)) return false;
-	if (!bind(addr)) return false;
+	if (!bind(addr.get())) return false;
 	return true;
 }
 
@@ -241,16 +237,16 @@ void Samurai::IO::Net::DatagramSocket::handleMonitorEvent(int trig)
 
 
 void Samurai::IO::Net::DatagramSocket::internal_canRead() {
-	if (!myPacket) myPacket = new DatagramPacket();
+	if (!myPacket) myPacket = std::make_unique<DatagramPacket>();
 	
-	switch (read(myPacket)) {
+	switch (read(myPacket.get())) {
 		case -1:
 			if (eventHandler) eventHandler->EventDatagramError(this, strerror(NETERROR));
 			break;
 		case 0:
 			break;
 		default:
-			if (eventHandler) eventHandler->EventGotDatagram(this, myPacket);
+			if (eventHandler) eventHandler->EventGotDatagram(this, myPacket.get());
 			break;
 	}
 }

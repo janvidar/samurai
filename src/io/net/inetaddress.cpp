@@ -10,6 +10,7 @@
 
 #include <stdlib.h>
 #include <string>
+#include <memory>
 
 /**
  * inet_ntop
@@ -95,21 +96,21 @@ static int net_string_to_address(int af, const char* src, void* dst)
 
 Samurai::IO::Net::InetAddress::InetAddress() : version(Unspecified), data(nullptr), resolver(nullptr), resolveState(Unresolved), dnsevent(nullptr)
 {
-	data = new Samurai::IO::Net::__InternalAddress();
-	memset(data, 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
+	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
+	memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
 }
 
 Samurai::IO::Net::InetAddress::InetAddress(enum Version ip_version) : version(ip_version), data(nullptr), resolver(nullptr), resolveState(Unresolved), dnsevent(nullptr)
 {
-	data = new Samurai::IO::Net::__InternalAddress();
-	memset(data, 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
+	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
+	memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
 }
 
 Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Version ip_version) : version(Unspecified), data(nullptr), resolver(nullptr), resolveState(Unresolved), dnsevent(nullptr)
 {
 	version = ip_version;
-	data = new Samurai::IO::Net::__InternalAddress();
-	memset(data, 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
+	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
+	memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
 	
 	// printf("InetAddress::InetAddress(): %s\n", address.c_str());
 	
@@ -129,7 +130,7 @@ Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Vers
 		{
 			/* If address is indeed an IP address (as opposed to a hostname),
 			   we will try to autodetect it and the address family. */
-			ok = stringToAddress(IPv4, address.c_str(), data);
+			ok = stringToAddress(IPv4, address.c_str(), data.get());
 			if (ok)
 			{
 				// printf("Unspec is OK - IPv4\n");
@@ -137,7 +138,7 @@ Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Vers
 			}
 			else
 			{
-				ok = stringToAddress(IPv6, address.c_str(), data);
+				ok = stringToAddress(IPv6, address.c_str(), data.get());
 				if (ok)
 				{
 					// printf("Unspec is OK - IPv6\n");
@@ -150,12 +151,12 @@ Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Vers
 			if (version == IPv4)
 			{
 				// printf("Specified IPv4\n");
-				ok = stringToAddress(IPv4, address.c_str(), data);
+				ok = stringToAddress(IPv4, address.c_str(), data.get());
 			}
 			else if (version == IPv6)
 			{
 				// printf("Specified IPv6\n");
-				ok = stringToAddress(IPv6, address.c_str(), data);
+				ok = stringToAddress(IPv6, address.c_str(), data.get());
 			}
 		}
 	}
@@ -166,7 +167,7 @@ Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Vers
 		// printf("NOT OK!\n");
 		// error in string, or this is not an IP address.
 		// let's try to resolve it
-		memset(data, 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
+		memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
 		version = Unspecified;
 		// FIXME: Maybe this is indeed a name? Perhaps we should look up a IPv6 name, when IPv6 is specified?
 	}
@@ -182,8 +183,8 @@ Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Vers
 Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress& address) : ResolveEventHandler(), version(Unspecified), data(nullptr), resolver(nullptr), resolveState(Unresolved), dnsevent(nullptr)
 {
 	version = address.version;
-	data = new Samurai::IO::Net::__InternalAddress();
-	memcpy(data, address.data, sizeof(struct Samurai::IO::Net::__InternalAddress));
+	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
+	memcpy(data.get(), address.data.get(), sizeof(struct Samurai::IO::Net::__InternalAddress));
 	hostname = address.hostname;
 	resolveState = address.resolveState;
 }
@@ -192,8 +193,8 @@ Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress& 
 Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress* address) : version(Unspecified), data(nullptr), resolver(nullptr), resolveState(Unresolved), dnsevent(nullptr)
 {
 	version = address->version;
-	data = new Samurai::IO::Net::__InternalAddress();
-	memcpy(data, address->data, sizeof(struct Samurai::IO::Net::__InternalAddress));
+	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
+	memcpy(data.get(), address->data.get(), sizeof(struct Samurai::IO::Net::__InternalAddress));
 	hostname = address->hostname;
 	resolveState = address->resolveState;
 }
@@ -206,11 +207,9 @@ Samurai::IO::Net::InetAddress::~InetAddress()
 	   forwarded to a user handler that believes this address is still alive. */
 	dnsevent = nullptr;
 
-	delete resolver;
-	resolver = nullptr;
+	resolver.reset();
 
-	delete data;
-	data = nullptr;
+	data.reset();
 }
 
 
@@ -220,8 +219,8 @@ bool Samurai::IO::Net::InetAddress::setRawAddress(void* data_, size_t length, en
 	if (ip_version == Samurai::IO::Net::InetAddress::IPv6 && length < sizeof(struct in6_addr)) return false;
 	
  	version = ip_version;
-	memset(data, 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
-	memcpy(data, data_, length);
+	memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
+	memcpy(data.get(), data_, length);
 	resolveState = Resolved;
 	return true;
 }
@@ -373,12 +372,12 @@ bool Samurai::IO::Net::InetAddress::operator==(const Samurai::IO::Net::InetAddre
 
 Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const std::string& address)
 {
-	delete data; data = nullptr;
-	delete resolver; resolver = nullptr;
+	data.reset();
+	resolver.reset();
 	
 	version = Unspecified;
-	data = new Samurai::IO::Net::__InternalAddress();
-	memset(data, 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
+	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
+	memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
 	
 	if (address == "") return *this;
 	int ret;
@@ -411,7 +410,7 @@ Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const st
 		// error in string, or this is not an IP address.
 		// let's try to resolve it
 		hostname = address;
-		memset(data, 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
+		memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
 		version = Unspecified;
 	} else {
 		resolveState = Resolved;
@@ -422,13 +421,13 @@ Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const st
 
 Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const Samurai::IO::Net::InetAddress& copy)
 {
-	delete data; data = nullptr;
-	delete resolver; resolver = nullptr;
+	data.reset();
+	resolver.reset();
 
 
 	version = copy.version;
-	data = new Samurai::IO::Net::__InternalAddress();
-	memcpy(data, copy.data, sizeof(struct Samurai::IO::Net::__InternalAddress));
+	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
+	memcpy(data.get(), copy.data.get(), sizeof(struct Samurai::IO::Net::__InternalAddress));
 	hostname = copy.hostname;
 	resolveState = copy.resolveState;
 	return *this;
@@ -450,7 +449,7 @@ void Samurai::IO::Net::InetAddress::EventHostFound(const Samurai::IO::Net::InetA
 	/* Every constructor allocates 'data', so there is always a block to copy
 	   into. */
 	version = address->version;
-	memcpy(data, address->data, sizeof(struct Samurai::IO::Net::__InternalAddress));
+	memcpy(data.get(), address->data.get(), sizeof(struct Samurai::IO::Net::__InternalAddress));
 	resolveState = Resolved;
 
 	/* Cleared before the callback, not after: the handler is free to destroy
@@ -485,8 +484,7 @@ void Samurai::IO::Net::InetAddress::lookup(ResolveEventHandler* eventHandler)
 		return;
 	}
 
-	delete resolver;
-	resolver = nullptr;
+	resolver.reset();
 
 	resolver = Samurai::IO::Net::DNS::Resolver::getHostByName(this, hostname.c_str()); /* FIXME: std::string-ify */
 }

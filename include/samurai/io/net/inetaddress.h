@@ -115,9 +115,11 @@ namespace Samurai {
 					
 				protected:
 					enum Version version;
-					struct __InternalAddress* data;
+					/* Owning. Stays pointer-like because the X_IP* accessor macros in
+					   socketglue.h dereference it. */
+					std::unique_ptr<struct __InternalAddress> data;
 					std::string hostname;
-					Samurai::IO::Net::DNS::Resolver* resolver;
+					std::unique_ptr<Samurai::IO::Net::DNS::Resolver> resolver;
 					enum ResolveState resolveState;
 					ResolveEventHandler* dnsevent;
 					
