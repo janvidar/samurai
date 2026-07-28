@@ -17,8 +17,12 @@
 #include <samurai/util/random.h>
 #include <stdlib.h>
 
-extern Samurai::IO::Net::DNS::ResolveConfiguration* g_dns_config;
-Samurai::IO::Net::DNS::ResolveConfiguration* g_dns_config = 0;
+/*
+ * NOTE: this was a global with external linkage, and no other translation unit
+ * refers to it. A name in the global namespace is not mangled, so the shared
+ * library exported it as plain "g_dns_config".
+ */
+static Samurai::IO::Net::DNS::ResolveConfiguration* g_dns_config = 0;
 
 
 Samurai::IO::Net::DNS::BuiltinResolver::BuiltinResolver(Samurai::IO::Net::ResolveEventHandler* eh) : Samurai::IO::Net::DNS::Resolver(eh)

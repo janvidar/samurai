@@ -26,7 +26,7 @@ static const char* samurai_skip_ws_sign(const char* value, bool* negative) {
  * A very simple string to (64 bit) integer converter.
  * Stops at the first character that is not a digit. Overflow saturates.
  */
-int64_t samurai_atoll(const char* value) {
+int64_t Samurai::Util::Convert::to_int64(const char* value) {
 	bool negative = false;
 	const char* p = samurai_skip_ws_sign(value, &negative);
 	if (!p) return 0;
@@ -50,7 +50,7 @@ int64_t samurai_atoll(const char* value) {
 /**
  * A very simple string to (64 bit) integer converter.
  */
-uint64_t samurai_atoull(const char* value) {
+uint64_t Samurai::Util::Convert::to_uint64(const char* value) {
 	bool negative = false;
 	const char* p = samurai_skip_ws_sign(value, &negative);
 	if (!p || negative) return 0;
@@ -67,14 +67,26 @@ uint64_t samurai_atoull(const char* value) {
 /**
  * A very simple string to (64 bit) integer converter.
  */
-int samurai_atoi(const char* value) {
-	const int64_t val = samurai_atoll(value);
+int32_t Samurai::Util::Convert::to_int32(const char* value) {
+	const int64_t val = to_int64(value);
 	if (val > 2147483647LL)  return 2147483647;
 	if (val < -2147483648LL) return (-2147483647 - 1);
-	return (int) val;
+	return (int32_t) val;
 }
 
-unsigned int samurai_abs(int n) {
+uint64_t Samurai::Util::Convert::to_uint64(const std::string& str) {
+	return to_uint64(str.c_str());
+}
+
+int64_t Samurai::Util::Convert::to_int64(const std::string& str) {
+	return to_int64(str.c_str());
+}
+
+int32_t Samurai::Util::Convert::to_int32(const std::string& str) {
+	return to_int32(str.c_str());
+}
+
+unsigned int Samurai::Util::abs(int n) {
 	return (n < 0) ? (0u - (unsigned int) n) : (unsigned int) n;
 }
 
@@ -84,7 +96,7 @@ unsigned int samurai_abs(int n) {
 /* NOTE: this was #ifndef SAMURAI_OS_LINUX, which redefined a function libc
    already provides on macOS and the BSDs. Only Windows lacks it. */
 #ifdef SAMURAI_OS_WINDOWS
-char *strndup(const char *value, size_t len) {
+char* samurai_strndup(const char *value, size_t len) {
 	char* dupval = (char*) malloc(len+1);
 	strncpy(dupval, value, len);
 	dupval[len] = 0;
@@ -117,7 +129,7 @@ uint16_t Samurai::Util::Convert::to_uint16(const std::string& str)
 	for (std::string::const_iterator it = str.begin(); it != str.end(); ++it)
 		if (*it < '0' || *it > '9') return 0;
 
-	const int64_t n = samurai_atoll(str.c_str());
+	const int64_t n = to_int64(str.c_str());
 	if (n < 0 || n > 65535) return 0;
 	return (uint16_t) n;
 }
