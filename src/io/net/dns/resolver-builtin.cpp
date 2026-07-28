@@ -131,69 +131,64 @@ void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 
 void Samurai::IO::Net::DNS::BuiltinResolver::EventGotDatagram(DatagramSocket*, DatagramPacket* packet)
 {
-	puts("got dns datagram");
-	
+	QDBG("Got DNS datagram");
+
 	Samurai::IO::Buffer* buffer = packet->getBuffer();
 	Samurai::IO::Net::DNS::Message msg(buffer);
 	enum Samurai::IO::Net::DNS::ResponseCode code = msg.decode();
 
 	Samurai::IO::Net::DNS::CacheStorage* cache = Samurai::IO::Net::DNS::CacheStorage::getInstance();
-	
-	if (code == Samurai::IO::Net::DNS::DNS_STATUS_OK) {
-		/* Do nothing */
-		Samurai::IO::Net::DNS::ResourceRecord* rr = 0;
-		puts("=> ok, things seemed to work out! cool");
-		
-		
-		// Add everything to cache
-		for (size_t n = 0; msg.getRecord(n); n++) {
-			rr = msg.getRecord(n);
-			cache->add(rr);
-			// rr = msg.getRecord(n++);
-		}
 
+	if (code == Samurai::IO::Net::DNS::DNS_STATUS_OK) {
 		bool found = false;
 
-		// find whatever we are looking for
-		rr = msg.getRecord(rrname);
+		/*
+		 * The records are read here while the message still owns them, and are
+		 * only handed to the cache at the end. Doing it the other way round
+		 * would leave the cache and the message both believing they own the
+		 * same records.
+		 */
+		Samurai::IO::Net::DNS::ResourceRecord* rr = msg.getRecord(rrname);
 		while (rrname && rr) {
-			
-			if (dynamic_cast<Samurai::IO::Net::DNS::RR_A*>(rr->rr)) {
-				
-				Samurai::IO::Net::DNS::RR_A* tmp = dynamic_cast<Samurai::IO::Net::DNS::RR_A*>(rr->rr);
-				printf("hostname='%s', resolved_rra='%s'\n", hostname, tmp->getAddress()->toString().c_str());
+			if (Samurai::IO::Net::DNS::RR_A* tmp =
+				dynamic_cast<Samurai::IO::Net::DNS::RR_A*>(rr->rr))
+			{
+				QDBG("hostname='%s', resolved to '%s'", hostname, tmp->getAddress()->toString().c_str());
+				/* Borrowed for the duration of the call, as with the other
+				   resolver backends. */
 				eventHandler->EventHostFound(tmp->getAddress());
 				found = true;
 				break;
-				
-			} else if (dynamic_cast<Samurai::IO::Net::DNS::RR_CNAME*>(rr->rr)) {
-				Samurai::IO::Net::DNS::RR_CNAME* tmp = dynamic_cast<Samurai::IO::Net::DNS::RR_CNAME*>(rr->rr);
-				printf("hostname='%s', resolved_rra='%s' (cname)\n", hostname, tmp->getName()->toString().c_str());
-				
-				printf("rrname='%s', cname='%s'\n", rrname->toString().c_str(), tmp->getName()->toString().c_str());
-				
+
+			} else if (Samurai::IO::Net::DNS::RR_CNAME* tmp =
+				dynamic_cast<Samurai::IO::Net::DNS::RR_CNAME*>(rr->rr))
+			{
+				QDBG("rrname='%s' is a cname for '%s'", rrname->toString().c_str(), tmp->getName()->toString().c_str());
+
 				delete rrname;
 				rrname = new Samurai::IO::Net::DNS::Name(*tmp->getName());
 				rr = msg.getRecord(rrname);
 				numTries++;
-				
+
 			} else {
-				puts("Fuck it! Unable to cast RR");
+				QDBG("Resource record is of no type we can follow");
 				break;
 			}
 		}
-		
+
+		/* Ownership moves to the cache, which stamps and expires them. */
+		for (Samurai::IO::Net::DNS::ResourceRecord* record : msg.releaseRecords())
+			cache->add(record);
+
 		if (!found)
-		{
-			printf("Need to query again for %s\n", rrname->toString().c_str());
-		}
-		
-		
+			QDBG("No address for %s yet", rrname ? rrname->toString().c_str() : "");
+
 	} else if (code == Samurai::IO::Net::DNS::DNS_STATUS_NAME_ERROR) {
-		puts("=> Not found");
-		eventHandler->EventHostError(Unknown);
+		QDBG("Host not found");
+		eventHandler->EventHostError(NotFound);
 	} else {
-		puts("=> Error");
+		QDBG("Resolve failed, response code %d", (int) code);
+		eventHandler->EventHostError(Unknown);
 	}
 }
 

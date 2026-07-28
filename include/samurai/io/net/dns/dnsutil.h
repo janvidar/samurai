@@ -47,9 +47,9 @@ class Label {
 		const char* getName() const;
 		uint8_t getSize() const;
 		
-		bool operator==(const Label& label);
-		bool operator!=(const Label& label);
-		
+		bool operator==(const Label& label) const;
+		bool operator!=(const Label& label) const;
+
 
 	protected:
 		char   name[DNS_LABEL_SIZE+1];
@@ -73,8 +73,8 @@ class Name {
 		std::string toString() const;
 		void clear();
 		
-		bool operator==(const Name& name);
-		bool operator!=(const Name& name);
+		bool operator==(const Name& name) const;
+		bool operator!=(const Name& name) const;
 		
 	public:
 		char name[DNS_NAME_SIZE+1];

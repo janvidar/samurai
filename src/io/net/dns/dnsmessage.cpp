@@ -17,8 +17,29 @@ Samurai::IO::Net::DNS::Message::Message(Samurai::IO::Buffer* buffer_) {
 	buffer = buffer_; // FIXME: perhaps make a copy?
 }
 
+/*
+ * The buffer is borrowed from whoever handed it to the constructor, but every
+ * record, question and name server decoded out of it belongs to this message.
+ */
 Samurai::IO::Net::DNS::Message::~Message() {
-	// free buffer?
+	for (Question* question : questions)
+		delete question;
+
+	for (ResourceRecord* record : records)
+		delete record;
+
+	for (ResourceRecord* record : nameservers)
+		delete record;
+
+	for (ResourceRecord* record : additional)
+		delete record;
+}
+
+std::vector<Samurai::IO::Net::DNS::ResourceRecord*> Samurai::IO::Net::DNS::Message::releaseRecords()
+{
+	std::vector<ResourceRecord*> released;
+	released.swap(records);
+	return released;
 }
 
 bool Samurai::IO::Net::DNS::Message::isResponse()

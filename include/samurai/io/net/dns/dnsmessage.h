@@ -160,10 +160,22 @@ class Message {
 		bool encode();
 	
 		bool isResponse();
-		
+
+		/* The returned records stay owned by this message. */
 		ResourceRecord* getRecord(Name* name);
 		ResourceRecord* getRecord(size_t index);
-	
+
+		/**
+		 * Hand the decoded answer records over to the caller, which becomes
+		 * responsible for destroying them. The message keeps none of them, so
+		 * getRecord() finds nothing afterwards.
+		 */
+		std::vector<ResourceRecord*> releaseRecords();
+
+		/* Owns its decoded records, so a copy would release them twice. */
+		Message(const Message&) = delete;
+		Message& operator=(const Message&) = delete;
+
 	private:
 		void addOffset(size_t offset);
 		bool isOffsetOK(size_t offset);
