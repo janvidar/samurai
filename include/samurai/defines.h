@@ -147,6 +147,54 @@
 #define SAMURAI_BIG_ENDIAN
 #endif
 
+/*
+ * A guard against the spelling, not the value: a misspelt name in an #ifdef
+ * compiles to nothing rather than complaining, so testing SAMURAI_BIGENDIAN
+ * silently takes the little endian branch on every platform. That is what the
+ * #error checks above exist for, and the endian macro needs one too.
+ */
+#if defined(SAMURAI_BIGENDIAN)
+#error "Use SAMURAI_BIG_ENDIAN; SAMURAI_BIGENDIAN is not a macro this header defines"
+#endif
+
+#ifdef __cplusplus
+
+#include <bit>
+
+namespace Samurai {
+
+/*
+ * The platform, as values rather than as preprocessor state, so that new code
+ * can branch with 'if constexpr' and have both arms type checked.
+ *
+ * The #ifdefs above stay: they select which headers to include and which class
+ * definitions exist at all, which no amount of constexpr can replace.
+ */
+#ifdef SAMURAI_WINDOWS
+inline constexpr bool is_windows = true;
+#else
+inline constexpr bool is_windows = false;
+#endif
+
+inline constexpr bool is_posix = !is_windows;
+
+inline constexpr bool is_big_endian = (std::endian::native == std::endian::big);
+
+/*
+ * Cross-check the hand-rolled detection against the standard one. If they ever
+ * disagree the detection above is wrong, and every byte order decision built on
+ * it is wrong with it.
+ */
+#ifdef SAMURAI_BIG_ENDIAN
+static_assert(is_big_endian, "SAMURAI_BIG_ENDIAN is defined on a little endian target");
+#else
+static_assert(!is_big_endian, "SAMURAI_BIG_ENDIAN is not defined on a big endian target");
+#endif
+
+}
+
+#endif // __cplusplus
+
 
 
 #endif // HAVE_SAMURAI_DEFINES_H

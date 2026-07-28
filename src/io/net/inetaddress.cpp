@@ -229,7 +229,7 @@ bool Samurai::IO::Net::InetAddress::setRawAddress(void* data_, size_t length, Sa
 uint32_t Samurai::IO::Net::InetAddress::getIPv4HostOrder() const
 {
 	if (version != Version::IPv4 || !data) return 0;
-	return ntohl(X_IP4_32);
+	return ntohl(data->ipv4());
 }
 
 
@@ -244,7 +244,8 @@ bool Samurai::IO::Net::InetAddress::isValid() const
 #endif
 	} else if (version == Version::IPv6) {
 #ifdef SAMURAI_POSIX
-		return (X_IP6_32[0] || X_IP6_32[1] || X_IP6_32[2] || X_IP6_32[3]);
+		const auto words = data->ipv6_32();
+		return (words[0] || words[1] || words[2] || words[3]);
 #else
 		return true; // FIXME
 #endif
@@ -261,7 +262,7 @@ bool Samurai::IO::Net::InetAddress::isMulticast() const
 		return (host_order >= 0xe0000000 && host_order < 0xf0000000);
 	} else if (version == Version::IPv6) {
 #ifdef SAMURAI_POSIX
-		return (X_IP6_08[0] == 0xff);
+		return (data->ipv6_08()[0] == 0xff);
 #else
 		return false; // FIXME
 #endif
@@ -281,7 +282,7 @@ bool Samurai::IO::Net::InetAddress::isPrivate() const
 		return false;
 	} else if (version == Version::IPv6) {
 #ifdef SAMURAI_POSIX
-		return ((X_IP6_08[0] & 0xfe) == 0xfc); /* fc00::/7 */
+		return ((data->ipv6_08()[0] & 0xfe) == 0xfc); /* fc00::/7 */
 #else
 		return false; // FIXME
 #endif
@@ -297,7 +298,8 @@ bool Samurai::IO::Net::InetAddress::isLinkLocal() const
 		return ((getIPv4HostOrder() & 0xffff0000) == 0xa9fe0000); /* 169.254.0.0/16 */
 	} else if (version == Version::IPv6) {
 #ifdef SAMURAI_POSIX
-		return (X_IP6_08[0] == 0xfe && (X_IP6_08[1] & 0xc0) == 0x80); /* fe80::/10 */
+		const auto bytes = data->ipv6_08();
+		return (bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0x80); /* fe80::/10 */
 #else
 		return false; // FIXME
 #endif
@@ -313,7 +315,10 @@ bool Samurai::IO::Net::InetAddress::isLoopback() const
 		return ((getIPv4HostOrder() & 0xff000000) == 0x7f000000);
 	} else if (version == Version::IPv6) {
 #ifdef SAMURAI_POSIX
-		return (X_IP6_32[0] == 0 && X_IP6_32[1] == 0 && X_IP6_32[2] == 0 && X_IP6_16[6] == 0 && X_IP6_08[14] == 0 && X_IP6_08[15] == 1);
+		const auto words = data->ipv6_32();
+		const auto shorts = data->ipv6_16();
+		const auto bytes = data->ipv6_08();
+		return (words[0] == 0 && words[1] == 0 && words[2] == 0 && shorts[6] == 0 && bytes[14] == 0 && bytes[15] == 1);
 #else
 		return false; // FIXME
 #endif
