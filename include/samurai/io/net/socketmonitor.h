@@ -26,7 +26,12 @@ class SocketMonitor;
 class SocketMonitor
 {
 	public:
-		virtual ~SocketMonitor();	
+		virtual ~SocketMonitor();
+
+		/* The backends own descriptor arrays and epoll/kqueue descriptors,
+		 * released in their destructors. */
+		SocketMonitor(const SocketMonitor&) = delete;
+		SocketMonitor& operator=(const SocketMonitor&) = delete;	
 	
 		/**
 		 * Return the current socket monitor.

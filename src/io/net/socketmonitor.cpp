@@ -166,14 +166,14 @@ void Samurai::IO::Net::SocketMonitor::handleSocketEvent(Samurai::IO::Net::Socket
 	sock->handleMonitorEvent(trig);
 }
 
-Samurai::IO::Net::SocketMonitor* Samurai::IO::Net::SocketMonitor::socket_monitor = 0;
+Samurai::IO::Net::SocketMonitor* Samurai::IO::Net::SocketMonitor::socket_monitor = nullptr;
 
 
 bool Samurai::IO::Net::SocketMonitor::setSocketMonitor(Samurai::IO::Net::SocketMonitor* monitor)
 {
 	if (!monitor)
 	{
-		socket_monitor = 0;
+		socket_monitor = nullptr;
 		return true;
 	}
 	
@@ -193,7 +193,7 @@ bool Samurai::IO::Net::SocketMonitor::setSocketMonitor(Samurai::IO::Net::SocketM
 
 static Samurai::IO::Net::SocketMonitor* createDefaultMonitor()
 {
-	Samurai::IO::Net::SocketMonitor* monitor = 0;
+	Samurai::IO::Net::SocketMonitor* monitor = nullptr;
 
 #ifdef SOCKET_NOTIFY_EPOLL
 	if (!monitor)
@@ -214,7 +214,7 @@ static Samurai::IO::Net::SocketMonitor* createDefaultMonitor()
 		if (!monitor->isValid())
 		{
 			delete monitor;
-			monitor = 0;
+			monitor = nullptr;
 		}
 	}
 #endif // SOCKET_NOTIFY_KQUEUE
@@ -227,7 +227,7 @@ static Samurai::IO::Net::SocketMonitor* createDefaultMonitor()
 		if (!monitor->isValid())
 		{
 			delete monitor;
-			monitor = 0;
+			monitor = nullptr;
 		}
 	}
 #endif // SOCKET_NOTIFY_POLL
@@ -239,7 +239,7 @@ static Samurai::IO::Net::SocketMonitor* createDefaultMonitor()
 		if (!monitor->isValid())
 		{
 			delete monitor;
-			monitor = 0;
+			monitor = nullptr;
 		}
 	}
 #endif // SOCKET_NOTIFY_SELECT

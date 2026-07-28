@@ -102,7 +102,7 @@ namespace Samurai {
 					/**
 					 * Start lookup hostname
 					 */
-					void lookup(ResolveEventHandler* eventHandler = 0);
+					void lookup(ResolveEventHandler* eventHandler = nullptr);
 					
 					
 				protected:

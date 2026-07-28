@@ -8,8 +8,8 @@
 #include <samurai/io/file.h>
 
 
-Samurai::IO::File* Samurai::IO::Net::TlsFactory::pem_key = 0;
-Samurai::IO::File* Samurai::IO::Net::TlsFactory::pem_cert = 0;
+Samurai::IO::File* Samurai::IO::Net::TlsFactory::pem_key = nullptr;
+Samurai::IO::File* Samurai::IO::Net::TlsFactory::pem_cert = nullptr;
 bool Samurai::IO::Net::TlsFactory::allow_untrusted = true;
 
 void Samurai::IO::Net::TlsFactory::priv_init()
@@ -35,8 +35,8 @@ void Samurai::IO::Net::TlsFactory::setAllowUntrustedConnections(bool toggle)
 
 void Samurai::IO::Net::TlsFactory::resetKeys()
 {
-	pem_key = 0;
-	pem_cert = 0;
+	pem_key = nullptr;
+	pem_cert = nullptr;
 }
 
 void Samurai::IO::Net::TlsFactory::freeKeys()

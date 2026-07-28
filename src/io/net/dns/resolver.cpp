@@ -19,13 +19,13 @@ Samurai::IO::Net::DNS::Resolver::Resolver(Samurai::IO::Net::ResolveEventHandler*
 
 Samurai::IO::Net::DNS::Resolver::~Resolver()
 {
-	eventHandler = 0;
+	eventHandler = nullptr;
 }
 
 /* static */
 Samurai::IO::Net::DNS::Resolver* Samurai::IO::Net::DNS::Resolver::getHostByName(Samurai::IO::Net::ResolveEventHandler* eh, const char* name)
 {
-	Samurai::IO::Net::DNS::Resolver* resolver = 0;
+	Samurai::IO::Net::DNS::Resolver* resolver = nullptr;
 #ifdef DNS_RESOLVE_BUILTIN
 	resolver = new Samurai::IO::Net::DNS::BuiltinResolver(eh);
 #else
@@ -41,7 +41,7 @@ Samurai::IO::Net::DNS::Resolver* Samurai::IO::Net::DNS::Resolver::getNameByAddre
 {
 	(void) address;
 	
-	return 0;
+	return nullptr;
 }
 
 

@@ -62,6 +62,11 @@ class Socket :
 	public:
 		~Socket() override;
 
+		/* Releases raw pointers in its destructor, so the implicit copy
+		 * operations would release them a second time. */
+		Socket(const Socket&) = delete;
+		Socket& operator=(const Socket&) = delete;
+
 		void lookup();
 
 		void connect();

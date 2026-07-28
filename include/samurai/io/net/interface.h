@@ -32,6 +32,11 @@ class NetworkInterface
 	public:
 		virtual ~NetworkInterface();
 
+		/* Releases raw pointers in its destructor, so the implicit copy
+		 * operations would release them a second time. */
+		NetworkInterface(const NetworkInterface&) = delete;
+		NetworkInterface& operator=(const NetworkInterface&) = delete;
+
 		virtual InetAddress* getAddress() const;
 		virtual InetAddress* getBroadcastAddress() const;
 		virtual InetAddress* getNetmask() const;

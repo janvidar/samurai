@@ -26,22 +26,22 @@
 
 #define MAX_BUF_SIZE 65536
 
-Samurai::IO::Net::DatagramPacket::DatagramPacket() : buffer(0), socket(0), addr(0) {
+Samurai::IO::Net::DatagramPacket::DatagramPacket() : buffer(nullptr), socket(nullptr), addr(nullptr) {
 	buffer = new Samurai::IO::Buffer(MAX_BUF_SIZE);
 }
 
-Samurai::IO::Net::DatagramPacket::DatagramPacket(const uint8_t* buf, size_t len) : buffer(0), socket(0), addr(0) {
+Samurai::IO::Net::DatagramPacket::DatagramPacket(const uint8_t* buf, size_t len) : buffer(nullptr), socket(nullptr), addr(nullptr) {
 	buffer = new Samurai::IO::Buffer(len);
 	buffer->append((char*) buf, len);
 }
 
-Samurai::IO::Net::DatagramPacket::DatagramPacket(const char* buf) : buffer(0), socket(0), addr(0) {
+Samurai::IO::Net::DatagramPacket::DatagramPacket(const char* buf) : buffer(nullptr), socket(nullptr), addr(nullptr) {
 	buffer = new Samurai::IO::Buffer(strlen(buf));
 	buffer->append(buf);
 
 }
 
-Samurai::IO::Net::DatagramPacket::DatagramPacket(Samurai::IO::Buffer* buf) : buffer(0), socket(0), addr(0) {
+Samurai::IO::Net::DatagramPacket::DatagramPacket(Samurai::IO::Buffer* buf) : buffer(nullptr), socket(nullptr), addr(nullptr) {
 	buffer = new Samurai::IO::Buffer(buf);
 }
 
@@ -53,7 +53,7 @@ void Samurai::IO::Net::DatagramPacket::setData(const uint8_t* buf, size_t len) {
 void Samurai::IO::Net::DatagramPacket::setAddress(Samurai::IO::Net::SocketAddress* addr_)
 {
 	delete addr;
-	addr = 0;
+	addr = nullptr;
 
 	/*
 	 * Only an InetSocketAddress can be copied here, and the cast has to be
@@ -86,7 +86,7 @@ Samurai::IO::Buffer* Samurai::IO::Net::DatagramPacket::getBuffer() {
 	return buffer;
 }
 
-Samurai::IO::Net::DatagramSocket::DatagramSocket(DatagramEventHandler* eh, enum InetAddress::Version version) : SocketBase(Datagram), eventHandler(eh), myPacket(0)
+Samurai::IO::Net::DatagramSocket::DatagramSocket(DatagramEventHandler* eh, enum InetAddress::Version version) : SocketBase(Datagram), eventHandler(eh), myPacket(nullptr)
 {
 	int af = (version == InetAddress::IPv4 ? AF_INET : version == InetAddress::IPv6 ? AF_INET6 : AF_UNSPEC);
 	createDescriptor(af);
@@ -97,25 +97,25 @@ Samurai::IO::Net::DatagramSocket::DatagramSocket(DatagramEventHandler* eh, enum 
  * so this leaves the socket unbound and says so; listen() and send() refuse an
  * INVALID_SOCKET.
  */
-Samurai::IO::Net::DatagramSocket::DatagramSocket() : SocketBase(Datagram), eventHandler(0), myPacket(0) {
+Samurai::IO::Net::DatagramSocket::DatagramSocket() : SocketBase(Datagram), eventHandler(nullptr), myPacket(nullptr) {
 	QERR("DatagramSocket: default-constructed sockets have no address family "
 	     "and cannot be used; construct with an address, port or version");
 }
 
 Samurai::IO::Net::DatagramSocket::DatagramSocket(Samurai::IO::Net::DatagramEventHandler* eh, const Samurai::IO::Net::SocketAddress& bindAddr)
-	: SocketBase(bindAddr, Datagram), eventHandler(eh), myPacket(0)
+	: SocketBase(bindAddr, Datagram), eventHandler(eh), myPacket(nullptr)
 {
 	internal_create();
 }
 
 Samurai::IO::Net::DatagramSocket::DatagramSocket(DatagramEventHandler* eh, const Samurai::IO::Net::InetAddress& bindaddr, uint16_t bindport)
-	: SocketBase(bindaddr, bindport, Datagram), eventHandler(eh), myPacket(0)
+	: SocketBase(bindaddr, bindport, Datagram), eventHandler(eh), myPacket(nullptr)
 {
 	internal_create();
 }
 
 Samurai::IO::Net::DatagramSocket::DatagramSocket(DatagramEventHandler* eh, uint16_t bindport)
-	: SocketBase(Samurai::IO::Net::InetAddress("0.0.0.0"), bindport, Datagram), eventHandler(eh), myPacket(0)
+	: SocketBase(Samurai::IO::Net::InetAddress("0.0.0.0"), bindport, Datagram), eventHandler(eh), myPacket(nullptr)
 {
 	internal_create();
 }

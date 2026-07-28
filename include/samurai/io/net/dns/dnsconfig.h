@@ -20,6 +20,11 @@ class ResolveConfiguration {
 		ResolveConfiguration(const char* resolv_conf = "/etc/resolv.conf");
 		~ResolveConfiguration();
 
+		/* Releases raw pointers in its destructor, so the implicit copy
+		 * operations would release them a second time. */
+		ResolveConfiguration(const ResolveConfiguration&) = delete;
+		ResolveConfiguration& operator=(const ResolveConfiguration&) = delete;
+
 		/**
 		 * The configured name server to use for the given attempt, or 0 if
 		 * none could be read from the configuration. Callers must check:

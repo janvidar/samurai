@@ -10,7 +10,7 @@
 #include <memory>
 
 Samurai::IO::Net::DNS::Message::Message() {
-	buffer = 0;
+	buffer = nullptr;
 }
 
 Samurai::IO::Net::DNS::Message::Message(Samurai::IO::Buffer* buffer_) {
@@ -332,7 +332,7 @@ Samurai::IO::Net::DNS::ResourceRecord* Samurai::IO::Net::DNS::Message::getRecord
 {
 	QDBG("getRecord(%p) = '%s'\n", name, name ? name->toString().c_str() : "");
 	
-	if (!name) return 0;
+	if (!name) return nullptr;
 	
 	QDBG("Records: %d\n", (int) records.size());
 	for (std::vector<Samurai::IO::Net::DNS::ResourceRecord*>::iterator it = records.begin(); it != records.end(); it++) {
@@ -344,12 +344,12 @@ Samurai::IO::Net::DNS::ResourceRecord* Samurai::IO::Net::DNS::Message::getRecord
 			return record;
 		}
 	}
-	return 0;
+	return nullptr;
 }
 
 Samurai::IO::Net::DNS::ResourceRecord* Samurai::IO::Net::DNS::Message::getRecord(size_t index)
 {
-	if (index >= records.size() || !records.size()) return 0;
+	if (index >= records.size() || !records.size()) return nullptr;
 	return records[index];
 }
 

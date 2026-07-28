@@ -29,6 +29,11 @@ class Hash {
 		
 		virtual ~Hash();
 
+		/* Releases raw pointers in its destructor, so the implicit copy
+		 * operations would release them a second time. */
+		Hash(const Hash&) = delete;
+		Hash& operator=(const Hash&) = delete;
+
 		/**
 		 * Resets the internal digest to the starting point.
 		 */

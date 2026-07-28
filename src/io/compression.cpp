@@ -94,7 +94,7 @@ Samurai::IO::BZip2Compressor::BZip2Compressor()
 	
 	if (BZ2_bzCompressInit(d->stream, 5, 0, 0) != BZ_OK)
 	{
-		delete d; d = 0;
+		delete d; d = nullptr;
 	}
 }
 
@@ -139,7 +139,7 @@ Samurai::IO::BZip2Decompressor::BZip2Decompressor()
 	
 	if (BZ2_bzDecompressInit(d->stream, 0, 0) != BZ_OK)
 	{
-		delete d; d = 0;
+		delete d; d = nullptr;
 	}
 }
 		
@@ -183,7 +183,7 @@ Samurai::IO::GzipCompressor::GzipCompressor()
 	 // FIXME: Default compression level: 5
 	if (deflateInit(d->stream, 5) != Z_OK)
 	{
-		delete d; d = 0;
+		delete d; d = nullptr;
 	}
 }
 
@@ -225,7 +225,7 @@ Samurai::IO::GzipDecompressor::GzipDecompressor()
 	d = new GzPrivate();
 	if (inflateInit(d->stream) != Z_OK)
 	{
-		delete d; d = 0;
+		delete d; d = nullptr;
 	}
 	
 }

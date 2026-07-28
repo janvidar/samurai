@@ -21,12 +21,23 @@ class RR {
 	public:
 		RR();
 		virtual ~RR();
+
+		/* The subclasses own raw pointers and release them in their own
+		 * destructors; deleting the copy operations here stops any of them
+		 * being copied and released twice. */
+		RR(const RR&) = delete;
+		RR& operator=(const RR&) = delete;
 };
 
 class ResourceRecord {
 	public:
 		ResourceRecord();
 		~ResourceRecord();
+
+		/* Releases raw pointers in its destructor, so the implicit copy
+		 * operations would release them a second time. */
+		ResourceRecord(const ResourceRecord&) = delete;
+		ResourceRecord& operator=(const ResourceRecord&) = delete;
 
 		/**
 		 * A record is only expirable once it has been stamped; an unstamped

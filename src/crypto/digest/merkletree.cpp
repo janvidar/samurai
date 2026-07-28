@@ -75,7 +75,7 @@ void Samurai::Crypto::Digest::MerkleWorkStack::grow()
 	for (; i < capacity; i++)
 		new_nodes[i] = nodes[i];
 	for (; i < sz; i++)
-		new_nodes[i] = 0;
+		new_nodes[i] = nullptr;
 	
 	delete[] nodes;
 	nodes = new_nodes;	
@@ -127,7 +127,7 @@ void Samurai::Crypto::Digest::MerkleWorkStack::clear()
 	size = 0;
 	pos = 0;
 	for (size_t i = 0; i < capacity; i++)
-		nodes[i] = 0;	
+		nodes[i] = nullptr;	
 }
 
 
@@ -135,7 +135,7 @@ void Samurai::Crypto::Digest::MerkleWorkStack::setPosition(size_t npos)
 {
 	pos = npos;
 	for (size_t i = pos; i < capacity; i++)
-		nodes[i] = 0;
+		nodes[i] = nullptr;
 }
 
 
@@ -219,7 +219,7 @@ void Samurai::Crypto::Digest::MerkleTree::setLeavesRTL(Samurai::IO::Buffer& buff
  */
 void Samurai::Crypto::Digest::MerkleTree::copyLeavesLTR(Samurai::IO::Buffer& buffer)
 {
-	MerkleNode* node = 0;
+	MerkleNode* node = nullptr;
 	size_t leaf_size = size();
 	for (size_t n = 0; n < m_nodes->getPosition(); n++)
 	{
@@ -233,7 +233,7 @@ void Samurai::Crypto::Digest::MerkleTree::copyLeavesLTR(Samurai::IO::Buffer& buf
  */
 void Samurai::Crypto::Digest::MerkleTree::copyLeavesRTL(Samurai::IO::Buffer& buffer)
 {
-	MerkleNode* node = 0;
+	MerkleNode* node = nullptr;
 	size_t leaf_size = size();
 	for (size_t n = m_nodes->getPosition(); n > 0; n--)
 	{
@@ -383,7 +383,7 @@ void Samurai::Crypto::Digest::MerkleTree::compact_all(MerkleWorkStack* stack)
 {
 	while (stack->getPosition() > 1)
 	{
-		MerkleNode* spare = 0;
+		MerkleNode* spare = nullptr;
 		if (stack->getPosition() % 2 == 1)
 		{
 			spare = stack->getLast();

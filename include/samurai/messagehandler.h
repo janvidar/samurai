@@ -66,6 +66,11 @@ class MessageHandler {
 		
 	public:
 		~MessageHandler();
+
+		/* Releases raw pointers in its destructor, so the implicit copy
+		 * operations would release them a second time. */
+		MessageHandler(const MessageHandler&) = delete;
+		MessageHandler& operator=(const MessageHandler&) = delete;
 		static MessageHandler* getInstance();
 		
 		void postMessage(size_t id, void* data, size_t arg1, size_t arg2);

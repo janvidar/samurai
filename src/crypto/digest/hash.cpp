@@ -11,7 +11,7 @@
 Samurai::Crypto::Digest::Hash::Hash(size_t result_size, size_t block_size, bool big_bit_endian, bool big_byte_endian, size_t count_size) :
 	m_size(result_size),
 	m_block_size(block_size),
-	m_current_block(0),
+	m_current_block(nullptr),
 	m_current_block_index(0),
 	m_file_size(0),
 	m_big_bit_endian(big_bit_endian),

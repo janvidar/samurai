@@ -32,6 +32,11 @@ class BuiltinResolver final :
 	public:
 		BuiltinResolver(ResolveEventHandler* eventHandler);
 		~BuiltinResolver() override;
+
+		/* Releases raw pointers in its destructor, so the implicit copy
+		 * operations would release them a second time. */
+		BuiltinResolver(const BuiltinResolver&) = delete;
+		BuiltinResolver& operator=(const BuiltinResolver&) = delete;
 		void lookup(const char* addr) override;
 
 	protected:

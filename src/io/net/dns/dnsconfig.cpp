@@ -44,7 +44,7 @@ void Samurai::IO::Net::DNS::ResolveConfiguration::skipNameServer() {
 
 Samurai::IO::Net::InetAddress* Samurai::IO::Net::DNS::ResolveConfiguration::getNameServer(size_t n)
 {
-	if (!num_nameservers) return 0;
+	if (!num_nameservers) return nullptr;
 
 	if (option_rotate) cur_nameserver = n % num_nameservers;
 
@@ -58,7 +58,7 @@ Samurai::IO::Net::InetAddress* Samurai::IO::Net::DNS::ResolveConfiguration::getN
 
 char* Samurai::IO::Net::DNS::ResolveConfiguration::getNameSearch()
 {
-	return 0;
+	return nullptr;
 }
 
 size_t Samurai::IO::Net::DNS::ResolveConfiguration::getNDots() const { return option_ndots; }

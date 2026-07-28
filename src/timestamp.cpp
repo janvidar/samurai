@@ -7,7 +7,7 @@
 #include <samurai/timestamp.h>
 
 Samurai::TimeStamp::TimeStamp() {
-	data = time(0);
+	data = time(nullptr);
 }
 
 Samurai::TimeStamp::TimeStamp(time_t t) {
@@ -29,7 +29,7 @@ time_t Samurai::TimeStamp::getTime() {
 */
 
 void Samurai::TimeStamp::reset() {
-	data = time(0);
+	data = time(nullptr);
 }
 
 const char* Samurai::TimeStamp::getTime(const char* format) {
@@ -51,7 +51,7 @@ time_t Samurai::TimeStamp::elapsed(const Samurai::TimeStamp& later) {
 }
 
 time_t Samurai::TimeStamp::elapsed() {
-	return time(0) - data;
+	return time(nullptr) - data;
 }
 
 void Samurai::TimeStamp::operator=(const Samurai::TimeStamp& copy) {

@@ -18,6 +18,11 @@ class OpenSSL final : public TlsFactory {
 	public:
 		OpenSSL();
 		~OpenSSL() override;
+
+		/* Releases raw pointers in its destructor, so the implicit copy
+		 * operations would release them a second time. */
+		OpenSSL(const OpenSSL&) = delete;
+		OpenSSL& operator=(const OpenSSL&) = delete;
 	
 		enum TlsStatus initialize(enum TlsOperation mode, socket_t sd) override;
 		enum TlsStatus deinitialize() override;
