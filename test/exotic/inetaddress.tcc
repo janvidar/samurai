@@ -323,6 +323,90 @@ EXO_TEST(inet_addr_ipv4_private_14,
 	return !addr.isPrivate();
 });
 
+EXO_TEST(inet_addr_ipv4_private_15,
+{
+	Samurai::IO::Net::InetAddress addr("172.20.0.0", Samurai::IO::Net::InetAddress::IPv4);
+	return addr.isPrivate();
+});
+
+EXO_TEST(inet_addr_ipv4_private_16,
+{
+	Samurai::IO::Net::InetAddress addr("172.31.255.255", Samurai::IO::Net::InetAddress::IPv4);
+	return addr.isPrivate();
+});
+
+EXO_TEST(inet_addr_ipv4_private_17,
+{
+	Samurai::IO::Net::InetAddress addr("172.15.255.255", Samurai::IO::Net::InetAddress::IPv4);
+	return !addr.isPrivate();
+});
+
+EXO_TEST(inet_addr_ipv4_private_18,
+{
+	Samurai::IO::Net::InetAddress addr("172.32.0.0", Samurai::IO::Net::InetAddress::IPv4);
+	return !addr.isPrivate();
+});
+
+EXO_TEST(inet_addr_ipv6_private_1,
+{
+	Samurai::IO::Net::InetAddress addr("fd00::1", Samurai::IO::Net::InetAddress::IPv6);
+	return addr.isPrivate();
+});
+
+EXO_TEST(inet_addr_ipv6_private_2,
+{
+	Samurai::IO::Net::InetAddress addr("2001:db8::1", Samurai::IO::Net::InetAddress::IPv6);
+	return !addr.isPrivate();
+});
+
+EXO_TEST(inet_addr_ipv4_linklocal_1,
+{
+	Samurai::IO::Net::InetAddress addr("169.254.0.0", Samurai::IO::Net::InetAddress::IPv4);
+	return addr.isLinkLocal();
+});
+
+EXO_TEST(inet_addr_ipv4_linklocal_2,
+{
+	Samurai::IO::Net::InetAddress addr("169.254.255.255", Samurai::IO::Net::InetAddress::IPv4);
+	return addr.isLinkLocal();
+});
+
+EXO_TEST(inet_addr_ipv4_linklocal_3,
+{
+	Samurai::IO::Net::InetAddress addr("127.0.0.1", Samurai::IO::Net::InetAddress::IPv4);
+	return !addr.isLinkLocal();
+});
+
+EXO_TEST(inet_addr_ipv4_linklocal_4,
+{
+	Samurai::IO::Net::InetAddress addr("169.253.255.255", Samurai::IO::Net::InetAddress::IPv4);
+	return !addr.isLinkLocal();
+});
+
+EXO_TEST(inet_addr_ipv6_linklocal_1,
+{
+	Samurai::IO::Net::InetAddress addr("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::IPv6);
+	return addr.isLinkLocal();
+});
+
+EXO_TEST(inet_addr_ipv6_linklocal_2,
+{
+	Samurai::IO::Net::InetAddress addr("febf::1", Samurai::IO::Net::InetAddress::IPv6);
+	return addr.isLinkLocal();
+});
+
+EXO_TEST(inet_addr_ipv6_linklocal_3,
+{
+	Samurai::IO::Net::InetAddress addr("::1", Samurai::IO::Net::InetAddress::IPv6);
+	return !addr.isLinkLocal();
+});
+
+EXO_TEST(inet_addr_ipv6_linklocal_4,
+{
+	Samurai::IO::Net::InetAddress addr("fec0::1", Samurai::IO::Net::InetAddress::IPv6);
+	return !addr.isLinkLocal();
+});
+
 
 EXO_TEST(inet_addr_ipv4_multicast_1,
 {
