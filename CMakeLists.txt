@@ -116,8 +116,6 @@ endif()
 # Library
 # ---------------------------------------------------------------------------
 
-# NOTE: src/media/** is deliberately absent; it was not part of the Makefile
-# build either and does not currently compile.
 set(SAMURAI_SOURCES
     src/os.cpp
     src/messagehandler.cpp
