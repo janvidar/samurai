@@ -78,7 +78,7 @@ uint16_t     Samurai::IO::Net::InetSocketAddress::getPort()
 }
 
 
-std::string  Samurai::IO::Net::InetSocketAddress::toString()
+std::string  Samurai::IO::Net::InetSocketAddress::toString() const
 {
 	const std::string address = addr.toString();
 	const std::string portstr = std::to_string(port);

@@ -9,6 +9,7 @@
 #include <samurai/samurai.h>
 #include <vector>
 #include <span>
+#include <concepts>
 #include <samurai/crypto/digest/hashvalue.h>
 
 namespace Samurai {
@@ -110,8 +111,8 @@ class Hash {
 
 
 /* MISC: */
-inline uint64_t make_uint64_t(uint8_t u0, uint8_t u1, uint8_t u2, uint8_t u3,
-							  uint8_t u4, uint8_t u5, uint8_t u6, uint8_t u7)
+constexpr uint64_t make_uint64_t(uint8_t u0, uint8_t u1, uint8_t u2, uint8_t u3,
+							  uint8_t u4, uint8_t u5, uint8_t u6, uint8_t u7) noexcept
 {
 	return (uint64_t)(
 					((uint64_t)u0 << 56) | ((uint64_t) u1 << 48) |
@@ -120,7 +121,7 @@ inline uint64_t make_uint64_t(uint8_t u0, uint8_t u1, uint8_t u2, uint8_t u3,
 					((uint64_t)u6 <<  8) | u7);
 }
 
-template<typename T> inline uint8_t get_byte(size_t offset, T input)
+template<std::unsigned_integral T> constexpr uint8_t get_byte(size_t offset, T input) noexcept
 {
 	return (uint8_t) (input >> ((sizeof(T) - 1 - (offset & (sizeof(T) - 1))) << 3));
 }

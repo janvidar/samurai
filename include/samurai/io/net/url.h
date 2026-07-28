@@ -30,7 +30,7 @@ class URL {
 		std::string getQuery() const { return query; }
 		std::string getUsername() const { return username; }
 		std::string getPassword() const { return password; }
-		std::string toString();
+		std::string toString() const;
 		URL& operator=(const URL& u);
 		
 		bool isValid() const;

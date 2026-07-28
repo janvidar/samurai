@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <algorithm>
 #include <samurai/samurai.h>
 #include <samurai/io/net/socketglue.h>
 #include <samurai/io/net/interface.h>
@@ -105,17 +106,16 @@ bool Samurai::IO::Net::MulticastSocket::leave(const Samurai::IO::Net::InetAddres
 
 	if (!dropMembership(address)) return false;
 
-	/* Matched on the textual form: InetAddress::operator== is neither a const
-	   member nor takes a const argument, so a const address cannot use it. */
+	/* Matched on the textual form because InetSocketAddress has no equality
+	   operator; it carries a sockaddr whose comparison depends on the family. */
 	const std::string wanted = address.toString();
-	for (std::vector<Samurai::IO::Net::InetSocketAddress>::iterator it = joined.begin();
-		it != joined.end(); ++it)
-	{
-		if (it->toString() == wanted) {
-			joined.erase(it);
-			break;
-		}
-	}
+	const auto it = std::ranges::find_if(joined,
+		[&wanted](const Samurai::IO::Net::InetSocketAddress& joined_address) {
+			return joined_address.toString() == wanted;
+		});
+
+	if (it != joined.end())
+		joined.erase(it);
 
 	return true;
 }

@@ -48,16 +48,9 @@ void Samurai::IO::Net::SelectSocketMonitor::internal_add(Samurai::IO::Net::Socke
 
 
 void Samurai::IO::Net::SelectSocketMonitor::internal_remove(Samurai::IO::Net::SocketBase* socket) {
-	std::vector<SocketBase*>::iterator it = sockets.begin();
-	for (; it != sockets.end(); it++)
-	{
-		SocketBase* sock = (*it);
-		if (sock == socket)
-		{
-			sockets.erase(it);
-			return;
-		}
-	}
+	const auto it = std::ranges::find(sockets, socket);
+	if (it != sockets.end())
+		sockets.erase(it);
 }
 
 
@@ -109,9 +102,7 @@ void Samurai::IO::Net::SelectSocketMonitor::internal_wait(int time_ms) {
 	socket_t maxfd = INVALID_SOCKET;
 	size_t skipped = 0;
 
-	std::vector<SocketBase*>::iterator it = sockets.begin();
-	for (; it != sockets.end(); it++) {
-		SocketBase* sock = (*it);
+	for (SocketBase* sock : sockets) {
 		const socket_t fd = sock->getFD();
 
 		if (!fd_fits_in_set(fd))
@@ -161,17 +152,17 @@ void Samurai::IO::Net::SelectSocketMonitor::internal_wait(int time_ms) {
 			/* Report the unusable descriptors so their owners tear them down.
 			   Collected first, because dispatching can modify 'sockets'. */
 			std::vector<socket_t> bad;
-			for (std::vector<SocketBase*>::iterator b = sockets.begin(); b != sockets.end(); b++)
+			for (const SocketBase* sock : sockets)
 			{
-				const socket_t fd = (*b)->getFD();
+				const socket_t fd = sock->getFD();
 				if (fd != INVALID_SOCKET && !fd_is_usable(fd)) bad.push_back(fd);
 			}
 
 			QERR("Select: %lu stale descriptor(s) in the set; reporting them as errors",
 			     (unsigned long) bad.size());
 
-			for (size_t n = 0; n < bad.size(); n++)
-				dispatch(bad[n], Samurai::IO::Net::SocketMonitor::Triggers::Error);
+			for (const socket_t fd : bad)
+				dispatch(fd, Samurai::IO::Net::SocketMonitor::Triggers::Error);
 
 			return;
 		}
@@ -181,10 +172,8 @@ void Samurai::IO::Net::SelectSocketMonitor::internal_wait(int time_ms) {
 	}
 
 	size_t act_num = 0;
-	it = sockets.begin();
-	for (; it != sockets.end(); it++)
+	for (SocketBase* sock : sockets)
 	{
-		SocketBase* sock = (*it);
 		const socket_t fd = sock->getFD();
 
 		/* Same bound as above: FD_ISSET reads the bitmap too. */

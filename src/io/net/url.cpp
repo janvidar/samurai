@@ -58,7 +58,7 @@ Samurai::IO::Net::URL::~URL()
 }
 
 
-std::string Samurai::IO::Net::URL::toString()
+std::string Samurai::IO::Net::URL::toString() const
 {
 	return url;
 }

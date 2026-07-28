@@ -25,7 +25,7 @@ namespace Samurai {
 					virtual struct sockaddr* getSockAddr() = 0;
 					virtual size_t getSockAddrSize() = 0;
 
-					virtual std::string  toString() = 0;
+					virtual std::string  toString() const = 0;
 					
 					virtual bool isLinkLocal() = 0;
 			};
@@ -45,7 +45,7 @@ namespace Samurai {
 					void setRawSocketAddress(void* sockaddr_data, size_t sockaddr_len, uint16_t port, Samurai::IO::Net::InetAddress::Version version);
 					const InetAddress* getAddress() const;
 					uint16_t     getPort();
-					std::string  toString() override;
+					std::string  toString() const override;
 					bool isLinkLocal() override;
 
 					int getSockAddrFamily() override;

@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <algorithm>
 #include <samurai/samurai.h>
 #include <samurai/messagehandler.h>
 #include <memory>
@@ -58,10 +59,8 @@ void Samurai::MessageHandler::process() {
 }
 
 void Samurai::MessageHandler::handleMessage(Samurai::Message* msg) {
-	std::vector<Samurai::MessageListener*>::iterator it;
-	for (it = listener.begin(); it != listener.end(); it++) {
-		(*it)->EventMessage(msg);
-	}
+	for (Samurai::MessageListener* handler : listener)
+		handler->EventMessage(msg);
 }
 
 void Samurai::MessageHandler::addMessageListener(Samurai::MessageListener* handler) {
@@ -70,13 +69,11 @@ void Samurai::MessageHandler::addMessageListener(Samurai::MessageListener* handl
 }
 
 void Samurai::MessageHandler::removeMessageListener(Samurai::MessageListener* handler) {
-	std::vector<Samurai::MessageListener*>::iterator it;
-	for (it = listener.begin(); it != listener.end(); it++) {
-		if ((*it) == handler) {
-			listener.erase(it);
-			return;
-		}
-	}
+	/* Only the first match is removed, as before: a listener registers itself
+	   once from its constructor. */
+	const auto it = std::ranges::find(listener, handler);
+	if (it != listener.end())
+		listener.erase(it);
 }
 
 Samurai::MessageListener::MessageListener()
