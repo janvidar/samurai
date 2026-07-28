@@ -20,12 +20,24 @@
 #include <sys/epoll.h>
 #include <stdlib.h>
 
+/*
+ * How many ready descriptors one epoll_wait() may report, which is not the
+ * same thing as how many sockets may be monitored - epoll has no limit on the
+ * latter and reports whatever does not fit on the next call.
+ *
+ * NOTE: this array used to be sized from getMaxOpenSockets(), so a process
+ * with a high descriptor limit paid for a large allocation up front to
+ * describe a handful of sockets. Anything left over is picked up immediately,
+ * because the descriptors stay ready.
+ */
+#define EPOLL_BATCH 256
+
 Samurai::IO::Net::EPollSocketMonitor::EPollSocketMonitor() : Samurai::IO::Net::SocketMonitor("epoll")
 {
 	max = Samurai::OS::getMaxOpenSockets();
 	num = 0;
-	act = new struct epoll_event[max];
-	memset(act, 0, sizeof(struct epoll_event) * max);
+	act = new struct epoll_event[EPOLL_BATCH];
+	memset(act, 0, sizeof(struct epoll_event) * EPOLL_BATCH);
 	epfd = epoll_create(max);
 }
 
@@ -155,7 +167,7 @@ void Samurai::IO::Net::EPollSocketMonitor::internal_modify(Samurai::IO::Net::Soc
 
 void Samurai::IO::Net::EPollSocketMonitor::wait(int time_ms)
 {
-	int nfds = epoll_wait(epfd, act, max, time_ms);
+	int nfds = epoll_wait(epfd, act, EPOLL_BATCH, time_ms);
 	if (nfds == 0) return;
 	
 	if (nfds == -1) {

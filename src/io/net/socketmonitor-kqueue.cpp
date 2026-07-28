@@ -22,15 +22,19 @@
 #define MAXSOCK 4096
 #define MAXCHANGES 32
 
+/* How many ready descriptors one kevent() may report, rather than one slot per
+   monitorable socket. Anything that does not fit is reported on the next call. */
+#define KQUEUE_BATCH 256
+
 Samurai::IO::Net::KQueueSocketMonitor::KQueueSocketMonitor() : Samurai::IO::Net::SocketMonitor("kqueue")
 {
 	numChanges = 0;
 	max = MIN(Samurai::OS::getMaxOpenSockets(), MAXSOCK);
 	num = 0;
-	events = new struct kevent[max];
+	events = new struct kevent[KQUEUE_BATCH];
 	change = new struct kevent[MAXCHANGES];
 
-	memset(events, 0, sizeof(struct kevent) * max);
+	memset(events, 0, sizeof(struct kevent) * KQUEUE_BATCH);
 	memset(change, 0, sizeof(struct kevent) * MAXCHANGES);
 
 	kfd = kqueue();
@@ -218,7 +222,7 @@ void Samurai::IO::Net::KQueueSocketMonitor::wait(int time_ms)
 	timeout.tv_sec  = time_ms / 1000;
 	timeout.tv_nsec = (time_ms % 1000) * 1000000;
 
-	int ret = kevent(kfd, change, numChanges, events, max, &timeout);
+	int ret = kevent(kfd, change, numChanges, events, KQUEUE_BATCH, &timeout);
 	QDBG("kqueue - run changes=%d, max=%d, ret=%d", numChanges, max, ret);
 	numChanges = 0;
 
