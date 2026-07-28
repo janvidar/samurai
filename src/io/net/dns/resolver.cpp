@@ -8,7 +8,6 @@
 #include <samurai/io/net/dns/resolver.h>
 #include <samurai/io/net/dns/resolver-blocking.h>
 #include <samurai/io/net/dns/resolver-builtin.h>
-#include <samurai/io/net/dns/resolver-fork.h>
 #include <samurai/io/net/socketevent.h>
 #include <samurai/io/net/inetaddress.h>
 
@@ -27,23 +26,11 @@ Samurai::IO::Net::DNS::Resolver::~Resolver()
 Samurai::IO::Net::DNS::Resolver* Samurai::IO::Net::DNS::Resolver::getHostByName(Samurai::IO::Net::ResolveEventHandler* eh, const char* name)
 {
 	Samurai::IO::Net::DNS::Resolver* resolver = 0;
-#ifdef DNS_RESOLVE_BLOCKING
-	resolver = new Samurai::IO::Net::DNS::BlockingResolver(eh);
-#else
-# ifdef DNS_RESOLVE_FORKED
-	resolver = new Samurai::IO::Net::DNS::ForkResolver(eh);
-# else
-#  ifdef DNS_RESOLVE_BUILTIN
+#ifdef DNS_RESOLVE_BUILTIN
 	resolver = new Samurai::IO::Net::DNS::BuiltinResolver(eh);
-#  else
+#else
 	resolver = new Samurai::IO::Net::DNS::BlockingResolver(eh);
-#  endif // DNS_RESOLVE_BUILTIN
-# endif //DNS_RESOLVE_FORK
-#endif // DNS_RESOLVE_BLOCKING
-
-/*
-	printf("Looking up host \"%s\"...\n", name);
-*/
+#endif
 
 	if (resolver) resolver->lookup(name);
 	return resolver;

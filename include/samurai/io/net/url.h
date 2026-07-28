@@ -38,11 +38,6 @@ class URL {
 		bool operator==(const URL& u) const;
 		bool operator!=(const URL& u) const;
 
-#if 0
-		static const std::string& getProtocolByPort(uint16_t port);
-		static uint16_t getPortByProtocol(const std::string&);
-#endif
-	
 	protected:
 		std::string url;
 		std::string scheme;

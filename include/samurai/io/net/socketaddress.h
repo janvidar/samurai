@@ -55,20 +55,6 @@ namespace Samurai {
 					uint16_t port;
 			};
 			
-#if 0
-			/**
-			 * FIXME: Use File class as member.
-			 */
-			class UnixSocketAddress : public SocketAddress {
-				public:
-					UnixSocketAddress(const char* filename);
-					
-					const char*  getFileName();
-					std::string  toString();
-			};
-			
-#endif // 0
-			
 		}
 	}
 }

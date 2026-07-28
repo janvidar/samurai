@@ -56,8 +56,8 @@ if(NOT SAMURAI_BUILD_SHARED AND NOT SAMURAI_BUILD_STATIC)
 endif()
 
 set(SAMURAI_DNS_PROVIDER "BLOCKING" CACHE STRING
-    "DNS resolver to use: BLOCKING, FORKED or BUILTIN")
-set_property(CACHE SAMURAI_DNS_PROVIDER PROPERTY STRINGS BLOCKING FORKED BUILTIN)
+    "DNS resolver to use: BLOCKING or BUILTIN")
+set_property(CACHE SAMURAI_DNS_PROVIDER PROPERTY STRINGS BLOCKING BUILTIN)
 
 # ---------------------------------------------------------------------------
 # Dependencies
@@ -112,10 +112,10 @@ else()
     endif()
 endif()
 
-if(NOT SAMURAI_DNS_PROVIDER MATCHES "^(BLOCKING|FORKED|BUILTIN)$")
+if(NOT SAMURAI_DNS_PROVIDER MATCHES "^(BLOCKING|BUILTIN)$")
     message(FATAL_ERROR
         "Invalid SAMURAI_DNS_PROVIDER '${SAMURAI_DNS_PROVIDER}' "
-        "(expected BLOCKING, FORKED or BUILTIN)")
+        "(expected BLOCKING or BUILTIN)")
 endif()
 
 if(NOT SAMURAI_DNS_PROVIDER STREQUAL "BLOCKING")
@@ -141,7 +141,6 @@ set(SAMURAI_SOURCES
     src/io/compression.cpp
     src/io/dir.cpp
     src/io/file.cpp
-    src/io/stream.cpp
     src/io/unicode.cpp
     src/io/net/bandwidth.cpp
     src/io/net/datagram.cpp
@@ -169,7 +168,6 @@ set(SAMURAI_SOURCES
     src/io/net/dns/resolver.cpp
     src/io/net/dns/resolver-blocking.cpp
     src/io/net/dns/resolver-builtin.cpp
-    src/io/net/dns/resolver-fork.cpp
     src/util/base32.cpp
     src/util/bwestimation.cpp
     src/util/format.cpp
@@ -178,8 +176,7 @@ set(SAMURAI_SOURCES
     src/crypto/digest/hashvalue.cpp
     src/crypto/digest/merkletree.cpp
     src/crypto/digest/tiger.cpp
-    src/crypto/digest/tigertree.cpp
-    src/crypto/digest/tthsum.cpp)
+    src/crypto/digest/tigertree.cpp)
 
 # The sources are compiled once into an object library, and the enabled
 # library flavours are then assembled from those objects. The objects are

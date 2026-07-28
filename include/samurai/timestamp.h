@@ -25,9 +25,7 @@ class TimeStamp {
 		 * Returns the internal timestamp value.
 		 */
 		time_t getInternalData() const;
-		
-//		static time_t getTime();
-		
+
 		/* Resets or updates the timestamp to the current clock */
 		void reset();
 		

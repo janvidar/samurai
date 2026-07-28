@@ -50,25 +50,6 @@ enum SocketError
 	SocketUnknown
 };
 
-enum SSLCertificateError
-{
-	CertInvalid,
-	CertSignerNotFound,
-	CertRevoked,
-	CertInitialization,
-	CertNotFound,
-	CertParseError,
-	CertExpired,
-	CertNotActive,
-	CertHostnameMismatch
-};
-
-enum SSLDirection
-{
-	SSLClient,
-	SSLServer
-};
-
 /**
  * The base for Socket and ServerSocket.
  * This class is not interresting for anything else.
