@@ -510,6 +510,55 @@ void Samurai::IO::Net::InetAddress::lookup(ResolveEventHandler* eventHandler)
 
 
 /*
+ * A dotted-quad written with a leading zero in any octet is ambiguous:
+ * inet_aton() and a number of URL parsers read the zero as introducing an
+ * octal number, so "010.1.1.1" is 10.1.1.1 to some readers and 8.1.1.1 to
+ * others. Accepting it would mean disagreeing with whatever else inspects the
+ * same address, so it is refused.
+ *
+ * This cannot be left to inet_pton(), which does not agree with itself across
+ * platforms: glibc rejects the notation, macOS and the BSDs quietly read it as
+ * decimal, and WSAStringToAddress() is more permissive still.
+ */
+static bool is_canonical_dotted_quad(const char* text)
+{
+	size_t digits = 0;
+	size_t octets = 1;
+
+	for (const char* p = text; *p; p++)
+	{
+		if (*p == '.')
+		{
+			if (!digits) return false;
+			digits = 0;
+			octets++;
+			continue;
+		}
+
+		if (*p < '0' || *p > '9') return false;
+
+		/* A second digit in an octet that began with a zero. */
+		if (digits == 1 && *(p - 1) == '0') return false;
+
+		if (++digits > 3) return false;
+	}
+
+	return digits > 0 && octets == 4;
+}
+
+/*
+ * A dotted-quad can also appear inside an IPv6 literal, as in
+ * "::ffff:1.2.3.4", where it is always the part following the last colon.
+ */
+static bool has_canonical_embedded_ipv4(const std::string& text)
+{
+	if (text.find('.') == std::string::npos) return true;
+
+	std::string::size_type colon = text.rfind(':');
+	return is_canonical_dotted_quad(text.c_str() + (colon == std::string::npos ? 0 : colon + 1));
+}
+
+/*
  * NOTE: This replaces a hand-written dotted-quad and IPv6 parser
  * (stringToAddress) of roughly 150 lines. It mis-parsed "::" compression,
  * never accepted an IPv4-mapped "::ffff:1.2.3.4" at all, and ended in a
@@ -528,10 +577,16 @@ bool Samurai::IO::Net::InetAddress::stringToAddress(enum Samurai::IO::Net::InetA
 		text = text.substr(1, text.size() - 2);
 
 	if (version == Samurai::IO::Net::InetAddress::IPv4)
+	{
+		if (!is_canonical_dotted_quad(text.c_str())) return false;
 		return net_string_to_address(AF_INET, text.c_str(), (void*) &data->internal.in) > 0;
+	}
 
 	if (version == Samurai::IO::Net::InetAddress::IPv6)
+	{
+		if (!has_canonical_embedded_ipv4(text)) return false;
 		return net_string_to_address(AF_INET6, text.c_str(), (void*) &data->internal.in6) > 0;
+	}
 
 	return false;
 }
