@@ -9,7 +9,10 @@
 #include <samurai/samurai.h>
 
 #include <filesystem>
+#include <optional>
 #include <string>
+
+#include <samurai/io/file.h>
 
 namespace Samurai {
 namespace IO {
@@ -45,6 +48,13 @@ class Directory {
 		 * invalidated by the act of continuing to iterate.
 		 */
 		bool next(Samurai::IO::File& entry);
+
+		/**
+		 * The same iteration without an out-parameter: the result is empty
+		 * when the directory is not open, or exhausted.
+		 */
+		std::optional<Samurai::IO::File> first();
+		std::optional<Samurai::IO::File> next();
 
 	protected:
 		/* NOTE: this used to be an opendir()/readdir() loop behind
