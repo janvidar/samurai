@@ -18,7 +18,8 @@ namespace Util {
  * base32_encode_size(input.size()) bytes including the terminator.
  *
  * @return the number of characters written, excluding the terminator, or 0 if
- *         the output buffer is too small. Nothing is written in that case.
+ *         the output buffer is too small, in which case 'result' is set to the
+ *         empty string. Nothing is written at all only when 'result' is empty.
  */
 size_t base32_encode(std::span<const unsigned char> input, std::span<char> result);
 
@@ -31,7 +32,9 @@ constexpr size_t base32_encode_size(size_t len)
 }
 
 /**
- * Base32-decode 'src' into at most dst.size() bytes.
+ * Base32-decode 'src' into at most dst.size() bytes. Characters outside the
+ * alphabet are skipped. Decoding stops at whichever bound is reached first.
+ *
  * @return the number of bytes written.
  */
 size_t base32_decode(std::string_view src, std::span<unsigned char> dst);

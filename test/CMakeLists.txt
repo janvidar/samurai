@@ -58,6 +58,7 @@ if(NOT SAMURAI_EXOTIC_EXECUTABLE)
 endif()
 
 set(SAMURAI_EXOTIC_INPUTS
+    base32.tcc
     buffer.tcc
     buffer_binary.tcc
     compression.tcc

@@ -54,7 +54,11 @@ size_t Samurai::Util::base32_decode(std::string_view source, std::span<unsigned 
 	size_t offset = 0;
 	if (!src || !dst || !len) return 0;
 	memset(dst, 0, len);
-	for (size_t i = 0; src[i]; i++) {
+
+	/* Bounded by the view, which carries its own length and need not be NUL
+	   terminated - a view over part of a larger buffer has no terminator at
+	   its end. */
+	for (size_t i = 0; i < source.size(); i++) {
 		unsigned char n = 0;
 		for (; n < 32; n++) if (src[i] == ALPHABET[n]) break;
 		if (n == 32) continue;
