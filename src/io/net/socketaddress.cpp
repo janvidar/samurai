@@ -93,14 +93,7 @@ std::string  Samurai::IO::Net::InetSocketAddress::toString()
 
 
 bool Samurai::IO::Net::InetSocketAddress::isLinkLocal() {
-	/* FIXME: 127/8 and ::1 are loopback, not link local (169.254/16, fe80::/10),
-	   and this should test bits rather than formatted text. See TODO.md #32. */
-	const std::string s = toString();
-	if (addr->getType() == Samurai::IO::Net::InetAddress::IPv4)
-		return s.compare(0, 4, "127.") == 0;
-	if (addr->getType() == Samurai::IO::Net::InetAddress::IPv6)
-		return s.compare(0, 6, "[::1]:") == 0;
-	return false;
+	return addr && addr->isLinkLocal();
 }
 
 

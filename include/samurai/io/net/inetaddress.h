@@ -58,17 +58,24 @@ namespace Samurai {
 					
 					/**
 					 * Returns true if this if this is a private address.
-					 * For IPv4: is 10.0.0.0/8, 172.16.0.0/20 or 192.168.0.0/16
-					 * For IPv6: this returns false
+					 * For IPv4: is 10.0.0.0/8, 172.16.0.0/12 or 192.168.0.0/16
+					 * For IPv6: is fc00::/7
 					 */
 					virtual bool isPrivate();
-					
+
 					/**
 					 * Returns true if this if this is a local loopback address.
 					 * For IPv4: is 127.0.0.0/8
 					 * For IPv6: is ::1
 					 */
 					virtual bool isLoopback() const;
+
+					/**
+					 * Returns true if this is a link local address.
+					 * For IPv4: is 169.254.0.0/16
+					 * For IPv6: is fe80::/10
+					 */
+					virtual bool isLinkLocal() const;
 					
 					/**
 					 * The IPv4 address as a host order integer, or 0 if this

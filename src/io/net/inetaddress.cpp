@@ -275,13 +275,33 @@ bool Samurai::IO::Net::InetAddress::isMulticast()
 bool Samurai::IO::Net::InetAddress::isPrivate()
 {
 	if (version == IPv4) {
-		if (ntohl(X_IP4_32) >= 0x0a000000 && ntohl(X_IP4_32) < 0x0b000000) return true; /* 10.0.0.0/8 */
-		if (ntohl(X_IP4_32) >= 0xac100000 && ntohl(X_IP4_32) < 0xac150000) return true; /* 172.16.0.0/20 */
-		if (ntohl(X_IP4_32) >= 0xc0a80000 && ntohl(X_IP4_32) < 0xc0a90000) return true; /* 192.168.0.0/16 */
+		const uint32_t host_order = getIPv4HostOrder();
+		if ((host_order & 0xff000000) == 0x0a000000) return true; /* 10.0.0.0/8 */
+		if ((host_order & 0xfff00000) == 0xac100000) return true; /* 172.16.0.0/12 */
+		if ((host_order & 0xffff0000) == 0xc0a80000) return true; /* 192.168.0.0/16 */
 		return false;
 	} else if (version == IPv6) {
-		// TODO: Implement this!
+#ifdef SAMURAI_POSIX
+		return ((X_IP6_08[0] & 0xfe) == 0xfc); /* fc00::/7 */
+#else
+		return false; // FIXME
+#endif
+	} else {
 		return false;
+	}
+}
+
+
+bool Samurai::IO::Net::InetAddress::isLinkLocal() const
+{
+	if (version == IPv4) {
+		return ((getIPv4HostOrder() & 0xffff0000) == 0xa9fe0000); /* 169.254.0.0/16 */
+	} else if (version == IPv6) {
+#ifdef SAMURAI_POSIX
+		return (X_IP6_08[0] == 0xfe && (X_IP6_08[1] & 0xc0) == 0x80); /* fe80::/10 */
+#else
+		return false; // FIXME
+#endif
 	} else {
 		return false;
 	}
