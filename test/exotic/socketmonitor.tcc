@@ -12,6 +12,8 @@
 
 #include <sys/socket.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <sys/select.h>
 #include <memory>
 #include <vector>
 
@@ -64,14 +66,51 @@ class ProbeSocket final : public Samurai::IO::Net::SocketBase
 			: Samurai::IO::Net::SocketBase(fd, addr) { }
 };
 
+/*
+ * Owns both ends. SocketBase's destructor deregisters from the monitor but does
+ * not close the descriptor, so a ProbeSocket wrapping one of these does not take
+ * it over - which makes closing exactly once, here, the only safe arrangement.
+ * Closing twice would be worse than untidy: between the two, something else can
+ * be handed the same number and lose it.
+ */
 struct Pair
 {
 	int fd[2] = { -1, -1 };
+
 	Pair() { if (socketpair(AF_UNIX, SOCK_STREAM, 0, fd) != 0) fd[0] = fd[1] = -1; }
+
+	~Pair()
+	{
+		for (int n = 0; n < 2; n++) close_end(n);
+	}
+
+	void close_end(int n)
+	{
+		if (fd[n] == -1) return;
+		::close(fd[n]);
+		fd[n] = -1;
+	}
+
 	bool valid() const { return fd[0] != -1 && fd[1] != -1; }
 
 	Pair(const Pair&) = delete;
 	Pair& operator=(const Pair&) = delete;
+};
+
+/* A descriptor at or above FD_SETSIZE, obtained without opening a thousand
+   files. Closed here because ProbeSocket does not own what it wraps. */
+struct HighDescriptor
+{
+	int fd = -1;
+
+	explicit HighDescriptor(int from) { fd = fcntl(from, F_DUPFD, FD_SETSIZE); }
+	~HighDescriptor() { if (fd != -1) ::close(fd); }
+
+	bool obtained() const { return fd >= FD_SETSIZE; }
+	bool refused() const  { return fd < 0; }
+
+	HighDescriptor(const HighDescriptor&) = delete;
+	HighDescriptor& operator=(const HighDescriptor&) = delete;
 };
 
 static Samurai::IO::Net::InetSocketAddress probe_address()
@@ -206,7 +245,6 @@ EXO_TEST(monitor_select_reports_readable,
 
 	const bool ok = reader->events > 0 && any(reader->last & Triggers::Read);
 	monitor.remove(reader.get());
-	::close(pair.fd[1]);
 	return ok;
 });
 
@@ -225,7 +263,6 @@ EXO_TEST(monitor_poll_reports_readable,
 
 	const bool ok = reader->events > 0 && any(reader->last & Triggers::Read);
 	monitor.remove(reader.get());
-	::close(pair.fd[1]);
 	return ok;
 });
 
@@ -243,7 +280,6 @@ EXO_TEST(monitor_select_quiet_socket_is_not_reported,
 
 	const bool ok = reader->events == 0;
 	monitor.remove(reader.get());
-	::close(pair.fd[1]);
 	return ok;
 });
 
@@ -261,7 +297,6 @@ EXO_TEST(monitor_select_reports_writable,
 
 	const bool ok = writer->events > 0 && any(writer->last & Triggers::Write);
 	monitor.remove(writer.get());
-	::close(pair.fd[1]);
 	return ok;
 });
 
@@ -278,7 +313,6 @@ EXO_TEST(monitor_poll_reports_writable,
 
 	const bool ok = writer->events > 0 && any(writer->last & Triggers::Write);
 	monitor.remove(writer.get());
-	::close(pair.fd[1]);
 	return ok;
 });
 
@@ -297,7 +331,6 @@ EXO_TEST(monitor_select_removed_socket_is_not_dispatched,
 	monitor.wait(0);
 
 	const bool ok = reader->events == 0;
-	::close(pair.fd[1]);
 	return ok;
 });
 
@@ -321,7 +354,6 @@ EXO_TEST(monitor_select_modify_changes_the_trigger,
 
 	const bool ok = probe->events > 0 && any(probe->last & Triggers::Write);
 	monitor.remove(probe.get());
-	::close(pair.fd[1]);
 	return ok;
 });
 
@@ -349,6 +381,92 @@ EXO_TEST(monitor_select_recovers_from_a_stale_descriptor,
 	const bool ok = probe->events > 0 && any(probe->last & Triggers::Error);
 
 	monitor.remove(probe.get());
-	::close(pair.fd[1]);
+	return ok;
+});
+
+/*
+ * select()'s FD_SETSIZE bound.
+ *
+ * fd_set is a fixed size bitmap and FD_SET() on a descriptor at or above
+ * FD_SETSIZE writes past the end of it - past three fd_sets on internal_wait()'s
+ * own stack frame. A process whose descriptor limit is higher can be handed such
+ * a socket while monitoring only a handful, so the backend has to leave it out.
+ *
+ * Reaching the bound needs a descriptor numbered at least FD_SETSIZE, which
+ * F_DUPFD provides directly - it duplicates onto the lowest free descriptor at
+ * or above the number given, so this costs one call rather than a thousand open
+ * files.
+ */
+EXO_TEST(monitor_select_skips_a_descriptor_past_fd_setsize,
+{
+	Pair pair;
+	if (!pair.valid()) return false;
+
+	HighDescriptor high(pair.fd[0]);
+	if (high.refused()) return true;   /* the limit will not allow it here */
+	if (!high.obtained()) return false;
+
+	Samurai::IO::Net::SelectSocketMonitor monitor;
+	std::shared_ptr<ProbeSocket> probe = adopt(high.fd, Triggers::Read);
+	monitor.add(probe.get());
+
+	/* Readable, so it would be reported if it were in the set at all. */
+	const bool wrote = ::write(pair.fd[1], "x", 1) == 1;
+
+	monitor.wait(0);
+
+	const bool skipped = probe->events == 0;
+	monitor.remove(probe.get());
+	return wrote && skipped;
+});
+
+/* The same descriptor is reported perfectly well by a backend without the
+   bound, which is what makes the case above a limitation and not a defect. */
+EXO_TEST(monitor_poll_handles_a_descriptor_past_fd_setsize,
+{
+	Pair pair;
+	if (!pair.valid()) return false;
+
+	HighDescriptor high(pair.fd[0]);
+	if (high.refused()) return true;
+	if (!high.obtained()) return false;
+
+	Samurai::IO::Net::PollSocketMonitor monitor;
+	std::shared_ptr<ProbeSocket> probe = adopt(high.fd, Triggers::Read);
+	monitor.add(probe.get());
+
+	if (::write(pair.fd[1], "x", 1) != 1) return false;
+
+	monitor.wait(500);
+
+	const bool reported = probe->events > 0 && any(probe->last & Triggers::Read);
+	monitor.remove(probe.get());
+	return reported;
+});
+
+/* A skipped descriptor must not stop the ones that do fit from being served. */
+EXO_TEST(monitor_select_still_serves_low_descriptors_alongside_a_skipped_one,
+{
+	Pair low;
+	Pair high_pair;
+	if (!low.valid() || !high_pair.valid()) return false;
+
+	HighDescriptor high(high_pair.fd[0]);
+	if (high.refused()) return true;
+
+	Samurai::IO::Net::SelectSocketMonitor monitor;
+	std::shared_ptr<ProbeSocket> over = adopt(high.fd, Triggers::Read);
+	std::shared_ptr<ProbeSocket> under = adopt(low.fd[0], Triggers::Read);
+	monitor.add(over.get());
+	monitor.add(under.get());
+
+	if (::write(low.fd[1], "x", 1) != 1) return false;
+	if (::write(high_pair.fd[1], "x", 1) != 1) return false;
+
+	monitor.wait(500);
+
+	const bool ok = under->events > 0 && over->events == 0;
+	monitor.remove(over.get());
+	monitor.remove(under.get());
 	return ok;
 });
