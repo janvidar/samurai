@@ -201,9 +201,14 @@ void Samurai::Crypto::Digest::Tiger::internal_finalize()
 	
 	uint8_t tmp[TIGER_HASH_SIZE];
 	for (size_t j = 0; j < size(); ++j)
-		tmp[j] = get_byte(7 - (j % 8), result[j / 8]);	
-	
+		tmp[j] = get_byte(7 - (j % 8), result[j / 8]);
+
+	/* set_finalized_value() refuses once the flag is set, so it has to be
+	   raised after the value is stored - but raised it must be, or a second
+	   digest() pads the already padded state and returns a different value,
+	   and update() stops being the no-op it promises to be after finalize. */
 	set_finalized_value(tmp);
+	m_finalized = true;
 }
 
 
