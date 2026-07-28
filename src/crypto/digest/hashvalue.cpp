@@ -6,8 +6,10 @@
 #include <samurai/samurai.h>
 #include <samurai/crypto/digest/hashvalue.h>
 #include <samurai/util/base32.h>
+#include <span>
 #include <stdio.h>
 #include <string.h>
+#include <algorithm>
 
 Samurai::Crypto::Digest::HashValue::HashValue() = default;
 
@@ -26,11 +28,13 @@ Samurai::Crypto::Digest::HashValue::HashValue(Samurai::Crypto::Digest::HashValue
 {
 }
 
-void Samurai::Crypto::Digest::HashValue::setData(const uint8_t* data)
+bool Samurai::Crypto::Digest::HashValue::setData(std::span<const uint8_t> data)
 {
 	/* The size is fixed at construction, so the existing storage is reused. */
-	if (!m_data.empty())
-		memcpy(m_data.data(), data, m_data.size());
+	if (data.size() != m_data.size()) return false;
+
+	std::copy(data.begin(), data.end(), m_data.begin());
+	return true;
 }
 
 size_t Samurai::Crypto::Digest::HashValue::size() const
@@ -70,7 +74,7 @@ bool Samurai::Crypto::Digest::HashValue::getFormattedString(Format format, char*
 		   terminator. */
 		if (buflen < ((size*8 + 4) / 5) + 1)
 			return false;
-		if (!base32_encode(m_data.data(), size, buf, buflen))
+		if (!Samurai::Util::base32_encode(m_data, std::span<char>(buf, buflen)))
 			return false;
 
 	} else {

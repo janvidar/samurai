@@ -8,6 +8,7 @@
 
 #include <samurai/samurai.h>
 #include <samurai/io/net/socketbase.h>
+#include <samurai/io/net/tlsfactory.h>
 #include <memory>
 #include <samurai/io/net/dns/resolver.h>
 #include <samurai/io/net/socketevent.h>
@@ -155,7 +156,7 @@ class Socket :
 		 * TlsFactory::getPeerCertificateSHA256() defines it. False if this is
 		 * not a TLS connection, or the peer sent no certificate.
 		 */
-		bool TLSgetPeerCertificateSHA256(uint8_t* digest, size_t length);
+		std::optional<TlsFactory::Sha256Digest> TLSgetPeerCertificateSHA256();
 
 	protected:
 		std::unique_ptr<InetAddress> address;

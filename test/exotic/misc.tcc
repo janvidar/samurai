@@ -8,6 +8,8 @@
 #include <samurai/util/bwestimation.h>
 #include <samurai/io/file.h>
 #include <samurai/io/net/socketmonitor.h>
+#include <algorithm>
+#include <span>
 #include <string.h>
 
 /*
@@ -27,13 +29,13 @@ EXO_TEST(hwaddr_from_octets,
 EXO_TEST(hwaddr_from_octets_keeps_octets,
 {
 	Samurai::IO::Net::HardwareAddress addr(hwaddr_octets_b);
-	return memcmp(addr.getOctets(), hwaddr_octets_b, 6) == 0;
+	return std::ranges::equal(addr.getOctets(), hwaddr_octets_b);
 });
 
 EXO_TEST(hwaddr_from_text,
 {
 	Samurai::IO::Net::HardwareAddress addr("00:1b:63:84:45:e6");
-	const uint8_t* o = addr.getOctets();
+	const auto o = addr.getOctets();
 	return o[0] == 0x00 && o[1] == 0x1b && o[2] == 0x63
 		&& o[3] == 0x84 && o[4] == 0x45 && o[5] == 0xe6;
 });
@@ -47,7 +49,7 @@ EXO_TEST(hwaddr_from_text_round_trip,
 EXO_TEST(hwaddr_from_text_uppercase,
 {
 	Samurai::IO::Net::HardwareAddress addr("AA:BB:CC:DD:EE:FF");
-	const uint8_t* o = addr.getOctets();
+	const auto o = addr.getOctets();
 	return o[0] == 0xaa && o[5] == 0xff;
 });
 
@@ -56,7 +58,7 @@ EXO_TEST(hwaddr_from_text_uppercase,
 EXO_TEST(hwaddr_from_garbage_is_zero,
 {
 	Samurai::IO::Net::HardwareAddress addr("not-a-mac-address");
-	const uint8_t* o = addr.getOctets();
+	const auto o = addr.getOctets();
 	return strcmp(addr.getAddress(), "00:00:00:00:00:00") == 0
 		&& o[0] == 0 && o[1] == 0 && o[2] == 0
 		&& o[3] == 0 && o[4] == 0 && o[5] == 0;

@@ -7,26 +7,36 @@
 #define HAVE_SAMURAI_UTIL_BASE32_H
 
 #include <stddef.h>
+#include <span>
+#include <string_view>
+
+namespace Samurai {
+namespace Util {
 
 /**
- * Base32-encode 'len' bytes into 'result', which must have room for
- * base32_encode_size(len) bytes including the terminator.
+ * Base32-encode 'input' into 'result', which must have room for
+ * base32_encode_size(input.size()) bytes including the terminator.
  *
  * @return the number of characters written, excluding the terminator, or 0 if
  *         the output buffer is too small. Nothing is written in that case.
  */
-extern size_t base32_encode(const unsigned char* buffer, size_t len,
-                            char* result, size_t result_len);
+size_t base32_encode(std::span<const unsigned char> input, std::span<char> result);
 
 /**
  * Bytes needed to hold the encoding of 'len' input bytes, terminator included.
  */
-extern size_t base32_encode_size(size_t len);
+constexpr size_t base32_encode_size(size_t len)
+{
+	return ((len * 8 + 4) / 5) + 1;
+}
 
 /**
- * Base32-decode 'src' into at most 'len' bytes of 'dst'.
+ * Base32-decode 'src' into at most dst.size() bytes.
  * @return the number of bytes written.
  */
-extern size_t base32_decode(const char* src, unsigned char* dst, size_t len);
+size_t base32_decode(std::string_view src, std::span<unsigned char> dst);
+
+}
+}
 
 #endif // HAVE_SAMURAI_UTIL_BASE32_H

@@ -26,8 +26,11 @@ Samurai::Crypto::Digest::Hash::Hash(size_t result_size, size_t block_size, bool 
 
 Samurai::Crypto::Digest::Hash::~Hash() = default;
 
-void Samurai::Crypto::Digest::Hash::update(const void* data_, size_t length)
+void Samurai::Crypto::Digest::Hash::update(std::span<const uint8_t> input)
 {
+	const uint8_t* data_ = input.data();
+	const size_t length = input.size();
+
 	if (!data_ || !length || m_finalized) return;
 
 	/*
@@ -37,7 +40,7 @@ void Samurai::Crypto::Digest::Hash::update(const void* data_, size_t length)
 	 */
 	if (m_current_block_index >= m_block_size) return;
 
-	const uint8_t* data = (const uint8_t*) data_;
+	const uint8_t* data = data_;
 	size_t offset = 0;
 	while (offset < length)
 	{
@@ -92,10 +95,10 @@ void Samurai::Crypto::Digest::Hash::finalize_count()
 	}
 }
 
-void Samurai::Crypto::Digest::Hash::set_finalized_value(uint8_t* data)
+bool Samurai::Crypto::Digest::Hash::set_finalized_value(std::span<const uint8_t> data)
 {
-	if (m_finalized) return;
-	
-	m_finalized_value.setData(data);
+	if (m_finalized) return false;
+
+	return m_finalized_value.setData(data);
 }
 

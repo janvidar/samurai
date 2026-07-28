@@ -166,7 +166,7 @@ void Samurai::Crypto::Digest::MerkleTree::setLeavesLTR(Samurai::IO::Buffer& buff
 	for (size_t n = 0; n < leaves; n++)
 	{
 		buffer.pop((char*) buf.data(), n*leaf_size, leaf_size);
-		value.setData(buf.data());
+		value.setData(buf);
 
 		/* Owned by the tree, which releases the stack's nodes in
 		   deleteNodes(); the stack itself holds them without owning them. */
@@ -190,7 +190,7 @@ void Samurai::Crypto::Digest::MerkleTree::setLeavesRTL(Samurai::IO::Buffer& buff
 	for (size_t n = leaves; n > 0; n--)
 	{
 		buffer.pop((char*) buf.data(), ((n-1)*leaf_size), leaf_size);
-		value.setData(buf.data());
+		value.setData(buf);
 
 		m_nodes->add(new MerkleNode(&value));
 	}
@@ -308,7 +308,7 @@ void Samurai::Crypto::Digest::MerkleTree::finalize()
 	compact_all(m_nodes.get());
 	
 	MerkleNode* root = m_nodes->getFirst();
-	set_finalized_value(root->getData());
+	set_finalized_value(root->bytes());
 	delete root;
 	m_nodes->clear();
 	
@@ -337,7 +337,7 @@ Samurai::Crypto::Digest::MerkleNode* Samurai::Crypto::Digest::MerkleTree::combin
 	m_hasher->update(a->getData(), m_hasher->size());
 	m_hasher->update(b->getData(), m_hasher->size());
 	Samurai::Crypto::Digest::HashValue* value = m_hasher->digest();
-	a->setData(value->getData());
+	a->setData(value->bytes());
 	return a;
 }
 

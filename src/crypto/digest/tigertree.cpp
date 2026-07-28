@@ -97,8 +97,10 @@ static void tt_block(TT_CONTEXT *ctx)
 	}
 }
 
-void tt_update(TT_CONTEXT *ctx, uint8_t *buffer, size_t len)
+void tt_update(TT_CONTEXT *ctx, std::span<const uint8_t> input)
 {
+  const uint8_t* buffer = input.data();
+  size_t len = input.size();
 
   if (ctx->index)
   { /* Try to fill partial block */
@@ -145,7 +147,7 @@ static void tt_final(TT_CONTEXT *ctx)
     tt_block(ctx);
 }
 
-void tt_digest(TT_CONTEXT *ctx, uint8_t *s)
+void tt_digest(TT_CONTEXT *ctx, std::span<uint8_t, Samurai::Crypto::Digest::TIGERSIZE> s)
 {
 	QDBG("Digesting 1");
 	tt_final(ctx);
@@ -153,7 +155,7 @@ void tt_digest(TT_CONTEXT *ctx, uint8_t *s)
 	while( (ctx->top-TIGERSIZE) > ctx->nodes ) {
 		tt_compose(ctx);
 	}
-	memmove(s,ctx->nodes,TIGERSIZE);
+	memmove(s.data(), ctx->nodes, TIGERSIZE);
 }
 
 /*

@@ -105,7 +105,7 @@ class Connection : public Samurai::IO::Net::SocketEventHandler {
 			/* can write */
 		}
 		
-		void EventError(const Samurai::IO::Net::Socket*, enum Samurai::IO::Net::SocketError error, const char* msg)
+		void EventError(const Samurai::IO::Net::Socket*, Samurai::IO::Net::SocketError error, const char* msg)
 		{
 			(void) error;
 			printf(" ERROR: %s\n", msg);

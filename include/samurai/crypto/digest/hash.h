@@ -8,6 +8,7 @@
 
 #include <samurai/samurai.h>
 #include <vector>
+#include <span>
 #include <samurai/crypto/digest/hashvalue.h>
 
 namespace Samurai {
@@ -55,7 +56,13 @@ class Hash {
 		/**
 		 * Update/append the internal digest.
 		 */
-		virtual void update(const void* data, size_t length);
+		virtual void update(std::span<const uint8_t> data);
+
+		/** Convenience for callers holding a raw buffer. */
+		void update(const void* data, size_t length)
+		{
+			update(std::span<const uint8_t>(static_cast<const uint8_t*>(data), length));
+		}
 		
 		
 		uint64_t getFileSize() { return m_file_size; }
@@ -72,10 +79,10 @@ class Hash {
 		virtual void finalize();
 		
 		/**
-		 * Internal method to set the finalized HashValue.
-		 * 'data' must be size() long.
+		 * Internal method to set the finalized HashValue. The span must be
+		 * size() long; a shorter one leaves the value untouched.
 		 */
-		void set_finalized_value(uint8_t* data);
+		bool set_finalized_value(std::span<const uint8_t> data);
 		
 	private:
 		

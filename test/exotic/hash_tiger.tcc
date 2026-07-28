@@ -4,6 +4,11 @@
 #include "samurai/crypto/digest/tigertree.h"
 #include "samurai/util/base32.h"
 #include <vector>
+#include <array>
+
+/* Named here because a comma inside EXO_TEST's second argument would be
+   read as an argument separator. */
+using TigerDigest = std::array<uint8_t, Samurai::Crypto::Digest::TIGERSIZE>;
 
 bool testTiger(const char* input, const char* expected) {
 	char buf[64];
@@ -229,12 +234,12 @@ EXO_TEST(hash_tth_stream_matches_reference_impl, {
 
 	Samurai::Crypto::Digest::TT_CONTEXT ctx;
 	Samurai::Crypto::Digest::tt_init(&ctx);
-	Samurai::Crypto::Digest::tt_update(&ctx, data.data(), N);
-	uint8_t raw[Samurai::Crypto::Digest::TIGERSIZE];
+	Samurai::Crypto::Digest::tt_update(&ctx, data);
+	TigerDigest raw{};
 	Samurai::Crypto::Digest::tt_digest(&ctx, raw);
 
 	char from_ref[64];
-	base32_encode(raw, Samurai::Crypto::Digest::TIGERSIZE, from_ref, sizeof(from_ref));
+	Samurai::Util::base32_encode(std::span<const unsigned char>(raw.data(), raw.size()), std::span<char>(from_ref, sizeof(from_ref)));
 
 	return strcasecmp(from_tree, from_ref) == 0;
 });
