@@ -7,6 +7,7 @@
 #define HAVE_SYSTEM_NET_SOCKET_ADDRESS_H
 
 #include <samurai/io/net/inetaddress.h>
+#include <vector>
 
 struct sockaddr;
 
@@ -38,7 +39,11 @@ namespace Samurai {
 					InetSocketAddress(uint16_t port);
 					InetSocketAddress(const char* ip, uint16_t port, enum Samurai::IO::Net::InetAddress::Version version);
 					virtual ~InetSocketAddress();
-					
+
+					/* Declared because the class owns 'addr': the implicit
+					 * assignment would copy the pointer and release it twice. */
+					InetSocketAddress& operator=(const InetSocketAddress& isa);
+
 					void setRawSocketAddress(void* sockaddr_data, size_t sockaddr_len, uint16_t port, enum Samurai::IO::Net::InetAddress::Version version);
 					InetAddress* getAddress() const;
 					uint16_t     getPort();
@@ -50,7 +55,15 @@ namespace Samurai {
 					size_t getSockAddrSize();
 					
 				protected:
-					struct sockaddr* data;
+					/*
+					 * Storage for the platform sockaddr_in / sockaddr_in6 that
+					 * getSockAddr() hands out. Held as bytes rather than as a
+					 * 'struct sockaddr*' because the pointer was allocated as
+					 * one of the two concrete types, and releasing it through
+					 * the unrelated base type is undefined. Empty until
+					 * getSockAddr() builds it.
+					 */
+					std::vector<char> data;
 					InetAddress* addr;
 					uint16_t port;
 			};

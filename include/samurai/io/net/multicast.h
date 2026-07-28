@@ -76,12 +76,18 @@ namespace Samurai {
 					bool getLoopbackMode();
 
 					/**
-					 * Overloaded from ServerSocket.
+					 * Hides DatagramSocket::listen(), which takes no backlog.
 					 */
 					bool listen(size_t backlog = 5);
 
 				protected:
-					std::vector<InetSocketAddress*> joined;
+					/* Drop one group membership, ignoring whether it is
+					 * recorded in 'joined'. */
+					bool dropMembership(InetSocketAddress& group);
+
+					/* The groups this socket has joined and not yet left, held
+					 * by value so the destructor can leave them all. */
+					std::vector<InetSocketAddress> joined;
 					interface_t netif;
 			
 				friend class SocketMonitor;
