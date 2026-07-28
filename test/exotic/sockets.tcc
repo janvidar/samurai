@@ -371,6 +371,27 @@ EXO_TEST(sockets_client_read_2, {
 	return n == (ssize_t) strlen(vars->listener->message) && strncmp(buf, vars->listener->message, n) == 0;
 });
 
+EXO_TEST(sockets_client_write_vectored, {
+	SocketVariables* vars = socket_tests_create();
+	if (!vars) return false;
+
+	vars->listener->message = (char*) "GET /index.html HTTP/1.0\r\n\r\n";
+
+	ssize_t n = vars->client->write({"GET /index.html", " HTTP/1.0\r\n", "", "\r\n"});
+	return n == (ssize_t) strlen(vars->listener->message);
+});
+
+EXO_TEST(sockets_client_read_vectored, {
+	SocketVariables* vars = socket_tests_create();
+	if (!vars) return false;
+
+	vars->monitor->wait(25);
+
+	char buf[64];
+	ssize_t n = vars->listener->accepted->read(buf, 64);
+	return n == (ssize_t) strlen(vars->listener->message) && strncmp(buf, vars->listener->message, n) == 0;
+});
+
 EXO_TEST(sockets_server_udp_create, {
 	SocketVariables* vars = socket_tests_create();
 	if (!vars) return false;

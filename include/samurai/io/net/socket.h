@@ -15,6 +15,10 @@
 #include <samurai/timer.h>
 #include <samurai/error.h>
 
+#include <initializer_list>
+#include <span>
+#include <string_view>
+
 
 namespace Samurai {
 namespace IO {
@@ -94,6 +98,29 @@ class Socket :
 		 *         with no error set means the socket would have blocked.
 		 */
 		ssize_t write(const char* data, size_t length, std::error_code& ec);
+
+		/**
+		 * Write several buffers as one operation, without joining them first.
+		 * A protocol layer with a header and a body no longer has to copy both
+		 * into one buffer to send them in a single segment.
+		 *
+		 * Partial writes work as they do above: the return value is the number
+		 * of bytes accepted, counted across the buffers in order, and the
+		 * caller resends the remainder. At most a platform-dependent number of
+		 * buffers is passed to the kernel per call - a longer list simply
+		 * writes fewer bytes rather than failing. Empty buffers are skipped.
+		 *
+		 * @return bytes written, 0 if the socket would have blocked, or -1 on
+		 *         error with 'ec' set.
+		 */
+		ssize_t write(std::span<const std::string_view> buffers, std::error_code& ec);
+		ssize_t write(std::span<const std::string_view> buffers);
+
+		ssize_t write(std::initializer_list<std::string_view> buffers, std::error_code& ec)
+		{ return write(std::span<const std::string_view>(buffers.begin(), buffers.size()), ec); }
+
+		ssize_t write(std::initializer_list<std::string_view> buffers)
+		{ return write(std::span<const std::string_view>(buffers.begin(), buffers.size())); }
 
 		ssize_t write(const char* data, size_t length);
 		ssize_t read(char* data, size_t length);
