@@ -9,6 +9,7 @@
 #include <samurai/samurai.h>
 #include <string>
 #include <string_view>
+#include <span>
 #include <vector>
 
 namespace Samurai {
@@ -39,6 +40,7 @@ class Buffer {
 	public:
 	
 		void append(const char* data, size_t len);
+		void append(std::span<const char> data) { append(data.data(), data.size()); }
 		void append(const char* string);
 		void append(const std::string& string);
 		void append(const std::string_view string);
@@ -67,6 +69,7 @@ class Buffer {
 		 *         the buffer holds fewer.
 		 */
 		size_t pop(char* data, size_t len);
+		size_t pop(std::span<char> data) { return pop(data.data(), data.size()); }
 
 		/**
 		 * NOTE: The popBinary() family returns false and leaves 'number'
@@ -80,6 +83,7 @@ class Buffer {
 		std::string pop(size_t len);
 
 		size_t pop(char* data, size_t offset, size_t len);
+		size_t pop(std::span<char> data, size_t offset) { return pop(data.data(), offset, data.size()); }
 
 		bool popBinary(size_t offset, uint8_t& number);
 		bool popBinary(size_t offset, uint16_t& number, BinaryMode endianness = BinaryMode::NativeEndian);

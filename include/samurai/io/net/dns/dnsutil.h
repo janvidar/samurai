@@ -9,6 +9,7 @@
 #include <samurai/samurai.h>
 #include <samurai/io/net/dns/common.h>
 #include <vector>
+#include <string_view>
 
 namespace Samurai {
 namespace IO {
@@ -25,7 +26,7 @@ class Validator {
  		 * A name consists of multiple labels joined by ".".
 		 * Example: 'www.example.com'
  		 */
-		static bool isValidName(const char* buf, size_t len);
+		static bool isValidName(std::string_view name);
 
 		/**
 		 * Checks if a label is valid (does not contain illegal characters).
@@ -34,7 +35,7 @@ class Validator {
 		 * Example: 'www.example.com" consists of three labels;
 		 * 'www', 'example' and 'com'.
 		 */
-		static bool isValidLabel(const char* buf, size_t len);
+		static bool isValidLabel(std::string_view label);
 };
 
 class Label {

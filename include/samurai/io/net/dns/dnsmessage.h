@@ -7,6 +7,7 @@
 #define HAVE_SYSTEM_DNS_MESSAGE_H
 
 #include <samurai/samurai.h>
+#include <string_view>
 #include <samurai/io/net/dns/common.h>
 #include <samurai/io/net/dns/dnsutil.h>
 #include <samurai/io/net/dns/dnsrrs.h>
@@ -64,7 +65,7 @@ class MessageHeader {
 			}
 		}
 
-		const char* getQueryTypeStr()
+		std::string_view getQueryTypeStr() const
 		{
 			switch ((flags_u16 & 0x7800) >> 11) {
 				case 0: return "standard";
@@ -117,7 +118,7 @@ class MessageHeader {
 			}
 		}
 
-		const char* getResponseCodeStr()
+		std::string_view getResponseCodeStr() const
 		{
 			switch (flags_u16 & 0x000f) {
 				case 0: return "ok";

@@ -8,6 +8,7 @@
 #include <samurai/io/net/inetaddress.h>
 #include <samurai/io/buffer.h>
 #include <memory>
+#include <string>
 #include <vector>
 
 Samurai::IO::Net::DNS::Message::Message() {
@@ -205,12 +206,12 @@ Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode()
 	QDBG("DNS Response: id=%d, flags=%x, qd=%d, an=%d, ns=%d, ar=%d", header.id, header.flags_u16, header.qdcount, header.ancount, header.nscount, header.arcount);
 	QDBG("* flags: { message type=%s, query type=%s, authorative=%s, truncated=%s, recursion desired=%s, recursion available=%s, response_code=%s }",
 		(header.isQuery() ? "query" : "response"),
-		 header.getQueryTypeStr(),
+		 std::string(header.getQueryTypeStr()).c_str(),
 		(header.isAuthorative()        ? "yes" : "no"),
 		(header.isTruncated()          ? "yes" : "no"),
 		(header.isRecursionDesired()   ? "yes" : "no"),
 		(header.isRecursionAvailable() ? "yes" : "no"),
-		header.getResponseCodeStr());
+		std::string(header.getResponseCodeStr()).c_str());
 
 	if (!header.isValid()) return ResponseCode::FormatError;
 	
