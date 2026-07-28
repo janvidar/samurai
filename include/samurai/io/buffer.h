@@ -49,11 +49,17 @@ class Buffer {
 		void appendBinary(uint32_t number, BinaryMode endiannes = NativeEndian);
 		void appendBinary(uint64_t number, BinaryMode endiannes = NativeEndian);
 	
+		/** Returned by the find() family when there is no match. */
+		static const size_t npos = (size_t) -1;
+
 		/**
-		 * Copy the first 'len' bytes into a char array,
-		 * or string.
+		 * Copy the first 'len' bytes into a char array, or string.
+		 * These copy without consuming; remove() is the consuming half.
+		 *
+		 * @return the number of bytes copied, which is less than 'len' when
+		 *         the buffer holds fewer.
 		 */
-		void pop(char* data, size_t len);
+		size_t pop(char* data, size_t len);
 
 		/**
 		 * NOTE: The popBinary() family returns false and leaves 'number'
@@ -66,17 +72,17 @@ class Buffer {
 		 */
 		std::string pop(size_t len);
 
-		void pop(char* data, size_t offset, size_t len);
+		size_t pop(char* data, size_t offset, size_t len);
 
 		bool popBinary(size_t offset, uint8_t& number);
 		bool popBinary(size_t offset, uint16_t& number, BinaryMode endianness = NativeEndian);
 		bool popBinary(size_t offset, uint32_t& number, BinaryMode endianness = NativeEndian);
 		bool popBinary(size_t offset, uint64_t& number, BinaryMode endianness = NativeEndian);
 		
-		// search/find
-		int find(char achar, size_t offset = 0);
-		int rfind(char achar);
-		int find(const char* str, size_t offset = 0);
+		// search/find, returning npos when there is no match.
+		size_t find(char achar, size_t offset = 0);
+		size_t rfind(char achar);
+		size_t find(const char* str, size_t offset = 0);
 
 		/**
 		 * Allocate memory and return a chunk based on the
