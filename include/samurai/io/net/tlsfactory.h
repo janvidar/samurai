@@ -45,6 +45,19 @@ class TlsFactory {
 		void setPeerName(const std::string& name) { peer_name = name; }
 		const std::string& getPeerName() const { return peer_name; }
 
+		/** Bytes in the digest the two calls below produce. */
+		static const size_t SHA256_LENGTH = 32;
+
+		/**
+		 * The SHA-256 digest of the certificate the peer presented, taken over
+		 * its DER encoding - what X.509 tools call the certificate fingerprint.
+		 *
+		 * Only meaningful once the handshake has completed. False if it has
+		 * not, if the peer presented no certificate, or if the buffer is
+		 * smaller than SHA256_LENGTH.
+		 */
+		virtual bool getPeerCertificateSHA256(uint8_t* digest, size_t length) = 0;
+
 		/**
 		 * Initialize SSL contexts, etc.
 		 */
@@ -84,7 +97,14 @@ class TlsFactory {
 		
 		static Samurai::IO::File* getPrivateKey();
 		static Samurai::IO::File* getCertificate();
-		
+
+		/**
+		 * The same digest of the certificate we present ourselves, read from
+		 * the file handed to setKeys(). False if there is no certificate, or
+		 * it cannot be read.
+		 */
+		static bool getOwnCertificateSHA256(uint8_t* digest, size_t length);
+
 		static bool allowUntrustedConnections();
 		static void setAllowUntrustedConnections(bool toggle);
 		

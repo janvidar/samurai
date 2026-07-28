@@ -25,7 +25,9 @@ class OpenSSL : public TlsFactory {
 		enum TlsStatus deinitialize();
 		enum TlsStatus sendHandshake();
 		enum TlsStatus sendGoodbye();
-		
+
+		bool getPeerCertificateSHA256(uint8_t* digest, size_t length);
+
 		ssize_t write(const char* data, size_t length, enum TlsStatus& status);
 		ssize_t read(char* data, size_t length, enum TlsStatus& status);
 		ssize_t peek(char* data, size_t length, enum TlsStatus& status);

@@ -14,6 +14,8 @@
 #include <openssl/crypto.h>
 #include <openssl/opensslv.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 
@@ -47,6 +49,66 @@ static void ssl_error_string(char* buf, size_t buflen)
 
 	ERR_error_string_n(code, buf, buflen);
 	ERR_clear_error();
+}
+
+/*
+ * X509_digest() hashes the DER encoding of the whole certificate, which is what
+ * a certificate fingerprint is defined over.
+ */
+static bool sha256_of(X509* cert, uint8_t* digest, size_t length)
+{
+	if (length < Samurai::IO::Net::TlsFactory::SHA256_LENGTH) return false;
+
+	unsigned char buf[EVP_MAX_MD_SIZE];
+	unsigned int size = 0;
+
+	if (X509_digest(cert, EVP_sha256(), buf, &size) != 1)
+	{
+		char msg[SSL_ERRBUF_SIZE];
+		ssl_error_string(msg, sizeof(msg));
+		QERR("Unable to hash the certificate: %s", msg);
+		return false;
+	}
+
+	if (size != Samurai::IO::Net::TlsFactory::SHA256_LENGTH)
+	{
+		QERR("SHA-256 produced %u bytes rather than %u", size,
+			(unsigned int) Samurai::IO::Net::TlsFactory::SHA256_LENGTH);
+		return false;
+	}
+
+	memcpy(digest, buf, size);
+	return true;
+}
+
+bool Samurai::IO::Net::TlsFactory::getOwnCertificateSHA256(uint8_t* digest, size_t length)
+{
+	Samurai::IO::File* pem = TlsFactory::getCertificate();
+	if (!pem || !pem->exists()) return false;
+
+	BIO* bio = BIO_new_file(pem->getName().c_str(), "r");
+	if (!bio)
+	{
+		char msg[SSL_ERRBUF_SIZE];
+		ssl_error_string(msg, sizeof(msg));
+		QERR("Unable to open '%s': %s", pem->getName().c_str(), msg);
+		return false;
+	}
+
+	X509* cert = PEM_read_bio_X509(bio, 0, 0, 0);
+	BIO_free(bio);
+
+	if (!cert)
+	{
+		char msg[SSL_ERRBUF_SIZE];
+		ssl_error_string(msg, sizeof(msg));
+		QERR("Unable to read a certificate from '%s': %s", pem->getName().c_str(), msg);
+		return false;
+	}
+
+	bool found = sha256_of(cert, digest, length);
+	X509_free(cert);
+	return found;
 }
 
 bool Samurai::IO::Net::TlsFactory::global_init()
@@ -323,6 +385,22 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendHand
 	}
 
 	return Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
+}
+
+bool Samurai::IO::Net::OpenSSL::getPeerCertificateSHA256(uint8_t* digest, size_t length)
+{
+	if (!ssl) return false;
+
+	X509* cert = SSL_get1_peer_certificate(ssl);
+	if (!cert)
+	{
+		ERR_clear_error();
+		return false;
+	}
+
+	bool found = sha256_of(cert, digest, length);
+	X509_free(cert);
+	return found;
 }
 
 enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendGoodbye() {

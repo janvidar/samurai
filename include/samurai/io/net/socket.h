@@ -143,7 +143,14 @@ class Socket :
 		void TLSDeinitialize();
 		void TLSsendHandshake();
 		void TLSsendGoodbye();
-		
+
+		/**
+		 * The SHA-256 fingerprint of the certificate the peer presented, as
+		 * TlsFactory::getPeerCertificateSHA256() defines it. False if this is
+		 * not a TLS connection, or the peer sent no certificate.
+		 */
+		bool TLSgetPeerCertificateSHA256(uint8_t* digest, size_t length);
+
 	protected:
 		InetAddress* address;
 		uint16_t port;
