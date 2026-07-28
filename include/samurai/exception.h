@@ -6,12 +6,24 @@
 #ifndef HAVE_SAMURAI_EXCEPTION_H
 #define HAVE_SAMURAI_EXCEPTION_H
 
+#include <exception>
+
 namespace Samurai {
-	class Exception {
+	/**
+	 * Base for the library's exception types.
+	 *
+	 * Derives from std::exception so a generic handler can catch it, and has a
+	 * virtual destructor because it is meant to be derived from and thrown by
+	 * reference.
+	 */
+	class Exception : public std::exception {
 		public:
-			Exception(const char* exception) : name(exception) { }
-			const char* getName() { return name; }
-		
+			explicit Exception(const char* exception) noexcept : name(exception) { }
+			~Exception() override = default;
+
+			const char* getName() const noexcept { return name; }
+			const char* what() const noexcept override { return name; }
+
 		protected:
 			const char* name;
 	};

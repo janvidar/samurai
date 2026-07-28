@@ -234,7 +234,7 @@ uint32_t Samurai::IO::Net::InetAddress::getIPv4HostOrder() const
 }
 
 
-bool Samurai::IO::Net::InetAddress::isValid()
+bool Samurai::IO::Net::InetAddress::isValid() const
 {
 	if (version == IPv4) {
 #ifdef SAMURAI_POSIX
@@ -255,7 +255,7 @@ bool Samurai::IO::Net::InetAddress::isValid()
 }
 
 
-bool Samurai::IO::Net::InetAddress::isMulticast()
+bool Samurai::IO::Net::InetAddress::isMulticast() const
 {
 	if (version == IPv4) {
 		const uint32_t host_order = getIPv4HostOrder();
@@ -272,7 +272,7 @@ bool Samurai::IO::Net::InetAddress::isMulticast()
 }
 
 
-bool Samurai::IO::Net::InetAddress::isPrivate()
+bool Samurai::IO::Net::InetAddress::isPrivate() const
 {
 	if (version == IPv4) {
 		const uint32_t host_order = getIPv4HostOrder();
@@ -362,26 +362,13 @@ enum Samurai::IO::Net::InetAddress::Version Samurai::IO::Net::InetAddress::getTy
 }
 
 
-bool Samurai::IO::Net::InetAddress::operator==(const Samurai::IO::Net::InetAddress& copy)
+/* operator!= is synthesised from this one. */
+bool Samurai::IO::Net::InetAddress::operator==(const Samurai::IO::Net::InetAddress& copy) const
 {
 	if (&copy == this) return true;
 	if (copy.version != version) return false;
-	
-	if (!memcmp(&data->internal, &copy.data->internal, sizeof(struct __InternalAddress)))
-		return true;
-	
-	return false;
-}
 
-
-bool Samurai::IO::Net::InetAddress::operator!=(const Samurai::IO::Net::InetAddress& copy)
-{
-	if (&copy == this) return false;
-	if (copy.version != version) return true;
-	
-	if (!memcmp(&data->internal, &copy.data->internal, sizeof(struct __InternalAddress)))
-		return false;
-	return true;
+	return memcmp(&data->internal, &copy.data->internal, sizeof(struct __InternalAddress)) == 0;
 }
 
 Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const std::string& address)
@@ -449,7 +436,7 @@ Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const Sa
 
 
 
-bool Samurai::IO::Net::InetAddress::isResolved()
+bool Samurai::IO::Net::InetAddress::isResolved() const
 {
 	if (isValid() && resolveState == Resolved) return true;
 	return false;

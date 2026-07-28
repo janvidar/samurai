@@ -3,11 +3,11 @@
  * See the file "COPYING" for licensing details.
  */
 
-#include <samurai/samurai.h>
-#include <samurai/io/net/dns/common.h>
-
 #ifndef HAVE_SYSTEM_DNS_UTILS_H
 #define HAVE_SYSTEM_DNS_UTILS_H
+
+#include <samurai/samurai.h>
+#include <samurai/io/net/dns/common.h>
 
 namespace Samurai {
 namespace IO {

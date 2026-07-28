@@ -3,6 +3,9 @@
  * See the file "COPYING" for licensing details.
  */
 
+#ifndef HAVE_SAMURAI_DEBUG_DBG_H
+#define HAVE_SAMURAI_DEBUG_DBG_H
+
 #ifndef BUILD
 #define BUILD "internal"
 #endif
@@ -19,31 +22,31 @@
 #if defined(DEBUG)
 
 #if !defined(QDBG)
-#define QDBG(format, ...)  do { samurai_debug(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0);
+#define QDBG(format, ...)  do { samurai_debug(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0)
 #endif
 
 #if !defined(QERR)
-#define QERR(format, ...)  do { samurai_error(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0);
+#define QERR(format, ...)  do { samurai_error(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0)
 #endif
 
 #if !defined(QNET)
-#define QNET(format, ...)  do { samurai_net(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0);
+#define QNET(format, ...)  do { samurai_net(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0)
 #endif
 
 #if !defined(QSEARCH)
-#define QSEARCH(format, ...)  do { samurai_search(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0);
+#define QSEARCH(format, ...)  do { samurai_search(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0)
 #endif
 
 #if !defined(QHUB)
-#define QHUB(format, ...)  do { samurai_hub(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0);
+#define QHUB(format, ...)  do { samurai_hub(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0)
 #endif
 
 #if !defined(QDBG_INIT)
-#define QDBG_INIT do { samurai_debug_init(); } while(0);
+#define QDBG_INIT do { samurai_debug_init(); } while(0)
 #endif
 
 #if !defined(QDBG_FINI)
-#define QDBG_FINI do { samurai_debug_fini(); } while(0);
+#define QDBG_FINI do { samurai_debug_fini(); } while(0)
 #endif
 
 void samurai_debug_init();
@@ -59,33 +62,34 @@ void samurai_hub(const char* func, const char* file, int line, const char *forma
 #else /* ! DEBUG */
 
 #if !defined(QDBG)
-#define QDBG(format, ...) do { } while(0);
+#define QDBG(format, ...) do { } while(0)
 #endif
 
 #if !defined(QERR)
-#define QERR(format, ...) do { fprintf(stderr, "ERROR: "); fprintf(stderr, format, ## __VA_ARGS__); fprintf(stderr, "\n"); } while(0);
+#define QERR(format, ...) do { fprintf(stderr, "ERROR: "); fprintf(stderr, format, ## __VA_ARGS__); fprintf(stderr, "\n"); } while(0)
 #endif
 
 #if !defined(QNET)
-#define QNET(format, ...) do { } while(0);
+#define QNET(format, ...) do { } while(0)
 #endif
 
 #if !defined(QSEARCH)
-#define QSEARCH(format, ...)  do { } while(0);
+#define QSEARCH(format, ...)  do { } while(0)
 #endif
 
 #if !defined(QHUB)
-#define QHUB(format, ...)  do { } while(0);
+#define QHUB(format, ...)  do { } while(0)
 #endif
 
 #if !defined(QDBG_INIT)
-#define QDBG_INIT do { } while(0);
+#define QDBG_INIT do { } while(0)
 #endif
 
 #if !defined(QDBG_FINI)
-#define QDBG_FINI do { } while(0);
+#define QDBG_FINI do { } while(0)
 #endif
 
 
 #endif // DEBUG
 
+#endif // HAVE_SAMURAI_DEBUG_DBG_H
