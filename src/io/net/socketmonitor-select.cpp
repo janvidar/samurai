@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <algorithm>
 #include <samurai/samurai.h>
 #include "socketmonitor-backend.h"
 
@@ -22,7 +23,7 @@
 
 Samurai::IO::Net::SelectSocketMonitor::SelectSocketMonitor() : Samurai::IO::Net::SocketMonitor("select")
 {
-	max = MIN(Samurai::OS::getMaxOpenSockets(), MAXSOCK);
+	max = std::min<size_t>(Samurai::OS::getMaxOpenSockets(), MAXSOCK);
 	act.resize(max);
 	for (size_t n = 0; n < max; n++)
 	{

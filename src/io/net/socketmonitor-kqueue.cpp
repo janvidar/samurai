@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <algorithm>
 #include <samurai/samurai.h>
 #include "socketmonitor-backend.h"
 
@@ -29,7 +30,7 @@
 Samurai::IO::Net::KQueueSocketMonitor::KQueueSocketMonitor() : Samurai::IO::Net::SocketMonitor("kqueue")
 {
 	numChanges = 0;
-	max = MIN(Samurai::OS::getMaxOpenSockets(), MAXSOCK);
+	max = std::min<size_t>(Samurai::OS::getMaxOpenSockets(), MAXSOCK);
 	num = 0;
 	events.resize(KQUEUE_BATCH);
 	change.resize(MAXCHANGES);
