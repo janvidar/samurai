@@ -63,9 +63,8 @@ bool Samurai::IO::Net::PollSocketMonitor::isValid()
 
 /*
  * NOTE: the descriptor array is kept compact - entries in [0, num) are live -
- * so poll() is handed 'num' rather than 'max'. It used to be given the whole
- * 4096 entry array on every call whatever the real count, which is a syscall
- * argument the kernel has to walk in full.
+ * so poll() is handed 'num' rather than 'max'; the kernel walks the argument in
+ * full.
  */
 void Samurai::IO::Net::PollSocketMonitor::internal_add(Samurai::IO::Net::SocketBase* socket)
 {

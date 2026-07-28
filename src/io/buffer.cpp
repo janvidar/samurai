@@ -315,11 +315,9 @@ char Samurai::IO::Buffer::at(size_t offset) const {
 			(((x) & 0xff00000000000000ULL) >> 56)))
 
 /*
- * NOTE: This used to be #ifdef SAMURAI_BIG_ENDIAN around every conversion, and
- * before that a misspelled SAMURAI_BIGENDIAN that is defined nowhere - so the
- * byte swapping silently did nothing on big endian hosts and no compiler ever
- * said so. std::endian is a value the compiler supplies, so a typo here is a
- * build error rather than a wrong result on a machine nobody tests on.
+ * NOTE: endianness is taken from std::endian, which the compiler supplies, so a
+ * misspelling here is a build error rather than byte swapping that silently does
+ * nothing on a host nobody tests on.
  */
 static constexpr bool host_is_big_endian = (std::endian::native == std::endian::big);
 
@@ -372,9 +370,7 @@ void Samurai::IO::Buffer::appendBinary(uint64_t number_, BinaryMode endiannes) {
 }
 
 /*
- * NOTE: These read the *value stored at* the offset. The uint32/uint64
- * variants used to return reinterpret_cast<...>(&buf[offset]) - that is, the
- * address of the slot rather than its contents.
+ * NOTE: These read the *value stored at* the offset.
  *
  * memcpy() is used rather than a cast through a uint32_t*, since the offset
  * carries no alignment guarantee and type-punning through a pointer is

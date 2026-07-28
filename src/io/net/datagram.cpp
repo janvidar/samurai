@@ -85,12 +85,9 @@ Samurai::IO::Net::DatagramSocket::DatagramSocket(DatagramEventHandler* eh, enum 
 }
 
 /*
- * NOTE: this used to call internal_create(), which dereferenced a null 'addr'.
- * The immediate crash was guarded, but the object was still left with no
- * address and no descriptor while reporting itself as constructed. There is no
- * useful datagram socket to build without knowing an address family, so the
- * constructor now produces a plainly unbound socket and says so, and listen()
- * and send() already refuse an INVALID_SOCKET.
+ * NOTE: there is no useful datagram socket to build without an address family,
+ * so this leaves the socket unbound and says so; listen() and send() refuse an
+ * INVALID_SOCKET.
  */
 Samurai::IO::Net::DatagramSocket::DatagramSocket() : SocketBase(Datagram), eventHandler(0), myPacket(0) {
 	QERR("DatagramSocket: default-constructed sockets have no address family "
@@ -151,10 +148,7 @@ int Samurai::IO::Net::DatagramSocket::send(DatagramPacket* packet) {
 	if (!packet || !packet->addr) return -1;
 
 
-	/* NOTE: this used to copy into a 64 KB stack array that was zero
-	   initialised on every call - a memset of the whole thing per packet, and
-	   a stack depth hazard on threads with a small stack. The packet's own
-	   buffer already holds the bytes contiguously. */
+	/* The packet's own buffer already holds the bytes contiguously. */
 	size_t length = packet->buffer->size();
 	if (length > MAX_BUF_SIZE) length = MAX_BUF_SIZE;
 	if (!length) return 0;
@@ -176,9 +170,8 @@ int Samurai::IO::Net::DatagramSocket::send(DatagramPacket* packet) {
 		}
 	}
 
-	/* NOTE: Buffer::pop() copies without consuming, so the packet's buffer
-	   never drained and every subsequent send() resent the same bytes with
-	   the new ones appended behind them. */
+	/* NOTE: Buffer::pop() copies without consuming, so what was sent has to be
+	   removed explicitly or the next send() resends it. */
 	packet->buffer->remove((size_t) ret);
 
 	if (bandwidthManager) bandwidthManager->dataSendUDP((size_t) ret);
@@ -186,14 +179,10 @@ int Samurai::IO::Net::DatagramSocket::send(DatagramPacket* packet) {
 }
 
 int Samurai::IO::Net::DatagramSocket::read(DatagramPacket* packet) {
-	/* NOTE: the receive buffer was a 64 KB stack array zeroed on every call.
-	   It is a member now, so the memset and the stack pressure are gone. */
 	size_t length = sizeof(readbuf);
 	uint8_t* data = readbuf;
 
-	/* NOTE: this used a struct sockaddr_in and always built an IPv4 source
-	   address, so the sender of any IPv6 datagram came out as garbage. It also
-	   converted the address before checking whether recvfrom() had failed. */
+	/* sockaddr_storage, so the source address of an IPv6 datagram fits too. */
 	struct sockaddr_storage sa;
 	socklen_t sl = sizeof(sa);
 	memset(&sa, 0, sizeof(sa));

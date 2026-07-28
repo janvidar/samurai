@@ -90,11 +90,7 @@ unsigned int Samurai::Util::abs(int n) {
 	return (n < 0) ? (0u - (unsigned int) n) : (unsigned int) n;
 }
 
-/* NOTE: strdup is no longer reimplemented here; stdc.h maps it to the CRT's
-   _strdup, which avoids colliding with the one Windows already provides. */
-
-/* NOTE: this was #ifndef SAMURAI_OS_LINUX, which redefined a function libc
-   already provides on macOS and the BSDs. Only Windows lacks it. */
+/* strndup exists on Linux, macOS and the BSDs; only Windows lacks it. */
 #ifdef SAMURAI_OS_WINDOWS
 char* samurai_strndup(const char *value, size_t len) {
 	char* dupval = (char*) malloc(len+1);

@@ -49,11 +49,9 @@ Samurai::IO::Net::SocketBase::~SocketBase() {
 
 const Samurai::IO::Net::InetAddress* Samurai::IO::Net::SocketBase::getLocalAddress() const {
 	/*
-	 * NOTE: the IPv6 branch passed sizeof(struct in_addr) - four bytes - for a
-	 * sixteen byte address, and setRawAddress() rejects anything shorter than
-	 * the family requires, so this silently returned an all-zero address for
-	 * every IPv6 socket. It also chose the branch from the *remote* address's
-	 * family rather than from what getsockname() actually returned.
+	 * NOTE: the family comes from what getsockname() returned, not from the
+	 * remote address, and setRawAddress() is given the length that family
+	 * requires - it rejects anything shorter.
 	 */
 	if (sd == INVALID_SOCKET) return 0;
 
@@ -220,7 +218,6 @@ bool Samurai::IO::Net::SocketBase::setNonBlocking(bool toggle, std::error_code& 
 #endif
 
 #if !defined(SAMURAI_POSIX) && !defined(SAMURAI_WINSOCK)
-	/* NOTE: neither branch applied and the function ran off the end. */
 	(void) toggle;
 	ec = Samurai::system_error(ENOSYS);
 	return false;
@@ -278,8 +275,7 @@ bool Samurai::IO::Net::SocketBase::setSendBufferSize(size_t size) {
 bool Samurai::IO::Net::SocketBase::setSendBufferSize(size_t size, std::error_code& ec) {
 	ec.clear();
 
-	/* NOTE: this passed &size, a size_t*, where the kernel expects an int.
-	   It happened to work on little endian and was wrong on big endian. */
+	/* SO_SNDBUF is an int to the kernel, so 'size' cannot be passed by address. */
 	int value = (int) size;
 	if (SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_SNDBUF, &value, sizeof(value)) == SOCKET_ERROR) {
 		ec = Samurai::system_error(NETERROR);
@@ -307,8 +303,7 @@ bool Samurai::IO::Net::SocketBase::setReceiveBufferSize(size_t size) {
 bool Samurai::IO::Net::SocketBase::setReceiveBufferSize(size_t size, std::error_code& ec) {
 	ec.clear();
 
-	/* NOTE: this passed &size, a size_t*, where the kernel expects an int.
-	   It happened to work on little endian and was wrong on big endian. */
+	/* SO_RCVBUF is an int to the kernel, so 'size' cannot be passed by address. */
 	int value = (int) size;
 	if (SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_RCVBUF, &value, sizeof(value)) == SOCKET_ERROR) {
 		ec = Samurai::system_error(NETERROR);
@@ -328,7 +323,7 @@ size_t Samurai::IO::Net::SocketBase::getReceiveBufferSize() const {
 }
 
 /* NOTE: IP_TTL is meaningless on an IPv6 socket; the hop limit lives behind
-   IPV6_UNICAST_HOPS. Both of these used IP_TTL unconditionally. */
+   IPV6_UNICAST_HOPS. */
 bool Samurai::IO::Net::SocketBase::isIPv6() const
 {
 	InetSocketAddress* isa = dynamic_cast<InetSocketAddress*>(addr);

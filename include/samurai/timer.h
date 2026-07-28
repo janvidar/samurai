@@ -29,9 +29,8 @@ class TimerListener {
 
 /**
  * NOTE: timing is on std::chrono::steady_clock rather than wall-clock
- * TimeStamps. A wall-clock jump - NTP stepping the clock, or the operator
- * changing the timezone - used to move every deadline with it, firing timers
- * early or hanging them for the length of the jump.
+ * TimeStamps: a wall-clock jump - NTP stepping the clock, or the operator
+ * changing the timezone - must not move a deadline with it.
  */
 class Timer {
 
@@ -98,15 +97,11 @@ class TimerManager {
 		void schedule(Timer* timer);
 
 		/*
-		 * NOTE: this replaces a std::vector scanned end to end on every tick,
-		 * which made process() O(n) in the number of registered timers whether
-		 * or not any had expired.
-		 *
-		 * The heap is ordered by deadline and holds entries, not timers: an
-		 * entry whose timer has since been removed is skipped when it
-		 * surfaces, which avoids having to erase from the middle of a heap.
-		 * 'live' is the authority on what still exists, so a callback that
-		 * destroys another timer cannot leave a dangling pointer behind.
+		 * NOTE: the heap is ordered by deadline and holds entries, not timers:
+		 * an entry whose timer has been removed is skipped when it surfaces,
+		 * which avoids having to erase from the middle of a heap. 'live' is the
+		 * authority on what still exists, so a callback that destroys another
+		 * timer cannot leave a dangling pointer behind.
 		 */
 		struct Entry {
 			Timer::clock::time_point due;

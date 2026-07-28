@@ -74,9 +74,6 @@ uint16_t     Samurai::IO::Net::InetSocketAddress::getPort()
 }
 
 
-/* NOTE: This used to strcat() into a fixed heap buffer sized for a formatted
-   IP, while addr->toString() could return an arbitrary length hostname or a
-   null pointer. Both hazards go away with std::string. */
 std::string  Samurai::IO::Net::InetSocketAddress::toString()
 {
 	const std::string address = addr->toString();

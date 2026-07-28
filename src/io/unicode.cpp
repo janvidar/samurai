@@ -86,8 +86,7 @@ bool Samurai::IO::Unicode::exec(char* in, size_t& inlen, char* out, size_t& outl
 	if (cvt->convert(in, inlen, out, outlen)) return true;
 
 	/* iconv sets EILSEQ for invalid input, EINVAL for a truncated multibyte
-	   sequence and E2BIG for a full output buffer; all three used to arrive
-	   as a bare false. */
+	   sequence and E2BIG for a full output buffer. */
 	ec = Samurai::system_error(errno ? errno : EIO);
 	return false;
 }

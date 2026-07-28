@@ -8,12 +8,9 @@
 #endif
 
 /*
- * NOTE: These are included for both configurations on purpose. They used to be
- * inside the #ifdef DEBUG branch below, so the set of headers this file pulled
- * in changed with the build type - and the ~18 translation units that reach
- * memcpy()/memset()/strcmp() through this header compiled with DEBUG but not
- * without it. The old Makefile defaulted to DEBUG=YES, so a release build was
- * never attempted.
+ * NOTE: these are included for both configurations on purpose. Around eighteen
+ * translation units reach memcpy()/memset()/strcmp() through this header, so
+ * the set of headers it pulls in must not change with the build type.
  */
 #include <stdarg.h>
 #include <stdio.h>

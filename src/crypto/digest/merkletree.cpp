@@ -275,8 +275,6 @@ void Samurai::Crypto::Digest::MerkleTree::deleteNodes(Samurai::Crypto::Digest::M
 
 Samurai::Crypto::Digest::MerkleTree::~MerkleTree()
 {
-	/* NOTE: This used to be empty, leaking both work stacks together with
-	   every node still held in them. */
 	deleteNodes(m_nodes);
 	deleteNodes(m_work);
 	delete m_nodes;

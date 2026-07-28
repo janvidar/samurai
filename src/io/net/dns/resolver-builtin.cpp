@@ -17,11 +17,8 @@
 #include <samurai/util/random.h>
 #include <stdlib.h>
 
-/*
- * NOTE: this was a global with external linkage, and no other translation unit
- * refers to it. A name in the global namespace is not mangled, so the shared
- * library exported it as plain "g_dns_config".
- */
+/* static: a name at global scope is not mangled, so external linkage would
+   export plain "g_dns_config" from the shared library. */
 static Samurai::IO::Net::DNS::ResolveConfiguration* g_dns_config = 0;
 
 
@@ -64,11 +61,8 @@ void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 	if (g_dns_config->isIPv6()) dns_type = Type_AAAA;
 
 	/*
-	 * NOTE: this check is the whole reason the BUILTIN provider could not be
-	 * selected at all. getNameServer() returns 0 when the configuration lists
-	 * no usable server, and the InetAddress copy constructor below
-	 * dereferenced it without looking - so the first Socket::connect() in a
-	 * process built with -DSAMURAI_DNS_PROVIDER=BUILTIN segfaulted.
+	 * NOTE: getNameServer() returns 0 when the configuration lists no usable
+	 * server, and the InetAddress copy below would dereference it.
 	 */
 	Samurai::IO::Net::InetAddress* server = g_dns_config->getNameServer(numTries++);
 	if (!server)

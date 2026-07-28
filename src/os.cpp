@@ -122,7 +122,6 @@ time_t Samurai::OSUnix::getUptime()
 
 std::string Samurai::OSUnix::getHostName()
 {
-	/* NOTE: was a static buffer, so the returned pointer aliased across calls. */
 	char hostname[MAXHOSTNAMELEN] = {0, };
 	if (gethostname(hostname, MAXHOSTNAMELEN-1) == 0) {
 		hostname[MAXHOSTNAMELEN-1] = 0;

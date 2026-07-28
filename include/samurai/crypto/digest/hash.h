@@ -49,8 +49,6 @@ class Hash {
 		/**
 		 * Update/append the internal digest.
 		 */
-		/* NOTE: was update(uint8_t*, uint64_t) - non-const, and a length type
-		   wider than the size_t used to index the copy loop. */
 		virtual void update(const void* data, size_t length);
 		
 		

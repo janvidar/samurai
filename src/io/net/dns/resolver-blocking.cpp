@@ -26,11 +26,8 @@ Samurai::IO::Net::DNS::BlockingResolver::~BlockingResolver() {
 }
 
 /*
- * NOTE: This used gethostbyname(), which returns a pointer into a static
- * buffer (so two concurrent lookups corrupt each other), reports errors
- * through the equally shared h_errno, resolves IPv4 only, and was
- * dereferenced here as h_addr_list[0] without checking the list was
- * non-empty. getaddrinfo() is reentrant and returns both families.
+ * NOTE: getaddrinfo(), not gethostbyname(): it is reentrant and returns both
+ * address families.
  */
 void Samurai::IO::Net::DNS::BlockingResolver::lookup(const char* address) {
 	if (!eventHandler) return;

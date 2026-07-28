@@ -14,11 +14,6 @@
 namespace Samurai {
 namespace IO {
 
-/* NOTE: these used to carry dynamic exception specifications,
-   throw (Samurai::IO::Exception). They were deprecated in C++11 and removed in
-   C++17; they also never did what they appear to - an unlisted exception
-   called std::unexpected() rather than propagating. */
-
 class Exception : public Samurai::Exception
 {
 	public:

@@ -70,11 +70,8 @@ void Samurai::IO::Net::DNS::ForkResolver::lookup(const char* address) {
 
 		struct hostent* host = gethostbyname(address);
 
-		/* NOTE: The parent always expects 4 bytes; success or failure is
-		   carried by the exit status. The failure path used to call
-		   ::write(sd, (void*) 0, 4), which is undefined behaviour - reading
-		   4 bytes from a null pointer - and in practice wrote nothing at
-		   all, leaving the parent's read() to see end-of-file instead. */
+		/* NOTE: the parent always expects 4 bytes; success or failure is
+		   carried by the exit status. */
 		char result[4] = { 0, 0, 0, 0 };
 		int error = 0;
 

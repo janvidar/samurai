@@ -147,16 +147,14 @@ class Buffer {
 		void compact();
 
 	protected:
-		/* NOTE: was a malloc'd char* with no assignment operator, so assigning
-		   one Buffer to another double freed. The vector owns the storage and
-		   supplies the copy and move semantics. */
+		/* The vector owns the storage and supplies the copy and move semantics. */
 		std::vector<char> buf;
 
 		/*
 		 * Live bytes are [head, len). 'head' is what remove() advances instead
-		 * of memmove()ing the remainder down: a protocol loop that consumes one
-		 * message at a time used to move the whole rest of the buffer on every
-		 * message, which is quadratic in the number of messages buffered.
+		 * of memmove()ing the remainder down: memmoving would make a protocol
+		 * loop that consumes one message at a time quadratic in the number of
+		 * messages buffered.
 		 */
 		size_t head;
 		size_t len;

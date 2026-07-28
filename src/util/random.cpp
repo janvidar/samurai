@@ -24,10 +24,10 @@
 #endif
 
 /*
- * NOTE: The generator must be seeded exactly once. Re-seeding from the clock
- * on every call - as this used to do - means repeated calls within the same
- * clock tick all return the same number, and makes the whole sequence
- * recoverable from the wall clock.
+ * NOTE: The generator must be seeded exactly once. Re-seeding from the clock on
+ * every call would mean repeated calls within the same clock tick all return the
+ * same number, and would make the whole sequence recoverable from the wall
+ * clock.
  *
  * The C++11 rule for function-local statics makes the seeding below run once
  * even if several threads call in at the same time. The generator itself is
@@ -68,10 +68,9 @@ int Samurai::Util::pseudoRandom(int low, int high)
 
 	if (high <= low) return low;
 
-	/* NOTE: The division must be done in floating point. This used to read
-	   (int) (double) rand() / (RAND_MAX + 1) * (high - low) + low, where the
-	   cast binds tighter than the division - so it was integer division that
-	   always yielded 0, and the function always returned 'low'. */
+	/* NOTE: the division must be done in floating point - a cast binds tighter
+	   than '/', so the parentheses are what keep this out of integer
+	   division. */
 	return low + (int) (((double) rand() / ((double) RAND_MAX + 1.0)) * (high - low));
 }
 #endif
