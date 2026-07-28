@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_DNSRESOLVER_BLOCKING_H
-#define HAVE_QUICKDC_DNSRESOLVER_BLOCKING_H
+#ifndef HAVE_SAMURAI_DNSRESOLVER_BLOCKING_H
+#define HAVE_SAMURAI_DNSRESOLVER_BLOCKING_H
 
 #include <samurai/io/net/dns/resolver.h>
 
@@ -28,4 +28,4 @@ class BlockingResolver : public Resolver {
 }
 }
 
-#endif // HAVE_QUICKDC_DNSRESOLVER_BLOCKING_H
+#endif // HAVE_SAMURAI_DNSRESOLVER_BLOCKING_H

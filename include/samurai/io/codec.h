@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_CODEC_IO_H
-#define HAVE_QUICKDC_CODEC_IO_H
+#ifndef HAVE_SAMURAI_CODEC_IO_H
+#define HAVE_SAMURAI_CODEC_IO_H
 
 #include <samurai/samurai.h>
 #include <samurai/error.h>
@@ -30,4 +30,4 @@ class Codec {
 }
 }
 
-#endif // HAVE_QUICKDC_CODEC_IO_H
+#endif // HAVE_SAMURAI_CODEC_IO_H

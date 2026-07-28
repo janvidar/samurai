@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_SOCKETEVENT_H
-#define HAVE_QUICKDC_SOCKETEVENT_H
+#ifndef HAVE_SAMURAI_SOCKETEVENT_H
+#define HAVE_SAMURAI_SOCKETEVENT_H
 
 #include <samurai/samurai.h>
 #include <memory>
@@ -152,4 +152,4 @@ class DatagramEventHandler : public EventHandler {
 }
 }
 
-#endif // HAVE_QUICKDC_SOCKETEVENT_H
+#endif // HAVE_SAMURAI_SOCKETEVENT_H

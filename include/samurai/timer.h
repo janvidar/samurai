@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_TIMER_H
-#define HAVE_QUICKDC_TIMER_H
+#ifndef HAVE_SAMURAI_TIMER_H
+#define HAVE_SAMURAI_TIMER_H
 
 #include <time.h>
 
@@ -124,4 +124,4 @@ class TimerManager {
 
 }
 
-#endif // HAVE_QUICKDC_TIMER_H
+#endif // HAVE_SAMURAI_TIMER_H

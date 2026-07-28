@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_MERKLE_TREE_H
-#define HAVE_QUICKDC_MERKLE_TREE_H
+#ifndef HAVE_SAMURAI_MERKLE_TREE_H
+#define HAVE_SAMURAI_MERKLE_TREE_H
 
 #include <samurai/samurai.h>
 #include <samurai/io/buffer.h>
@@ -249,4 +249,4 @@ class MerkleTree : public Samurai::Crypto::Digest::Hash
 }
 }
 
-#endif // HAVE_QUICKDC_MERKLE_TREE_H
+#endif // HAVE_SAMURAI_MERKLE_TREE_H

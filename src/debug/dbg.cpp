@@ -10,11 +10,11 @@
 #include <samurai/debug/dbg.h>
 #include <samurai/io/file.h>
 
-#define DUMP_FILE_NETWORK "~/.quickdc/debug/network.log"
-#define DUMP_FILE_SEARCH  "~/.quickdc/debug/search.log"
-#define DUMP_FILE_DEBUG   "~/.quickdc/debug/debug.log"
-#define DUMP_FILE_HUB     "~/.quickdc/debug/hub.log"
-#define DUMP_FILE_MEM     "~/.quickdc/debug/memory.log"
+#define DUMP_FILE_NETWORK "~/.samurai/debug/network.log"
+#define DUMP_FILE_SEARCH  "~/.samurai/debug/search.log"
+#define DUMP_FILE_DEBUG   "~/.samurai/debug/debug.log"
+#define DUMP_FILE_HUB     "~/.samurai/debug/hub.log"
+#define DUMP_FILE_MEM     "~/.samurai/debug/memory.log"
 
 #define PREFIX "../"
 
@@ -27,56 +27,56 @@
 #define DUPLICATE_TO_DEBUG
 
 
-static Samurai::IO::File* quickdc_dump_net;
-static Samurai::IO::File* quickdc_dump_sch;
-static Samurai::IO::File* quickdc_dump_dbg;
-static Samurai::IO::File* quickdc_dump_hub;
-#ifdef QUICKDC_MEMDBG
-static Samurai::IO::File* quickdc_dump_mem;
+static Samurai::IO::File* samurai_dump_net;
+static Samurai::IO::File* samurai_dump_sch;
+static Samurai::IO::File* samurai_dump_dbg;
+static Samurai::IO::File* samurai_dump_hub;
+#ifdef SAMURAI_MEMDBG
+static Samurai::IO::File* samurai_dump_mem;
 #endif
 
 static bool g_debug_stderr = false;
 
-void QuickDC_Debug_Init() {
+void samurai_debug_init() {
 	fprintf(stderr, "Starting up with debug code enabled\n");
 	
-	Samurai::IO::File::mkdir("~/.quickdc",       0700);
-	Samurai::IO::File::mkdir("~/.quickdc/debug",   0700);
+	Samurai::IO::File::mkdir("~/.samurai",       0700);
+	Samurai::IO::File::mkdir("~/.samurai/debug",   0700);
 	
-	if (getenv("QUICKDC_DEBUG"))
+	if (getenv("SAMURAI_DEBUG"))
 	{
 		g_debug_stderr = true;
 		fprintf(stderr, "    (dumping debug messages to stderr)\n");
 	}
 	
-#ifdef QUICKDC_MEMDBG
-	quickdc_dump_mem = new Samurai::IO::File(DUMP_FILE_MEM);
-	quickdc_dump_mem->open(Samurai::IO::File::MODEWO, true);
+#ifdef SAMURAI_MEMDBG
+	samurai_dump_mem = new Samurai::IO::File(DUMP_FILE_MEM);
+	samurai_dump_mem->open(Samurai::IO::File::MODEWO, true);
 #endif
 	
-	quickdc_dump_net = new Samurai::IO::File(DUMP_FILE_NETWORK);
-	quickdc_dump_sch = new Samurai::IO::File(DUMP_FILE_SEARCH);
-	quickdc_dump_dbg = new Samurai::IO::File(DUMP_FILE_DEBUG);
-	quickdc_dump_hub = new Samurai::IO::File(DUMP_FILE_HUB);
-	quickdc_dump_net->open(Samurai::IO::File::Write | Samurai::IO::File::Truncate);
-	quickdc_dump_sch->open(Samurai::IO::File::Write | Samurai::IO::File::Append);
-	quickdc_dump_dbg->open(Samurai::IO::File::Write | Samurai::IO::File::Truncate);
-	quickdc_dump_hub->open(Samurai::IO::File::Write | Samurai::IO::File::Append);
+	samurai_dump_net = new Samurai::IO::File(DUMP_FILE_NETWORK);
+	samurai_dump_sch = new Samurai::IO::File(DUMP_FILE_SEARCH);
+	samurai_dump_dbg = new Samurai::IO::File(DUMP_FILE_DEBUG);
+	samurai_dump_hub = new Samurai::IO::File(DUMP_FILE_HUB);
+	samurai_dump_net->open(Samurai::IO::File::Write | Samurai::IO::File::Truncate);
+	samurai_dump_sch->open(Samurai::IO::File::Write | Samurai::IO::File::Append);
+	samurai_dump_dbg->open(Samurai::IO::File::Write | Samurai::IO::File::Truncate);
+	samurai_dump_hub->open(Samurai::IO::File::Write | Samurai::IO::File::Append);
 	
 }
 
-void QuickDC_Debug_Fini() {
-	delete quickdc_dump_sch; quickdc_dump_sch = 0;
-	delete quickdc_dump_hub; quickdc_dump_hub = 0;
-	delete quickdc_dump_dbg; quickdc_dump_dbg = 0;
-	delete quickdc_dump_net; quickdc_dump_net = 0;
-#ifdef QUICKDC_MEMDBG
-	delete quickdc_dump_mem; quickdc_dump_mem = 0;
+void samurai_debug_fini() {
+	delete samurai_dump_sch; samurai_dump_sch = 0;
+	delete samurai_dump_hub; samurai_dump_hub = 0;
+	delete samurai_dump_dbg; samurai_dump_dbg = 0;
+	delete samurai_dump_net; samurai_dump_net = 0;
+#ifdef SAMURAI_MEMDBG
+	delete samurai_dump_mem; samurai_dump_mem = 0;
 #endif
 
 }
 
-void QuickDC_Debug(const char* /*func*/, const char* file, int line, const char *format, ...) {
+void samurai_debug(const char* /*func*/, const char* file, int line, const char *format, ...) {
 	char logmsg[1024];
 	char location[1024];
 	va_list args;
@@ -90,19 +90,19 @@ void QuickDC_Debug(const char* /*func*/, const char* file, int line, const char 
 	shortfile = (shortfile ? shortfile + strlen(separator) + 1 : file);
 	snprintf(location, 1024, "%32s:%u\t ", shortfile, line);
 	
-	if (!quickdc_dump_dbg || g_debug_stderr)
+	if (!samurai_dump_dbg || g_debug_stderr)
 	{
 		fprintf(stderr, "DEBUG: %s: %s\n", location, logmsg);
 		return;
 	}
-	quickdc_dump_dbg->write(logmsg, strlen(logmsg));
-	quickdc_dump_dbg->write(ENDLINE, strlen(ENDLINE));
+	samurai_dump_dbg->write(logmsg, strlen(logmsg));
+	samurai_dump_dbg->write(ENDLINE, strlen(ENDLINE));
 #ifdef FLUSH_DEBUG
-	quickdc_dump_dbg->flush();
+	samurai_dump_dbg->flush();
 #endif
 }
 
-void QuickDC_Error(const char* /*func*/, const char* file, int line, const char *format, ...) {
+void samurai_error(const char* /*func*/, const char* file, int line, const char *format, ...) {
 	char logmsg[1024];
 	char location[1024];
 	va_list args;
@@ -117,19 +117,19 @@ void QuickDC_Error(const char* /*func*/, const char* file, int line, const char 
 	snprintf(location, 1024, "%32s:%u\t ", shortfile, line);
 	fprintf(stderr, "ERROR: %s: %s\n", location, logmsg);
 	
-	if (!quickdc_dump_dbg) return;
-	quickdc_dump_dbg->write("ERROR: ", strlen("ERROR: "));
-	quickdc_dump_dbg->write(location, strlen(location));
-	quickdc_dump_dbg->write(": ", strlen(": "));
-	quickdc_dump_dbg->write(logmsg, strlen(logmsg));
-	quickdc_dump_dbg->write(ENDLINE, strlen(ENDLINE));
+	if (!samurai_dump_dbg) return;
+	samurai_dump_dbg->write("ERROR: ", strlen("ERROR: "));
+	samurai_dump_dbg->write(location, strlen(location));
+	samurai_dump_dbg->write(": ", strlen(": "));
+	samurai_dump_dbg->write(logmsg, strlen(logmsg));
+	samurai_dump_dbg->write(ENDLINE, strlen(ENDLINE));
 #ifdef FLUSH_DEBUG
-	quickdc_dump_dbg->flush();
+	samurai_dump_dbg->flush();
 #endif
 }
 
-void QuickDC_Net(const char*, const char* , int, const char *format, ...) {
-	if (!quickdc_dump_net) return;
+void samurai_net(const char*, const char* , int, const char *format, ...) {
+	if (!samurai_dump_net) return;
 	
 	char logmsg[1024];
 	va_list args;
@@ -137,25 +137,25 @@ void QuickDC_Net(const char*, const char* , int, const char *format, ...) {
 	vsnprintf(logmsg, 1024, format, args);
 	va_end(args);
 	
-	quickdc_dump_net->write(logmsg, strlen(logmsg));
-	quickdc_dump_net->write(ENDLINE, strlen(ENDLINE));
+	samurai_dump_net->write(logmsg, strlen(logmsg));
+	samurai_dump_net->write(ENDLINE, strlen(ENDLINE));
 #ifdef FLUSH_DEBUG
-	quickdc_dump_net->flush();
+	samurai_dump_net->flush();
 #endif
 
 #ifdef DUPLICATE_TO_DEBUG
-        if (!quickdc_dump_dbg) return;
-        quickdc_dump_dbg->write(logmsg, strlen(logmsg));
-        quickdc_dump_dbg->write(ENDLINE, strlen(ENDLINE));
+        if (!samurai_dump_dbg) return;
+        samurai_dump_dbg->write(logmsg, strlen(logmsg));
+        samurai_dump_dbg->write(ENDLINE, strlen(ENDLINE));
 #ifdef FLUSH_DEBUG
-        quickdc_dump_dbg->flush();
+        samurai_dump_dbg->flush();
 #endif
 #endif
 
 }
 
-void QuickDC_Search(const char*, const char* , int, const char *format, ...) {
-	if (!quickdc_dump_sch) return;
+void samurai_search(const char*, const char* , int, const char *format, ...) {
+	if (!samurai_dump_sch) return;
 	
 	char logmsg[1024];
 	va_list args;
@@ -163,26 +163,26 @@ void QuickDC_Search(const char*, const char* , int, const char *format, ...) {
 	vsnprintf(logmsg, 1024, format, args);
 	va_end(args);
 	
-	quickdc_dump_sch->write(logmsg, strlen(logmsg));
-	quickdc_dump_sch->write(ENDLINE, strlen(ENDLINE));
+	samurai_dump_sch->write(logmsg, strlen(logmsg));
+	samurai_dump_sch->write(ENDLINE, strlen(ENDLINE));
 #ifdef FLUSH_DEBUG
-	quickdc_dump_sch->flush();
+	samurai_dump_sch->flush();
 #endif
 
 #ifdef DUPLICATE_TO_DEBUG
-        if (!quickdc_dump_dbg) return;
-        quickdc_dump_dbg->write(logmsg, strlen(logmsg));
-        quickdc_dump_dbg->write(ENDLINE, strlen(ENDLINE));
+        if (!samurai_dump_dbg) return;
+        samurai_dump_dbg->write(logmsg, strlen(logmsg));
+        samurai_dump_dbg->write(ENDLINE, strlen(ENDLINE));
 #ifdef FLUSH_DEBUG
-        quickdc_dump_dbg->flush();
+        samurai_dump_dbg->flush();
 #endif
 #endif
 
 
 }
 
-void QuickDC_Hub(const char*, const char* , int, const char *format, ...) {
-	if (!quickdc_dump_hub) return;
+void samurai_hub(const char*, const char* , int, const char *format, ...) {
+	if (!samurai_dump_hub) return;
 	
 	char logmsg[1024];
 	va_list args;
@@ -190,41 +190,41 @@ void QuickDC_Hub(const char*, const char* , int, const char *format, ...) {
 	vsnprintf(logmsg, 1024, format, args);
 	va_end(args);
 	
-	quickdc_dump_hub->write(logmsg, strlen(logmsg));
-	quickdc_dump_hub->write(ENDLINE, strlen(ENDLINE));
+	samurai_dump_hub->write(logmsg, strlen(logmsg));
+	samurai_dump_hub->write(ENDLINE, strlen(ENDLINE));
 #ifdef FLUSH_DEBUG
-	quickdc_dump_hub->flush();
+	samurai_dump_hub->flush();
 #endif
 #ifdef DUPLICATE_TO_DEBUG
-        if (!quickdc_dump_dbg) return;
-        quickdc_dump_dbg->write(logmsg, strlen(logmsg));
-        quickdc_dump_dbg->write(ENDLINE, strlen(ENDLINE));
+        if (!samurai_dump_dbg) return;
+        samurai_dump_dbg->write(logmsg, strlen(logmsg));
+        samurai_dump_dbg->write(ENDLINE, strlen(ENDLINE));
 #ifdef FLUSH_DEBUG
-        quickdc_dump_dbg->flush();
+        samurai_dump_dbg->flush();
 #endif
 #endif
 
 
 }
 
-#ifdef QUICKDC_MEMDBG
-void QuickDC_Memory(const char* func, void* addr, size_t size, void* code_addr, void* code_addr_up) {
-	if (!quickdc_dump_mem) return;
+#ifdef SAMURAI_MEMDBG
+void samurai_memory(const char* func, void* addr, size_t size, void* code_addr, void* code_addr_up) {
+	if (!samurai_dump_mem) return;
 	
 	char logmsg[1024] = {0, };
 	sprintf(logmsg, "%s: addr=%p, size=%u, stack=%p, stack=%p", func, addr, size, code_addr, code_addr_up);
-	quickdc_dump_mem->write(logmsg, strlen(logmsg));
-	quickdc_dump_mem->write(ENDLINE, strlen(ENDLINE));
+	samurai_dump_mem->write(logmsg, strlen(logmsg));
+	samurai_dump_mem->write(ENDLINE, strlen(ENDLINE));
 #ifdef FLUSH_DEBUG
-	quickdc_dump_mem->flush();
+	samurai_dump_mem->flush();
 #endif
 
 #ifdef DUPLICATE_TO_DEBUG
-        if (!quickdc_dump_dbg) return;
-        quickdc_dump_dbg->write(logmsg, strlen(logmsg));
-        quickdc_dump_dbg->write(ENDLINE, strlen(ENDLINE));
+        if (!samurai_dump_dbg) return;
+        samurai_dump_dbg->write(logmsg, strlen(logmsg));
+        samurai_dump_dbg->write(ENDLINE, strlen(ENDLINE));
 #ifdef FLUSH_DEBUG
-        quickdc_dump_dbg->flush();
+        samurai_dump_dbg->flush();
 #endif
 #endif
 

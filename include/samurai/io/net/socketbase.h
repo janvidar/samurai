@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_SOCKETBASE_H
-#define HAVE_QUICKDC_SOCKETBASE_H
+#ifndef HAVE_SAMURAI_SOCKETBASE_H
+#define HAVE_SAMURAI_SOCKETBASE_H
 
 #include <samurai/io/net/socketglue.h>
 
@@ -260,4 +260,4 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 }
 }
 
-#endif // HAVE_QUICKDC_SOCKETBASE_H
+#endif // HAVE_SAMURAI_SOCKETBASE_H

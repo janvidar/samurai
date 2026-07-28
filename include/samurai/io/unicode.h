@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_UNICODE_IO_H
-#define HAVE_QUICKDC_UNICODE_IO_H
+#ifndef HAVE_SAMURAI_UNICODE_IO_H
+#define HAVE_SAMURAI_UNICODE_IO_H
 
 #include <sys/types.h>
 #include <samurai/io/codec.h>
@@ -35,4 +35,4 @@ class Unicode : public Codec
 }
 }
 
-#endif // HAVE_QUICKDC_UNICODE_IO_H
+#endif // HAVE_SAMURAI_UNICODE_IO_H

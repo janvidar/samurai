@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_HASH_BASE_H
-#define HAVE_QUICKDC_HASH_BASE_H
+#ifndef HAVE_SAMURAI_HASH_BASE_H
+#define HAVE_SAMURAI_HASH_BASE_H
 
 #include <samurai/samurai.h>
 #include <samurai/crypto/digest/hashvalue.h>
@@ -118,5 +118,5 @@ template<typename T> inline uint8_t get_byte(size_t offset, T input)
 }
 }
 
-#endif // HAVE_QUICKDC_HASH_BASE_H
+#endif // HAVE_SAMURAI_HASH_BASE_H
 

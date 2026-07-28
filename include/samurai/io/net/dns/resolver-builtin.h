@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_DNSRESOLVER_BUILTIN_H
-#define HAVE_QUICKDC_DNSRESOLVER_BUILTIN_H
+#ifndef HAVE_SAMURAI_DNSRESOLVER_BUILTIN_H
+#define HAVE_SAMURAI_DNSRESOLVER_BUILTIN_H
 
 #include <memory>
 #include <samurai/io/net/dns/resolver.h>
@@ -65,4 +65,4 @@ class BuiltinResolver :
 }
 }
 
-#endif // HAVE_QUICKDC_DNSRESOLVER_BUILTIN_H
+#endif // HAVE_SAMURAI_DNSRESOLVER_BUILTIN_H

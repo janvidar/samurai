@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_SOCKET_SSL_API_H
-#define HAVE_QUICKDC_SOCKET_SSL_API_H
+#ifndef HAVE_SAMURAI_SOCKET_SSL_API_H
+#define HAVE_SAMURAI_SOCKET_SSL_API_H
 
 #include <samurai/io/net/socketglue.h>
 #include <string>
@@ -146,5 +146,5 @@ class TlsFactory {
 }
 }
 
-#endif // HAVE_QUICKDC_SOCKET_SSL_API_H
+#endif // HAVE_SAMURAI_SOCKET_SSL_API_H
 

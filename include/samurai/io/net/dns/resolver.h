@@ -4,8 +4,8 @@
  */
 
 
-#ifndef HAVE_QUICKDC_DNSRESOLVER_H
-#define HAVE_QUICKDC_DNSRESOLVER_H
+#ifndef HAVE_SAMURAI_DNSRESOLVER_H
+#define HAVE_SAMURAI_DNSRESOLVER_H
 
 namespace Samurai {
 namespace IO {
@@ -57,4 +57,4 @@ class Resolver {
 }
 }
 
-#endif // HAVE_QUICKDC_DNSRESOLVER_H
+#endif // HAVE_SAMURAI_DNSRESOLVER_H

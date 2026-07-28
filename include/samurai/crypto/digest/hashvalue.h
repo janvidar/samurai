@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_HASH_VALUE_H
-#define HAVE_QUICKDC_HASH_VALUE_H
+#ifndef HAVE_SAMURAI_HASH_VALUE_H
+#define HAVE_SAMURAI_HASH_VALUE_H
 
 #include <samurai/samurai.h>
 
@@ -62,4 +62,4 @@ class HashValue
 }
 }
 
-#endif // HAVE_QUICKDC_HASH_VALUE_H
+#endif // HAVE_SAMURAI_HASH_VALUE_H

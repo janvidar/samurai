@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_QUICKDC_BANDWIDTH_ESTIMATION_H
-#define HAVE_QUICKDC_BANDWIDTH_ESTIMATION_H
+#ifndef HAVE_SAMURAI_BANDWIDTH_ESTIMATION_H
+#define HAVE_SAMURAI_BANDWIDTH_ESTIMATION_H
 
 #include <time.h>
 
@@ -32,4 +32,4 @@ class RateEstimator {
 }
 }
 
-#endif // HAVE_QUICKDC_BANDWIDTH_ESTIMATION_H
+#endif // HAVE_SAMURAI_BANDWIDTH_ESTIMATION_H

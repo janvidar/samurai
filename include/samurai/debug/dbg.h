@@ -22,44 +22,44 @@
 #if defined(DEBUG)
 
 #if !defined(QDBG)
-#define QDBG(format, ...)  do { QuickDC_Debug(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0);
+#define QDBG(format, ...)  do { samurai_debug(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0);
 #endif
 
 #if !defined(QERR)
-#define QERR(format, ...)  do { QuickDC_Error(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0);
+#define QERR(format, ...)  do { samurai_error(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0);
 #endif
 
 #if !defined(QNET)
-#define QNET(format, ...)  do { QuickDC_Net  (__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0);
+#define QNET(format, ...)  do { samurai_net(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0);
 #endif
 
 #if !defined(QSEARCH)
-#define QSEARCH(format, ...)  do { QuickDC_Search(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0);
+#define QSEARCH(format, ...)  do { samurai_search(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0);
 #endif
 
 #if !defined(QHUB)
-#define QHUB(format, ...)  do { QuickDC_Hub(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0);
+#define QHUB(format, ...)  do { samurai_hub(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0);
 #endif
 
 #if !defined(QDBG_INIT)
-#define QDBG_INIT do { QuickDC_Debug_Init(); } while(0);
+#define QDBG_INIT do { samurai_debug_init(); } while(0);
 #endif
 
 #if !defined(QDBG_FINI)
-#define QDBG_FINI do { QuickDC_Debug_Fini(); } while(0);
+#define QDBG_FINI do { samurai_debug_fini(); } while(0);
 #endif
 
-void QuickDC_Debug_Init();
-void QuickDC_Debug_Fini();
+void samurai_debug_init();
+void samurai_debug_fini();
 
-void QuickDC_Debug(const char* func, const char* file, int line, const char *format, ...);
-void QuickDC_Error(const char* func, const char* file, int line, const char *format, ...);
-void QuickDC_Net(const char* func, const char* file, int line, const char *format, ...);
-void QuickDC_Search(const char* func, const char* file, int line, const char *format, ...);
-void QuickDC_Hub(const char* func, const char* file, int line, const char *format, ...);
+void samurai_debug(const char* func, const char* file, int line, const char *format, ...);
+void samurai_error(const char* func, const char* file, int line, const char *format, ...);
+void samurai_net(const char* func, const char* file, int line, const char *format, ...);
+void samurai_search(const char* func, const char* file, int line, const char *format, ...);
+void samurai_hub(const char* func, const char* file, int line, const char *format, ...);
 
-#ifdef QUICKDC_MEMDBG
-void QuickDC_Memory(const char* func, void* addr, size_t size, void* code_addr, void* code_addr_up);
+#ifdef SAMURAI_MEMDBG
+void samurai_memory(const char* func, void* addr, size_t size, void* code_addr, void* code_addr_up);
 #endif
 
 
