@@ -59,7 +59,7 @@ Samurai::IO::Net::Socket::Socket(SocketEventHandler* eh, const InetAddress& addr
 }
 
 Samurai::IO::Net::Socket::Socket(socket_t sd_, const Samurai::IO::Net::SocketAddress& addr_) :
-	SocketBase(sd_, addr_, Stream),
+	SocketBase(sd_, addr_, SocketType::Stream),
 	address(nullptr),
 	port(0),
 	autoConnectAfterLookup(false),
@@ -90,7 +90,7 @@ void Samurai::IO::Net::Socket::setEventHandler(Samurai::IO::Net::SocketEventHand
 }
 
 void Samurai::IO::Net::Socket::lookup() {
-	if (state != Disconnected) return;
+	if (state != SocketState::Disconnected) return;
 
 	if (address) {
 		if (eventHandler) eventHandler->EventHostLookup(this);
@@ -105,7 +105,7 @@ void Samurai::IO::Net::Socket::handleMonitorEvent(int trig)
 	{
 		switch (state)
 		{
-			case Connected:
+			case SocketState::Connected:
 			{
 				char buf[1];
 #ifndef SAMURAI_WINSOCK
@@ -133,17 +133,17 @@ void Samurai::IO::Net::Socket::handleMonitorEvent(int trig)
 			break;
 
 
-			case SSLBye:
-			case SSLHandshake:
-			case SSLConnected:
+			case SocketState::SSLBye:
+			case SocketState::SSLHandshake:
+			case SocketState::SSLConnected:
 				/* NOTE: This is a *read* event, so it has to dispatch to
 				   internal_canRead().
 
-				   No MSG_PEEK probe as in the Connected case above: a
+				   No MSG_PEEK probe as in the SocketState::Connected case above: a
 				   complete TLS record may already be buffered inside the
 				   TLS library while the socket itself reads empty, so
 				   peeking would skip valid reads. End-of-stream arrives
-				   as TLS_STATUS_CLOSED through read() instead. */
+				   as TlsStatus::Closed through read() instead. */
 				internal_canRead();
 				break;
 
@@ -158,14 +158,14 @@ void Samurai::IO::Net::Socket::handleMonitorEvent(int trig)
 	{
 		switch (state)
 		{
-			case Connecting:
+			case SocketState::Connecting:
 				internal_connected();
 				break;
 
-			case SSLBye:
-			case SSLHandshake:
-			case Connected:
-			case SSLConnected:
+			case SocketState::SSLBye:
+			case SocketState::SSLHandshake:
+			case SocketState::Connected:
+			case SocketState::SSLConnected:
 				internal_canWrite();
 				break;
 
@@ -180,7 +180,7 @@ void Samurai::IO::Net::Socket::handleMonitorEvent(int trig)
 	if (trig & (SocketMonitor::MError | SocketMonitor::MClose))
 	{
 		/* The MRead path may already have torn this down; do not report twice. */
-		if (state == Invalid || state == Disconnected)
+		if (state == SocketState::Invalid || state == SocketState::Disconnected)
 			return;
 
 		if (trig & SocketMonitor::MError)
@@ -201,25 +201,25 @@ void Samurai::IO::Net::Socket::handleMonitorEvent(int trig)
 
 size_t Samurai::IO::Net::Socket::bufferedInput() const
 {
-	if (state != SSLConnected || !tls) return 0;
+	if (state != SocketState::SSLConnected || !tls) return 0;
 	return tls->pending();
 }
 
 void Samurai::IO::Net::Socket::internal_canRead()
 {
-	if (state == Connected
-		|| state == SSLConnected
+	if (state == SocketState::Connected
+		|| state == SocketState::SSLConnected
 	) {
 		if (eventHandler)
 			eventHandler->EventDataAvailable(this);
 	}
 
-	if (state == SSLHandshake)
+	if (state == SocketState::SSLHandshake)
 	{
 		TLSsendHandshake();
 	}
 
-	if (state == SSLBye)
+	if (state == SocketState::SSLBye)
 	{
 		TLSsendGoodbye();
 	}
@@ -227,27 +227,27 @@ void Samurai::IO::Net::Socket::internal_canRead()
 
 void Samurai::IO::Net::Socket::internal_canWrite()
 {
-	if (state == Connected
-		|| state == SSLConnected
+	if (state == SocketState::Connected
+		|| state == SocketState::SSLConnected
 	)
 	{
 		if (eventHandler)
 			eventHandler->EventCanWrite(this);
 	}
 
-	if (state == SSLHandshake)
+	if (state == SocketState::SSLHandshake)
 	{
 		TLSsendHandshake();
 	}
 
-	if (state == SSLBye)
+	if (state == SocketState::SSLBye)
 	{
 		TLSsendGoodbye();
 	}
 }
 
 void Samurai::IO::Net::Socket::internal_error(int socket_error) {
-	state = Invalid;
+	state = SocketState::Invalid;
 	const char* message = "Unknown socket error.";
 	switch (socket_error)
 	{
@@ -269,7 +269,7 @@ void Samurai::IO::Net::Socket::internal_error(int socket_error) {
 }
 
 void Samurai::IO::Net::Socket::internal_closed() {
-	state = Disconnected;
+	state = SocketState::Disconnected;
 	if (eventHandler) eventHandler->EventDisconnected(this);
 	disableMonitor();
 }
@@ -300,7 +300,7 @@ void Samurai::IO::Net::Socket::internal_connected() {
 #endif // SAMURAI_POSIX
 
 	toggleWriteNotifier(false);
-	state = Connected;
+	state = SocketState::Connected;
 	if (eventHandler) eventHandler->EventConnected(this);
 }
 
@@ -313,7 +313,7 @@ void Samurai::IO::Net::Socket::internal_timeout() {
 
 void Samurai::IO::Net::Socket::connect()
 {
-	if (!(state == Disconnected || state == HostFound)) return;
+	if (!(state == SocketState::Disconnected || state == SocketState::HostFound)) return;
 
 	if (addr == nullptr) {
 		autoConnectAfterLookup = true;
@@ -322,14 +322,14 @@ void Samurai::IO::Net::Socket::connect()
 	}
 
 	if (!createDescriptor(addr->getSockAddrFamily())) {
-		state = Invalid;
+		state = SocketState::Invalid;
 		disableMonitor();
 		if (eventHandler) eventHandler->EventError(this, SocketUnknown, strerror(NETERROR));
 		return;
 	}
 
 	if (!setNonBlocking(true)) {
-		state = Invalid;
+		state = SocketState::Invalid;
 		disableMonitor();
 		if (eventHandler) eventHandler->EventError(this, SocketUnknown, strerror(NETERROR));
 		return;
@@ -344,13 +344,13 @@ void Samurai::IO::Net::Socket::connect()
 	timer = std::make_unique<Samurai::Timer>(this, CONNECT_TIMEOUT, true);
 	if (ret == -1) {
 		if (NETERROR == EINPROGRESS) {
-			state = Connecting;
+			state = SocketState::Connecting;
 			if (eventHandler) {
 				eventHandler->EventConnecting(this);
 			}
 			return;
 		} else {
-			state = Invalid;
+			state = SocketState::Invalid;
 			disableMonitor();
 			if (eventHandler) eventHandler->EventError(this, SocketUnknown, strerror(NETERROR));
 			return;
@@ -363,12 +363,12 @@ void Samurai::IO::Net::Socket::connect()
 
 void Samurai::IO::Net::Socket::disconnect() {
 	switch (state) {
-		case Connecting:
-		case Connected:
-		case SSLHandshake:
-		case SSLConnected:
-		case SSLBye:
-			state = Disconnected;
+		case SocketState::Connecting:
+		case SocketState::Connected:
+		case SocketState::SSLHandshake:
+		case SocketState::SSLConnected:
+		case SocketState::SSLBye:
+			state = SocketState::Disconnected;
 			if (eventHandler) eventHandler->EventDisconnected(this);
 			break;
 
@@ -381,8 +381,8 @@ void Samurai::IO::Net::Socket::disconnect() {
 
 
 ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
-	if (state != Connected
-	 && state != SSLConnected
+	if (state != SocketState::Connected
+	 && state != SocketState::SSLConnected
 		)
 	{
 		if (eventHandler) eventHandler->EventError(this, SocketWrite, "Not connected");
@@ -391,27 +391,27 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 
 	ssize_t ret = 0;
 
-	if (state == SSLConnected && tls)
+	if (state == SocketState::SSLConnected && tls)
 	{
-		enum Samurai::IO::Net::TlsFactory::TlsStatus status;
+		Samurai::IO::Net::TlsFactory::TlsStatus status;
 
 		ret = tls->write(data, length, status);
 
 		switch (status) {
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_OK:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Ok:
 				return ret;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::WantWrite:
 				toggleWriteNotifier(true);
 				return 0;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_READ:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::WantRead:
 				return 0;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_CLOSED:
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Closed:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Error:
 				if (eventHandler) eventHandler->EventTLSDisconnected(this);
-				state = Invalid;
+				state = SocketState::Invalid;
 				disableMonitor();
 				if (eventHandler) eventHandler->EventError(this, SocketWrite, "FIXME: SSL/TLS send error");
 				return -1;
@@ -427,7 +427,7 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 			if (NETERROR == EAGAIN || NETERROR == EWOULDBLOCK || NETERROR == EINTR) {
 				return 0;
 			} else {
-				state = Invalid;
+				state = SocketState::Invalid;
 				disableMonitor();
 				if (eventHandler) eventHandler->EventError(this, SocketWrite, strerror(NETERROR));
 				return -1;
@@ -447,34 +447,34 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 
 
 ssize_t Samurai::IO::Net::Socket::read(char* data, size_t length) {
-	if (state != Connected
-	 && state != SSLConnected
+	if (state != SocketState::Connected
+	 && state != SocketState::SSLConnected
 		)
 	{
 		if (eventHandler) eventHandler->EventError(this, SocketRead, "Not connected");
 		return 0; // nothing was read.
 	}
 	ssize_t ret = 0;
-	if (state == SSLConnected && tls)
+	if (state == SocketState::SSLConnected && tls)
 	{
-		enum Samurai::IO::Net::TlsFactory::TlsStatus status;
+		Samurai::IO::Net::TlsFactory::TlsStatus status;
 		ret = tls->read(data, length, status);
 
 		switch (status) {
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_OK:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Ok:
 				return ret;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::WantWrite:
 				toggleWriteNotifier(true);
 				return 0;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_READ:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::WantRead:
 				return 0;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_CLOSED:
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Closed:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Error:
 				if (eventHandler) eventHandler->EventTLSDisconnected(this);
-				state = Invalid;
+				state = SocketState::Invalid;
 				disableMonitor();
 				if (eventHandler) eventHandler->EventError(this, SocketRead, "FIXME: SSL/TLS read error");
 				return -1;
@@ -490,7 +490,7 @@ ssize_t Samurai::IO::Net::Socket::read(char* data, size_t length) {
 				return 0;
 			}
 
-			state = Invalid;
+			state = SocketState::Invalid;
 			disableMonitor();
 			if (eventHandler) eventHandler->EventError(this, SocketRead, strerror(NETERROR));
 			return 0; // nothing was read.
@@ -502,34 +502,34 @@ ssize_t Samurai::IO::Net::Socket::read(char* data, size_t length) {
 
 
 ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
-	if (state != Connected
-	 && state != SSLConnected
+	if (state != SocketState::Connected
+	 && state != SocketState::SSLConnected
 		)
 	{
 		if (eventHandler) eventHandler->EventError(this, SocketRead, "Not connected");
 		return 0;
 	}
 
-	if (state == SSLConnected && tls)
+	if (state == SocketState::SSLConnected && tls)
 	{
-		enum Samurai::IO::Net::TlsFactory::TlsStatus status;
+		Samurai::IO::Net::TlsFactory::TlsStatus status;
 		ssize_t tls_ret = tls->peek(data, length, status);
 
 		switch (status) {
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_OK:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Ok:
 				return tls_ret;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::WantWrite:
 				toggleWriteNotifier(true);
 				return 0;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_READ:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::WantRead:
 				return 0;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_CLOSED:
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Closed:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Error:
 				if (eventHandler) eventHandler->EventTLSDisconnected(this);
-				state = Invalid;
+				state = SocketState::Invalid;
 				disableMonitor();
 				if (eventHandler) eventHandler->EventError(this, SocketRead, "SSL/TLS peek error");
 				return 0;
@@ -544,7 +544,7 @@ ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
 			return 0;
 		}
 
-		state = Invalid;
+		state = SocketState::Invalid;
 		disableMonitor();
 		if (eventHandler) eventHandler->EventError(this, SocketRead, strerror(NETERROR));
 		return 0;
@@ -556,21 +556,21 @@ ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
 void Samurai::IO::Net::Socket::EventHostFound(const Samurai::IO::Net::InetAddress* resolved_addr) {
 	addr = std::make_unique<InetSocketAddress>(*resolved_addr, port);
 
-	state = HostFound;
+	state = SocketState::HostFound;
 	if (eventHandler) eventHandler->EventHostFound(this);
 	if (autoConnectAfterLookup) connect();
 }
 
 
 void Samurai::IO::Net::Socket::EventHostError(enum Samurai::IO::Net::DNS::Resolver::Error /*error*/) {
-	state = Invalid;
+	state = SocketState::Invalid;
 	disableMonitor();
 	if (eventHandler) eventHandler->EventError(this, HostNotFound, "Host not found.");
 }
 
 
 void Samurai::IO::Net::Socket::EventTimeout(Samurai::Timer*) {
-	if (state == Connecting) {
+	if (state == SocketState::Connecting) {
 		internal_timeout();
 	}
 
@@ -598,8 +598,8 @@ bool Samurai::IO::Net::Socket::TLSInitialize(bool server) {
 	if (!server && address && !address->getHostname().empty())
 		tls->setPeerName(address->getHostname());
 
-	enum Samurai::IO::Net::TlsFactory::TlsStatus status = tls->initialize(server ? Samurai::IO::Net::TlsFactory::TLS_OPERATE_SERVER : Samurai::IO::Net::TlsFactory::TLS_OPERATE_CLIENT, sd);
-	return (status == Samurai::IO::Net::TlsFactory::TLS_STATUS_OK);
+	Samurai::IO::Net::TlsFactory::TlsStatus status = tls->initialize(server ? Samurai::IO::Net::TlsFactory::TlsOperation::Server : Samurai::IO::Net::TlsFactory::TlsOperation::Client, sd);
+	return (status == Samurai::IO::Net::TlsFactory::TlsStatus::Ok);
 }
 
 
@@ -611,34 +611,34 @@ void Samurai::IO::Net::Socket::TLSDeinitialize() {
 
 
 void Samurai::IO::Net::Socket::TLSsendHandshake() {
-	if (tls && (state == Connected || state == SSLHandshake)) {
-		state = SSLHandshake;
-		enum Samurai::IO::Net::TlsFactory::TlsStatus status;
+	if (tls && (state == SocketState::Connected || state == SocketState::SSLHandshake)) {
+		state = SocketState::SSLHandshake;
+		Samurai::IO::Net::TlsFactory::TlsStatus status;
 		status = tls->sendHandshake();
 		switch (status) {
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_OK:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Ok:
 				toggleWriteNotifier(false);
-				state = SSLConnected;
+				state = SocketState::SSLConnected;
 				if (eventHandler) eventHandler->EventTLSConnected(this);
 				break;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::WantWrite:
 				toggleWriteNotifier(true);
-				state = SSLHandshake; /* try again */
+				state = SocketState::SSLHandshake; /* try again */
 				break;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_READ:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::WantRead:
 				toggleWriteNotifier(false);
-				state = SSLHandshake; /* try again */
+				state = SocketState::SSLHandshake; /* try again */
 				break;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_CLOSED:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Closed:
 				toggleWriteNotifier(false);
-				state = Connected;
+				state = SocketState::Connected;
 				/* wtf? */
 				break;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Error:
 				toggleWriteNotifier(false);
 				QERR("TLS handshake failed.");
 				close();
@@ -656,34 +656,34 @@ bool Samurai::IO::Net::Socket::TLSgetPeerCertificateSHA256(uint8_t* digest, size
 
 
 void Samurai::IO::Net::Socket::TLSsendGoodbye() {
-	if (tls && (state == SSLConnected || state == SSLBye)) {
-		state = SSLBye;
-		enum Samurai::IO::Net::TlsFactory::TlsStatus status;
+	if (tls && (state == SocketState::SSLConnected || state == SocketState::SSLBye)) {
+		state = SocketState::SSLBye;
+		Samurai::IO::Net::TlsFactory::TlsStatus status;
 		status = tls->sendGoodbye();
 		switch (status) {
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_OK:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Ok:
 				toggleWriteNotifier(false);
-				state = Connected;
+				state = SocketState::Connected;
 				if (eventHandler) eventHandler->EventTLSDisconnected(this);
 				break;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::WantWrite:
 				toggleWriteNotifier(true);
-				state = SSLBye; /* try again */
+				state = SocketState::SSLBye; /* try again */
 				break;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_READ:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::WantRead:
 				toggleWriteNotifier(false);
-				state = SSLBye; /* try again */
+				state = SocketState::SSLBye; /* try again */
 				break;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_CLOSED:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Closed:
 				toggleWriteNotifier(false);
-				state = Connected;
+				state = SocketState::Connected;
 				/* wtf? */
 				break;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Error:
 				toggleWriteNotifier(false);
 				QERR("TLS goodbye failed.");
 				close();
@@ -709,33 +709,33 @@ Samurai::IO::ReadResult Samurai::IO::Net::Socket::read(char* data, size_t length
 	transferred = 0;
 	ec.clear();
 
-	if (state != Connected && state != SSLConnected)
+	if (state != SocketState::Connected && state != SocketState::SSLConnected)
 	{
 		ec = Samurai::system_error(ENOTCONN);
 		return Samurai::IO::ReadError;
 	}
 
-	if (state == SSLConnected && tls)
+	if (state == SocketState::SSLConnected && tls)
 	{
-		enum Samurai::IO::Net::TlsFactory::TlsStatus status;
+		Samurai::IO::Net::TlsFactory::TlsStatus status;
 		ssize_t ret = tls->read(data, length, status);
 
 		switch (status) {
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_OK:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Ok:
 				if (ret > 0) { transferred = (size_t) ret; return Samurai::IO::ReadOk; }
 				return Samurai::IO::ReadEndOfFile;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::WantWrite:
 				toggleWriteNotifier(true);
 				return Samurai::IO::ReadWouldBlock;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_READ:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::WantRead:
 				return Samurai::IO::ReadWouldBlock;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_CLOSED:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Closed:
 				return Samurai::IO::ReadEndOfFile;
 
-			case Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR:
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Error:
 				ec = Samurai::system_error(EPROTO);
 				return Samurai::IO::ReadError;
 		}
@@ -770,7 +770,7 @@ Samurai::IO::ReadResult Samurai::IO::Net::Socket::peek(char* data, size_t length
 	transferred = 0;
 	ec.clear();
 
-	if (state != Connected && state != SSLConnected)
+	if (state != SocketState::Connected && state != SocketState::SSLConnected)
 	{
 		ec = Samurai::system_error(ENOTCONN);
 		return Samurai::IO::ReadError;
@@ -793,13 +793,13 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length, std::er
 {
 	ec.clear();
 
-	if (state != Connected && state != SSLConnected)
+	if (state != SocketState::Connected && state != SocketState::SSLConnected)
 	{
 		ec = Samurai::system_error(ENOTCONN);
 		return -1;
 	}
 
-	if (state == SSLConnected && tls)
+	if (state == SocketState::SSLConnected && tls)
 		return write(data, length);
 
 	ssize_t ret = ::send(sd, data, length, SAMURAI_SENDFLAGS);
@@ -830,7 +830,7 @@ ssize_t Samurai::IO::Net::Socket::write(std::span<const std::string_view> buffer
 {
 	ec.clear();
 
-	if (state != Connected && state != SSLConnected)
+	if (state != SocketState::Connected && state != SocketState::SSLConnected)
 	{
 		ec = Samurai::system_error(ENOTCONN);
 		return -1;
@@ -839,7 +839,7 @@ ssize_t Samurai::IO::Net::Socket::write(std::span<const std::string_view> buffer
 	/* TLS has no vectored write, so the buffers go out one record at a time.
 	   Stopping at the first short write keeps the partial-write contract: what
 	   is reported as written is a prefix of the whole sequence. */
-	if (state == SSLConnected && tls)
+	if (state == SocketState::SSLConnected && tls)
 	{
 		ssize_t total = 0;
 		for (size_t n = 0; n < buffers.size(); n++)

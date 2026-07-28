@@ -24,16 +24,16 @@ class OpenSSL final : public TlsFactory {
 		OpenSSL(const OpenSSL&) = delete;
 		OpenSSL& operator=(const OpenSSL&) = delete;
 	
-		enum TlsStatus initialize(enum TlsOperation mode, socket_t sd) override;
-		enum TlsStatus deinitialize() override;
-		enum TlsStatus sendHandshake() override;
-		enum TlsStatus sendGoodbye() override;
+		TlsStatus initialize(TlsOperation mode, socket_t sd) override;
+		TlsStatus deinitialize() override;
+		TlsStatus sendHandshake() override;
+		TlsStatus sendGoodbye() override;
 
 		bool getPeerCertificateSHA256(uint8_t* digest, size_t length) override;
 
-		ssize_t write(const char* data, size_t length, enum TlsStatus& status) override;
-		ssize_t read(char* data, size_t length, enum TlsStatus& status) override;
-		ssize_t peek(char* data, size_t length, enum TlsStatus& status) override;
+		ssize_t write(const char* data, size_t length, TlsStatus& status) override;
+		ssize_t read(char* data, size_t length, TlsStatus& status) override;
+		ssize_t peek(char* data, size_t length, TlsStatus& status) override;
 
 		size_t pending() const override;
 

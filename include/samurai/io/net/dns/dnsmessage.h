@@ -57,10 +57,10 @@ class MessageHeader {
 
 		enum QueryType getQueryType() {
 			switch ((flags_u16 & 0x7800) >> 11) {
-				case 0: return DNS_QT_QUERY;
-				case 1: return DNS_QT_IQUERY;
-				case 2: return DNS_QT_STATUS;
-				default: return DNS_QT_RESERVED;
+				case 0: return QueryType::Query;
+				case 1: return QueryType::InverseQuery;
+				case 2: return QueryType::Status;
+				default: return QueryType::Reserved;
 			}
 		}
 
@@ -106,14 +106,14 @@ class MessageHeader {
 		enum ResponseCode getResponseCode()
 		{
 			switch (flags_u16 & 0x000f) {
-				case 0: return DNS_STATUS_OK;
-				case 1: return DNS_STATUS_FORMAT_ERROR;
-				case 2: return DNS_STATUS_SERVER_ERROR;
-				case 3: return DNS_STATUS_NAME_ERROR;
-				case 4: return DNS_STATUS_NOT_IMPLEMENTED;
-				case 5: return DNS_STATUS_REFUSED;
+				case 0: return ResponseCode::Ok;
+				case 1: return ResponseCode::FormatError;
+				case 2: return ResponseCode::ServerError;
+				case 3: return ResponseCode::NameError;
+				case 4: return ResponseCode::NotImplemented;
+				case 5: return ResponseCode::Refused;
 				default:
-					return DNS_STATUS_RESERVED;
+					return ResponseCode::Reserved;
 			}
 		}
 
@@ -182,6 +182,22 @@ class Message {
 
 		bool decodeName(size_t& offset, Name& name, size_t recursion = 0, size_t maxlen = 0);
 		bool decode16Bits(size_t& offset, uint16_t& data);
+
+		/**
+		 * Read a 16 bit field into one of the scoped wire enums.
+		 *
+		 * The single place an arbitrary value off the network becomes a Type or
+		 * a Class: neither enumerates every value a peer may send, so the cast
+		 * is deliberate and belongs here rather than at each call site.
+		 */
+		template<typename E>
+		bool decodeEnum16(size_t& offset, E& value)
+		{
+			uint16_t raw = 0;
+			if (!decode16Bits(offset, raw)) return false;
+			value = static_cast<E>(raw);
+			return true;
+		}
 		bool decode32Bits(size_t& offset, uint32_t& data);
 		bool decodeS32Bits(size_t& offset, int32_t& data);
 		

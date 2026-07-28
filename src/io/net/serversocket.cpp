@@ -18,18 +18,18 @@
 Samurai::IO::Net::ServerSocket::ServerSocket() : eventHandler(nullptr) {}
 
 Samurai::IO::Net::ServerSocket::ServerSocket(ServerSocketEventHandler* eh, const Samurai::IO::Net::SocketAddress& addr_) :
-	Samurai::IO::Net::SocketBase(addr_, Stream), eventHandler(eh)
+	Samurai::IO::Net::SocketBase(addr_, SocketType::Stream), eventHandler(eh)
 {
 	internal_create();
 }
 
-Samurai::IO::Net::ServerSocket::ServerSocket(Samurai::IO::Net::ServerSocketEventHandler* eh, const Samurai::IO::Net::InetAddress& addr_, uint16_t port_) : Samurai::IO::Net::SocketBase(Samurai::IO::Net::InetSocketAddress(addr_, port_), Stream), eventHandler(eh)
+Samurai::IO::Net::ServerSocket::ServerSocket(Samurai::IO::Net::ServerSocketEventHandler* eh, const Samurai::IO::Net::InetAddress& addr_, uint16_t port_) : Samurai::IO::Net::SocketBase(Samurai::IO::Net::InetSocketAddress(addr_, port_), SocketType::Stream), eventHandler(eh)
 {
 	internal_create();
 }
 
 Samurai::IO::Net::ServerSocket::ServerSocket(ServerSocketEventHandler* eh, uint16_t port_) :
-	Samurai::IO::Net::SocketBase(Samurai::IO::Net::InetSocketAddress(port_), Stream), eventHandler(eh)
+	Samurai::IO::Net::SocketBase(Samurai::IO::Net::InetSocketAddress(port_), SocketType::Stream), eventHandler(eh)
 {
 	internal_create();
 }
@@ -78,7 +78,7 @@ void Samurai::IO::Net::ServerSocket::handleMonitorEvent(int trig)
 
 	if (trig & (SocketMonitor::MError | SocketMonitor::MClose))
 	{
-		QERR("Listening socket signalled error/hangup, disabling monitor");
+		QERR("SocketState::Listening socket signalled error/hangup, disabling monitor");
 		disableMonitor();
 	}
 }

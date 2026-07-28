@@ -28,7 +28,7 @@ namespace Samurai {
 			{
 				public:
 					enum Version { Unspecified, IPv4, IPv6 };
-					enum ResolveState { Unresolved, Resolving, ResolveError, Resolved };
+					enum class ResolveState { Unresolved, Resolving, ResolveError, Resolved };
 					
 				public:
 					InetAddress();
@@ -120,7 +120,7 @@ namespace Samurai {
 					std::unique_ptr<struct __InternalAddress> data;
 					std::string hostname;
 					std::unique_ptr<Samurai::IO::Net::DNS::Resolver> resolver;
-					enum ResolveState resolveState;
+					ResolveState resolveState;
 					ResolveEventHandler* dnsevent;
 					
 				friend class InetSocketAddress;

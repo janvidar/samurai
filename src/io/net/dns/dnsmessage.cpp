@@ -191,7 +191,7 @@ bool Samurai::IO::Net::DNS::Message::decodeName(size_t& offset, Name& name, size
 
 enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode()
 {
-	if (!buffer) return DNS_STATUS_FORMAT_ERROR;
+	if (!buffer) return ResponseCode::FormatError;
 	
 	size_t offset  = 0;
 	if (!decode16Bits(offset, header.id) ||
@@ -200,7 +200,7 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 			!decode16Bits(offset, header.ancount) ||
 			!decode16Bits(offset, header.nscount) ||
 			!decode16Bits(offset, header.arcount))
-		return DNS_STATUS_FORMAT_ERROR;
+		return ResponseCode::FormatError;
 
 	QDBG("DNS Response: id=%d, flags=%x, qd=%d, an=%d, ns=%d, ar=%d", header.id, header.flags_u16, header.qdcount, header.ancount, header.nscount, header.arcount);
 	QDBG("* flags: { message type=%s, query type=%s, authorative=%s, truncated=%s, recursion desired=%s, recursion available=%s, response_code=%s }",
@@ -212,15 +212,15 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 		(header.isRecursionAvailable() ? "yes" : "no"),
 		header.getResponseCodeStr());
 
-	if (!header.isValid()) return DNS_STATUS_FORMAT_ERROR;
+	if (!header.isValid()) return ResponseCode::FormatError;
 	
 	for (int q = 0; q < (int) header.qdcount; q++) {
 		Question question;
 
 		if (!decodeName(offset, question.name, 0, 0) ||
-			!decode16Bits(offset, question.type_class.rr_type) ||
-			!decode16Bits(offset, question.type_class.rr_class))
-		 return DNS_STATUS_FORMAT_ERROR;
+			!decodeEnum16(offset, question.type_class.rr_type) ||
+			!decodeEnum16(offset, question.type_class.rr_class))
+		 return ResponseCode::FormatError;
 
 		QDBG("name='%s', type=%d, class=%d", question.name.toString().c_str(), (int) question.type_class.rr_type, (int) question.type_class.rr_class);
 	}
@@ -242,13 +242,13 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 		auto record = std::make_unique<ResourceRecord>();
 
 		if (!decodeName(offset, record->name, 0, 0) ||
-			!decode16Bits(offset, record->type_class.rr_type) ||
-			!decode16Bits(offset, record->type_class.rr_class) ||
+			!decodeEnum16(offset, record->type_class.rr_type) ||
+			!decodeEnum16(offset, record->type_class.rr_class) ||
 			!decodeS32Bits(offset, record->ttl) ||
 			!decode16Bits(offset, record->rdLength))
 		{
 			QDBG("Malformed resource record header");
-			return DNS_STATUS_FORMAT_ERROR;
+			return ResponseCode::FormatError;
 		}
 
 		if (buffer->size() - offset < record->rdLength) {
@@ -257,46 +257,46 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 		}
 
 		size_t maxRdOffset = (size_t) offset + record->rdLength;
-		if (maxRdOffset > buffer->size()) { QDBG("Record data runs past the message"); return DNS_STATUS_FORMAT_ERROR; }
+		if (maxRdOffset > buffer->size()) { QDBG("Record data runs past the message"); return ResponseCode::FormatError; }
 
-		if (record->type_class.rr_type == Type_CNAME) {
+		if (record->type_class.rr_type == Type::CNAME) {
 			Name name;
-			if (!decodeName(offset, name, 0, maxRdOffset)) { QDBG("Malformed CNAME"); return DNS_STATUS_FORMAT_ERROR; }
+			if (!decodeName(offset, name, 0, maxRdOffset)) { QDBG("Malformed CNAME"); return ResponseCode::FormatError; }
 			record->rr = std::make_unique<RR_CNAME>(name);
 
-		} else if (record->type_class.rr_type == Type_PTR) {
+		} else if (record->type_class.rr_type == Type::PTR) {
 			Name name;
-			if (!decodeName(offset, name, 0, maxRdOffset)) { QDBG("Malformed PTR"); return DNS_STATUS_FORMAT_ERROR; }
+			if (!decodeName(offset, name, 0, maxRdOffset)) { QDBG("Malformed PTR"); return ResponseCode::FormatError; }
 			record->rr = std::make_unique<RR_PTR>(name);
 
-		} else if (record->type_class.rr_type == Type_NS) {
+		} else if (record->type_class.rr_type == Type::NS) {
 			Name name;
-			if (!decodeName(offset, name, 0, maxRdOffset)) { QDBG("Malformed NS"); return DNS_STATUS_FORMAT_ERROR; }
+			if (!decodeName(offset, name, 0, maxRdOffset)) { QDBG("Malformed NS"); return ResponseCode::FormatError; }
 			record->rr = std::make_unique<RR_NS>(name);
 
-		} else if (record->type_class.rr_type == Type_A) {
+		} else if (record->type_class.rr_type == Type::A) {
 			/* An A record is exactly four bytes. A shorter one would leave the
 			 * remaining bytes of the address undefined. */
-			if (record->rdLength != 4) { QDBG("A record is not 4 bytes"); return DNS_STATUS_FORMAT_ERROR; }
+			if (record->rdLength != 4) { QDBG("A record is not 4 bytes"); return ResponseCode::FormatError; }
 			char addr_bytes[4];
 			if (buffer->pop(addr_bytes, offset, sizeof(addr_bytes)) != sizeof(addr_bytes))
-				{ QDBG("Truncated A record"); return DNS_STATUS_FORMAT_ERROR; }
+				{ QDBG("Truncated A record"); return ResponseCode::FormatError; }
 			offset += record->rdLength;
 			Samurai::IO::Net::InetAddress inet_addr;
 			inet_addr.setRawAddress(addr_bytes, sizeof(addr_bytes), Samurai::IO::Net::InetAddress::IPv4);
 			record->rr = std::make_unique<RR_A>(inet_addr);
 
-		} else if (record->type_class.rr_type == Type_AAAA) {
-			if (record->rdLength != 16) { QDBG("AAAA record is not 16 bytes"); return DNS_STATUS_FORMAT_ERROR; }
+		} else if (record->type_class.rr_type == Type::AAAA) {
+			if (record->rdLength != 16) { QDBG("AAAA record is not 16 bytes"); return ResponseCode::FormatError; }
 			char addr_bytes[16];
 			if (buffer->pop(addr_bytes, offset, sizeof(addr_bytes)) != sizeof(addr_bytes))
-				{ QDBG("Truncated AAAA record"); return DNS_STATUS_FORMAT_ERROR; }
+				{ QDBG("Truncated AAAA record"); return ResponseCode::FormatError; }
 			offset += record->rdLength;
 			Samurai::IO::Net::InetAddress inet_addr;
 			inet_addr.setRawAddress(addr_bytes, sizeof(addr_bytes), Samurai::IO::Net::InetAddress::IPv6);
 			record->rr = std::make_unique<RR_AAAA>(inet_addr);
 
-		} else if (record->type_class.rr_type == Type_SOA) {
+		} else if (record->type_class.rr_type == Type::SOA) {
 			Name primary;
 			Name email;
 			uint32_t serial = 0;
@@ -311,7 +311,7 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 					!decode32Bits(offset, retry) ||
 					!decode32Bits(offset, expire) ||
 					!decodeS32Bits(offset, ttl))
-				{ QDBG("Malformed SOA"); return DNS_STATUS_FORMAT_ERROR; }
+				{ QDBG("Malformed SOA"); return ResponseCode::FormatError; }
 
 			record->rr = std::make_unique<RR_SOA>(primary, email, serial, refresh, retry, expire, ttl);
 
@@ -324,7 +324,7 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 		records.push_back(record.release());
 	}
 
-	return DNS_STATUS_OK;
+	return ResponseCode::Ok;
 }
 
 
@@ -338,7 +338,7 @@ Samurai::IO::Net::DNS::ResourceRecord* Samurai::IO::Net::DNS::Message::getRecord
 	for (std::vector<Samurai::IO::Net::DNS::ResourceRecord*>::iterator it = records.begin(); it != records.end(); it++) {
 		Samurai::IO::Net::DNS::ResourceRecord* record = (*it);
 		QDBG("Record: '%s' == '%s', %d\n", record->name.toString().c_str(), name->toString().c_str(), (int) record->type_class.rr_type);
-		if (record->name == *name /*&& record->type_class.rr_type == (uint16_t) Type_A*/)
+		if (record->name == *name /*&& record->type_class.rr_type == (uint16_t) Type::A*/)
 		{
 			QDBG("Match!\n");
 			return record;

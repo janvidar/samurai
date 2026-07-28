@@ -19,17 +19,17 @@ namespace Net {
 
 class TlsFactory {
 	public:
-		enum TlsOperation {
-			TLS_OPERATE_CLIENT,	/**<< Operate as a TLS/SSL client */
-			TLS_OPERATE_SERVER	/**<< Operate as a TLS/SSL server */
+		enum class TlsOperation {
+			Client,	/**<< Operate as a TLS/SSL client */
+			Server	/**<< Operate as a TLS/SSL server */
 		};
 
-		enum TlsStatus {
-			TLS_STATUS_OK,
-			TLS_STATUS_WANT_WRITE,
-			TLS_STATUS_WANT_READ,
-			TLS_STATUS_CLOSED,
-			TLS_STATUS_ERROR
+		enum class TlsStatus {
+			Ok,
+			WantWrite,
+			WantRead,
+			Closed,
+			Error
 		};
 
 		virtual ~TlsFactory() { }
@@ -62,22 +62,22 @@ class TlsFactory {
 		/**
 		 * Initialize SSL contexts, etc.
 		 */
-		virtual enum TlsStatus initialize(enum TlsOperation mode, socket_t sd) = 0;
+		virtual TlsStatus initialize(TlsOperation mode, socket_t sd) = 0;
 	
 		/**
 		 * Deinitialize SSL contexts, etc.
 		 */
-		virtual enum TlsStatus deinitialize() = 0;
+		virtual TlsStatus deinitialize() = 0;
 
 		/**
 		 * Send SSL handshake.
 		 */
-		virtual enum TlsStatus sendHandshake() = 0;
+		virtual TlsStatus sendHandshake() = 0;
 	
 		/**
 		 * Send SSL goodbye.
 		 */
-		virtual enum TlsStatus sendGoodbye() = 0;
+		virtual TlsStatus sendGoodbye() = 0;
 		
 		/**
 		 * Perform a global initializeation of the TLS stack.
@@ -112,9 +112,9 @@ class TlsFactory {
 		
 
 	public:
-		virtual ssize_t write(const char* data, size_t length, enum TlsStatus& status) = 0;
-		virtual ssize_t read(char* data, size_t length, enum TlsStatus& status) = 0;
-		virtual ssize_t peek(char* data, size_t length, enum TlsStatus& status) = 0;
+		virtual ssize_t write(const char* data, size_t length, TlsStatus& status) = 0;
+		virtual ssize_t read(char* data, size_t length, TlsStatus& status) = 0;
+		virtual ssize_t peek(char* data, size_t length, TlsStatus& status) = 0;
 
 		/**
 		 * Decrypted application data already held by the TLS layer, waiting to
@@ -130,7 +130,7 @@ class TlsFactory {
 
 	protected:
 		socket_t sd;
-		enum TlsOperation mode;
+		TlsOperation mode;
 		std::string peer_name;
 
 		/* Owned here. getPrivateKey() and getCertificate() hand out a

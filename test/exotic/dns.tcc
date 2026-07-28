@@ -83,8 +83,8 @@ EXO_TEST(dns_header_defaults_zero,
 EXO_TEST(dns_typeclass_defaults_invalid,
 {
 	Samurai::IO::Net::DNS::TypeClass tc;
-	return tc.rr_type == Samurai::IO::Net::DNS::Type_Invalid
-		&& tc.rr_class == Samurai::IO::Net::DNS::Class_Invalid;
+	return tc.rr_type == Samurai::IO::Net::DNS::Type::Invalid
+		&& tc.rr_class == Samurai::IO::Net::DNS::Class::Invalid;
 });
 
 EXO_TEST(dns_resourcerecord_defaults,
@@ -207,14 +207,14 @@ EXO_TEST(dns_header_response_code,
 {
 	Samurai::IO::Net::DNS::MessageHeader h;
 	h.flags_u16 = 0x8183;
-	return h.getResponseCode() == Samurai::IO::Net::DNS::DNS_STATUS_NAME_ERROR;
+	return h.getResponseCode() == Samurai::IO::Net::DNS::ResponseCode::NameError;
 });
 
 EXO_TEST(dns_header_query_type,
 {
 	Samurai::IO::Net::DNS::MessageHeader h;
 	h.flags_u16 = 0x0000;
-	return h.getQueryType() == Samurai::IO::Net::DNS::DNS_QT_QUERY;
+	return h.getQueryType() == Samurai::IO::Net::DNS::QueryType::Query;
 });
 
 /* ------------------------------------------------------------------------- */
@@ -232,7 +232,7 @@ EXO_TEST(dns_decode_header_does_not_sign_extend,
 	Samurai::IO::Buffer buf;
 	buf.append(dns_header_ra_only, sizeof(dns_header_ra_only));
 	Samurai::IO::Net::DNS::Message msg(&buf);
-	return msg.decode() == Samurai::IO::Net::DNS::DNS_STATUS_OK;
+	return msg.decode() == Samurai::IO::Net::DNS::ResponseCode::Ok;
 });
 
 /* 0x0080 has bit 0x8000 clear, so this is a query. Sign extension would set
@@ -251,13 +251,13 @@ EXO_TEST(dns_decode_truncated_header_fails,
 	Samurai::IO::Buffer buf;
 	buf.append(dns_truncated, sizeof(dns_truncated));
 	Samurai::IO::Net::DNS::Message msg(&buf);
-	return msg.decode() == Samurai::IO::Net::DNS::DNS_STATUS_FORMAT_ERROR;
+	return msg.decode() == Samurai::IO::Net::DNS::ResponseCode::FormatError;
 });
 
 EXO_TEST(dns_decode_no_buffer_fails,
 {
 	Samurai::IO::Net::DNS::Message msg;
-	return msg.decode() == Samurai::IO::Net::DNS::DNS_STATUS_FORMAT_ERROR;
+	return msg.decode() == Samurai::IO::Net::DNS::ResponseCode::FormatError;
 });
 
 EXO_TEST(dns_decode_answer_a_ok,
@@ -265,7 +265,7 @@ EXO_TEST(dns_decode_answer_a_ok,
 	Samurai::IO::Buffer buf;
 	buf.append(dns_answer_a, sizeof(dns_answer_a));
 	Samurai::IO::Net::DNS::Message msg(&buf);
-	return msg.decode() == Samurai::IO::Net::DNS::DNS_STATUS_OK
+	return msg.decode() == Samurai::IO::Net::DNS::ResponseCode::Ok
 		&& msg.isResponse();
 });
 
@@ -286,8 +286,8 @@ EXO_TEST(dns_decode_answer_a_type_and_ttl,
 	msg.decode();
 	Samurai::IO::Net::DNS::ResourceRecord* rec = msg.getRecord((size_t) 0);
 	if (!rec) return false;
-	return rec->type_class.rr_type == Samurai::IO::Net::DNS::Type_A
-		&& rec->type_class.rr_class == Samurai::IO::Net::DNS::Class_IN
+	return rec->type_class.rr_type == Samurai::IO::Net::DNS::Type::A
+		&& rec->type_class.rr_class == Samurai::IO::Net::DNS::Class::IN
 		&& rec->ttl == 256
 		&& rec->rdLength == 4;
 });
@@ -313,7 +313,7 @@ EXO_TEST(dns_decode_short_a_record_rejected,
 	Samurai::IO::Buffer buf;
 	buf.append(dns_answer_a_short, sizeof(dns_answer_a_short));
 	Samurai::IO::Net::DNS::Message msg(&buf);
-	return msg.decode() == Samurai::IO::Net::DNS::DNS_STATUS_FORMAT_ERROR;
+	return msg.decode() == Samurai::IO::Net::DNS::ResponseCode::FormatError;
 });
 
 /* ------------------------------------------------------------------------- */

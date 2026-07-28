@@ -20,7 +20,7 @@ class SocketMonitor;
 class SocketAddress;
 class InetAddress;
 
-enum SocketState
+enum class SocketState
 {
 	Disconnected,
 	HostLookup,
@@ -64,12 +64,12 @@ enum SocketError
  */
 class SocketBase : public std::enable_shared_from_this<SocketBase> {
 	public:
-		enum SocketType { Stream, Datagram };
+		enum class SocketType { Stream, Datagram };
 		
-		SocketBase(const Samurai::IO::Net::InetAddress& addr, uint16_t port, enum SocketType = Stream);
-		SocketBase(socket_t sd_, const Samurai::IO::Net::SocketAddress& addr, enum SocketType = Stream);
-		SocketBase(const Samurai::IO::Net::SocketAddress& addr, enum SocketType = Stream);
-		SocketBase(enum SocketType = Stream);
+		SocketBase(const Samurai::IO::Net::InetAddress& addr, uint16_t port, SocketType = SocketType::Stream);
+		SocketBase(socket_t sd_, const Samurai::IO::Net::SocketAddress& addr, SocketType = SocketType::Stream);
+		SocketBase(const Samurai::IO::Net::SocketAddress& addr, SocketType = SocketType::Stream);
+		SocketBase(SocketType = SocketType::Stream);
 		virtual ~SocketBase();
 
 		/* Releases raw pointers in its destructor, so the implicit copy
@@ -223,12 +223,12 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		bool createDescriptor(int af);
 		bool isIPv6() const;
 		
-		void setState(enum SocketState state);
+		void setState(SocketState state);
 
 	protected:
 		socket_t sd;
 		std::unique_ptr<Samurai::IO::Net::SocketAddress> addr;
-		enum SocketState state;
+		SocketState state;
 
 		/*
 		 * Where getAddress() and getLocalAddress() keep the object they hand
@@ -242,7 +242,7 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		// See SocketMonitor::Triggers
 		int monitor_trigger;
 		bool monitored;
-		enum SocketType type;
+		SocketType type;
 		Samurai::IO::Net::BandwidthManager* bandwidthManager;
 		
 	friend class SocketMonitor;
