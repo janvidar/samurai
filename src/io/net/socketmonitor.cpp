@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <algorithm>
 #include <samurai/samurai.h>
 #include <samurai/io/net/socketglue.h>
 #include <samurai/io/net/socketbase.h>
@@ -110,10 +111,9 @@ void Samurai::IO::Net::SocketMonitor::wait(int time_ms)
 
 bool Samurai::IO::Net::SocketMonitor::haveBufferedInput() const
 {
-	std::map<socket_t, std::weak_ptr<SocketBase> >::const_iterator it;
-	for (it = registry.begin(); it != registry.end(); it++)
+	for (const auto& [fd, weak] : registry)
 	{
-		std::shared_ptr<SocketBase> socket = it->second.lock();
+		const std::shared_ptr<SocketBase> socket = weak.lock();
 		if (socket && socket->bufferedInput())
 			return true;
 	}
@@ -129,16 +129,15 @@ void Samurai::IO::Net::SocketMonitor::dispatchBufferedInput()
 	   that has since gone away. */
 	std::vector<socket_t> ready;
 
-	std::map<socket_t, std::weak_ptr<SocketBase> >::const_iterator it;
-	for (it = registry.begin(); it != registry.end(); it++)
+	for (const auto& [fd, weak] : registry)
 	{
-		std::shared_ptr<SocketBase> socket = it->second.lock();
+		const std::shared_ptr<SocketBase> socket = weak.lock();
 		if (socket && socket->bufferedInput())
-			ready.push_back(it->first);
+			ready.push_back(fd);
 	}
 
-	for (size_t n = 0; n < ready.size(); n++)
-		dispatch(ready[n], Samurai::IO::Net::SocketMonitor::Triggers::Read);
+	for (const socket_t fd : ready)
+		dispatch(fd, Samurai::IO::Net::SocketMonitor::Triggers::Read);
 }
 
 

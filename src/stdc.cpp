@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <algorithm>
 #include <samurai/samurai.h>
 #include <samurai/stdc.h>
 #include <stdlib.h>
@@ -122,8 +123,8 @@ uint16_t Samurai::Util::Convert::to_uint16(const std::string& str)
 {
 	if (str.empty()) return 0;
 
-	for (std::string::const_iterator it = str.begin(); it != str.end(); ++it)
-		if (*it < '0' || *it > '9') return 0;
+	if (!std::ranges::all_of(str, [](const char c) { return c >= '0' && c <= '9'; }))
+		return 0;
 
 	const int64_t n = to_int64(str.c_str());
 	if (n < 0 || n > 65535) return 0;

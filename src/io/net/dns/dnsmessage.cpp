@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <algorithm>
 #include <samurai/io/net/dns/dnsmessage.h>
 #include <samurai/io/net/datagram.h>
 #include <samurai/io/net/inetaddress.h>
@@ -53,10 +54,8 @@ bool Samurai::IO::Net::DNS::Message::isResponse()
 bool Samurai::IO::Net::DNS::Message::isOffsetOK(size_t offset)
 {
 	if (offset > DNS_NAME_SIZE) return false;
-	uint8_t t = (uint8_t) offset;
-	for (std::vector<uint8_t>::iterator it = compTbl.begin(); it != compTbl.end(); it++)
-		if (t == (*it)) return true;
-	return false;
+	const uint8_t t = (uint8_t) offset;
+	return std::ranges::find(compTbl, t) != compTbl.end();
 }
 
 void Samurai::IO::Net::DNS::Message::addOffset(size_t offset) {
@@ -336,8 +335,7 @@ Samurai::IO::Net::DNS::ResourceRecord* Samurai::IO::Net::DNS::Message::getRecord
 	if (!name) return nullptr;
 	
 	QDBG("Records: %d\n", (int) records.size());
-	for (std::vector<Samurai::IO::Net::DNS::ResourceRecord*>::iterator it = records.begin(); it != records.end(); it++) {
-		Samurai::IO::Net::DNS::ResourceRecord* record = (*it);
+	for (Samurai::IO::Net::DNS::ResourceRecord* record : records) {
 		QDBG("Record: '%s' == '%s', %d\n", record->name.toString().c_str(), name->toString().c_str(), (int) record->type_class.rr_type);
 		if (record->name == *name /*&& record->type_class.rr_type == (uint16_t) Type::A*/)
 		{
