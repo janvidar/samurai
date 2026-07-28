@@ -52,8 +52,16 @@ void Samurai::IO::Net::DatagramPacket::setData(const uint8_t* buf, size_t len) {
 
 void Samurai::IO::Net::DatagramPacket::setAddress(Samurai::IO::Net::SocketAddress* addr_)
 {
-	delete addr; addr = 0;
-	addr = new InetSocketAddress(dynamic_cast<InetSocketAddress*>(addr_));
+	delete addr;
+	addr = 0;
+
+	/*
+	 * Only an InetSocketAddress can be copied here, and the cast has to be
+	 * checked before the result is used: the pointer-taking constructor
+	 * dereferences its argument, so a failed cast would go straight through it.
+	 */
+	if (InetSocketAddress* isa = dynamic_cast<InetSocketAddress*>(addr_))
+		addr = new InetSocketAddress(*isa);
 }
 
 Samurai::IO::Net::SocketAddress* Samurai::IO::Net::DatagramPacket::getAddress()

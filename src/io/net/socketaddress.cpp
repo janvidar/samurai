@@ -9,7 +9,6 @@
 
 Samurai::IO::Net::InetSocketAddress::InetSocketAddress()
 {
-	data = 0;
 	addr = new Samurai::IO::Net::InetAddress();
 	port = 0;
 }
@@ -17,7 +16,6 @@ Samurai::IO::Net::InetSocketAddress::InetSocketAddress()
 
 Samurai::IO::Net::InetSocketAddress::InetSocketAddress(const Samurai::IO::Net::InetSocketAddress& isa) : Samurai::IO::Net::SocketAddress()
 {
-	data = 0;
 	addr = new Samurai::IO::Net::InetAddress(isa.addr);
 	port = isa.port;
 }
@@ -25,7 +23,6 @@ Samurai::IO::Net::InetSocketAddress::InetSocketAddress(const Samurai::IO::Net::I
 
 Samurai::IO::Net::InetSocketAddress::InetSocketAddress(const Samurai::IO::Net::InetSocketAddress* isa)
 {
-	data = 0;
 	addr = new Samurai::IO::Net::InetAddress(isa->addr);
 	port = isa->port;
 }
@@ -33,7 +30,6 @@ Samurai::IO::Net::InetSocketAddress::InetSocketAddress(const Samurai::IO::Net::I
 
 Samurai::IO::Net::InetSocketAddress::InetSocketAddress(const Samurai::IO::Net::InetAddress& addr_, uint16_t port_)
 {
-	data = 0;
 	addr = new Samurai::IO::Net::InetAddress(addr_);
 	port = port_;
 }
@@ -41,7 +37,6 @@ Samurai::IO::Net::InetSocketAddress::InetSocketAddress(const Samurai::IO::Net::I
 
 Samurai::IO::Net::InetSocketAddress::InetSocketAddress(uint16_t port_)
 {
-	data = 0;
 	addr = new Samurai::IO::Net::InetAddress("0.0.0.0");
 	port = port_;
 }
@@ -49,7 +44,6 @@ Samurai::IO::Net::InetSocketAddress::InetSocketAddress(uint16_t port_)
 
 Samurai::IO::Net::InetSocketAddress::InetSocketAddress(const char* ip, uint16_t port_, enum Samurai::IO::Net::InetAddress::Version  version)
 {
-	data = 0;
 	addr = new Samurai::IO::Net::InetAddress(ip, version);
 	port = port_;
 }
@@ -58,7 +52,23 @@ Samurai::IO::Net::InetSocketAddress::InetSocketAddress(const char* ip, uint16_t 
 Samurai::IO::Net::InetSocketAddress::~InetSocketAddress()
 {
 	delete addr;
-	delete data;
+}
+
+
+Samurai::IO::Net::InetSocketAddress& Samurai::IO::Net::InetSocketAddress::operator=(const Samurai::IO::Net::InetSocketAddress& isa)
+{
+	if (this == &isa) return *this;
+
+	Samurai::IO::Net::InetAddress* replacement =
+		new Samurai::IO::Net::InetAddress(*isa.addr);
+	delete addr;
+	addr = replacement;
+	port = isa.port;
+
+	/* Discard the cached sockaddr rather than copying it; it is rebuilt from
+	   the new address on the next getSockAddr(). */
+	data.clear();
+	return *this;
 }
 
 
@@ -108,28 +118,30 @@ int Samurai::IO::Net::InetSocketAddress::getSockAddrFamily()
 
 struct sockaddr* Samurai::IO::Net::InetSocketAddress::getSockAddr()
 {
-	if (data) return data;
+	if (!data.empty()) return reinterpret_cast<struct sockaddr*>(data.data());
 
 	if (addr->getType() == Samurai::IO::Net::InetAddress::IPv4) {
-		struct sockaddr_in* sa = new struct sockaddr_in();
-		sa->sin_family = AF_INET;
-		sa->sin_port = htons(port);
-		memcpy(&sa->sin_addr, (void*) &addr->data->internal.in, sizeof(struct in_addr));
-		data = (sockaddr*) sa;
-		
+		struct sockaddr_in sa = {};
+		sa.sin_family = AF_INET;
+		sa.sin_port = htons(port);
+		memcpy(&sa.sin_addr, (void*) &addr->data->internal.in, sizeof(struct in_addr));
+		data.resize(sizeof(sa));
+		memcpy(data.data(), &sa, sizeof(sa));
+
 	} else if (addr->getType() == Samurai::IO::Net::InetAddress::IPv6) {
-		struct sockaddr_in6* sa = new struct sockaddr_in6();
-		sa->sin6_family = AF_INET6;
-		sa->sin6_port = htons(port);
-		sa->sin6_flowinfo = 0; // FIXME: ?
-		memcpy(&sa->sin6_addr, (void*) &addr->data->internal.in6, sizeof(struct in6_addr));
-		sa->sin6_scope_id = 0; // FIXME: ?
-		data = (sockaddr*) sa;
+		struct sockaddr_in6 sa = {};
+		sa.sin6_family = AF_INET6;
+		sa.sin6_port = htons(port);
+		sa.sin6_flowinfo = 0; // FIXME: ?
+		memcpy(&sa.sin6_addr, (void*) &addr->data->internal.in6, sizeof(struct in6_addr));
+		sa.sin6_scope_id = 0; // FIXME: ?
+		data.resize(sizeof(sa));
+		memcpy(data.data(), &sa, sizeof(sa));
 	} else {
 		return 0;
 	}
 
-	return data;
+	return reinterpret_cast<struct sockaddr*>(data.data());
 }
 
 
@@ -151,6 +163,9 @@ void Samurai::IO::Net::InetSocketAddress::setRawSocketAddress(void* sockaddr_dat
 	addr = new InetAddress();
 	addr->setRawAddress(sockaddr_data, sockaddr_len, version_);
 	port = port_;
+
+	/* The cached sockaddr described the previous address. */
+	data.clear();
 }
 
 

@@ -224,7 +224,15 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		socket_t sd;
 		Samurai::IO::Net::SocketAddress* addr;
 		enum SocketState state;
+
+		/*
+		 * Where getAddress() and getLocalAddress() keep the object they hand
+		 * out. They are separate because both return a pointer the caller may
+		 * still be holding when the other is called; sharing one would make
+		 * each call silently rewrite the other's result.
+		 */
 		mutable InetAddress* ia;
+		mutable InetAddress* local_ia;
 
 		// See SocketMonitor::Triggers
 		int monitor_trigger;
