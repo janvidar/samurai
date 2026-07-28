@@ -426,9 +426,11 @@ bool Samurai::IO::File::isExcecutable()  const
 
 const std::string& Samurai::IO::File::getExtension() const
 {
-	size_t pos = filename.rfind('.');
-	if (pos != std::string::npos)
-		temp = filename.substr(pos+1);
+	const std::string name = std::filesystem::path(filename).filename().string();
+
+	size_t pos = name.rfind('.');
+	if (pos != std::string::npos && pos != 0)
+		temp = name.substr(pos+1);
 	else
 		temp = "";
 	return temp;
