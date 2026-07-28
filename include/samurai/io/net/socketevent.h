@@ -136,7 +136,7 @@ class ResolveEventHandler : public EventHandler {
 	public:
 		/* Borrowed for the duration of the call; copy it to keep it. */
 		virtual void EventHostFound(const InetAddress* addr) = 0;
-		virtual void EventHostError(enum Samurai::IO::Net::DNS::Resolver::Error error) = 0;
+		virtual void EventHostError(Samurai::IO::Net::DNS::Resolver::Error error) = 0;
 	
 	friend class Resolver;
 

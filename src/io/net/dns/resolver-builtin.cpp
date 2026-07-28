@@ -53,7 +53,7 @@ void Samurai::IO::Net::DNS::BuiltinResolver::lookup(const char* name)
 
 void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 
-	enum Samurai::IO::Net::DNS::Type dns_type = Type::A;
+	Samurai::IO::Net::DNS::Type dns_type = Type::A;
 	if (dnsConfiguration()->isIPv6()) dns_type = Type::AAAA;
 
 	/*
@@ -82,12 +82,12 @@ void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 	uint16_t qdcount = 1;
 
 	/* Global DNS header */
-	buffer->appendBinary((uint16_t) jobId,     Samurai::IO::Buffer::BigEndian);
-	buffer->appendBinary((uint16_t) flags,     Samurai::IO::Buffer::BigEndian);
-	buffer->appendBinary((uint16_t) qdcount,   Samurai::IO::Buffer::BigEndian);
-	buffer->appendBinary((uint16_t) 0x0000,    Samurai::IO::Buffer::BigEndian);
-	buffer->appendBinary((uint16_t) 0x0000,    Samurai::IO::Buffer::BigEndian);
-	buffer->appendBinary((uint16_t) 0x0000,    Samurai::IO::Buffer::BigEndian);
+	buffer->appendBinary((uint16_t) jobId,     Samurai::IO::Buffer::BinaryMode::BigEndian);
+	buffer->appendBinary((uint16_t) flags,     Samurai::IO::Buffer::BinaryMode::BigEndian);
+	buffer->appendBinary((uint16_t) qdcount,   Samurai::IO::Buffer::BinaryMode::BigEndian);
+	buffer->appendBinary((uint16_t) 0x0000,    Samurai::IO::Buffer::BinaryMode::BigEndian);
+	buffer->appendBinary((uint16_t) 0x0000,    Samurai::IO::Buffer::BinaryMode::BigEndian);
+	buffer->appendBinary((uint16_t) 0x0000,    Samurai::IO::Buffer::BinaryMode::BigEndian);
 
 	QDBG("Adding request for: '%s'", rrname.toString().c_str());
 
@@ -99,8 +99,8 @@ void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 		buffer->append(part);
 	}
 	buffer->append((char) 0x00);
-	buffer->appendBinary((uint16_t) dns_type, Samurai::IO::Buffer::BigEndian);
-	buffer->appendBinary((uint16_t) Class::IN, Samurai::IO::Buffer::BigEndian);
+	buffer->appendBinary((uint16_t) dns_type, Samurai::IO::Buffer::BinaryMode::BigEndian);
+	buffer->appendBinary((uint16_t) Class::IN, Samurai::IO::Buffer::BinaryMode::BigEndian);
 
 	auto packet = std::make_unique<DatagramPacket>(buffer.get());
 
@@ -125,7 +125,7 @@ void Samurai::IO::Net::DNS::BuiltinResolver::EventGotDatagram(DatagramSocket*, D
 
 	Samurai::IO::Buffer* buffer = packet->getBuffer();
 	Samurai::IO::Net::DNS::Message msg(buffer);
-	enum Samurai::IO::Net::DNS::ResponseCode code = msg.decode();
+	Samurai::IO::Net::DNS::ResponseCode code = msg.decode();
 
 	Samurai::IO::Net::DNS::CacheStorage* cache = Samurai::IO::Net::DNS::CacheStorage::getInstance();
 

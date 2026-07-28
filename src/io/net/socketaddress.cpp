@@ -83,10 +83,10 @@ std::string  Samurai::IO::Net::InetSocketAddress::toString()
 	const std::string address = addr.toString();
 	const std::string portstr = std::to_string(port);
 
-	if (addr.getType() == Samurai::IO::Net::InetAddress::IPv4)
+	if (addr.getType() == Samurai::IO::Net::InetAddress::Version::IPv4)
 		return address + ":" + portstr;
 
-	if (addr.getType() == Samurai::IO::Net::InetAddress::IPv6)
+	if (addr.getType() == Samurai::IO::Net::InetAddress::Version::IPv6)
 		return "[" + address + "]:" + portstr;
 
 	return std::string();
@@ -100,9 +100,9 @@ bool Samurai::IO::Net::InetSocketAddress::isLinkLocal() {
 
 int Samurai::IO::Net::InetSocketAddress::getSockAddrFamily()
 {
-	if (addr.getType() == Samurai::IO::Net::InetAddress::IPv4) {
+	if (addr.getType() == Samurai::IO::Net::InetAddress::Version::IPv4) {
 		return AF_INET;
-	} else if (addr.getType() == Samurai::IO::Net::InetAddress::IPv6) {
+	} else if (addr.getType() == Samurai::IO::Net::InetAddress::Version::IPv6) {
 		return AF_INET6;
 	} else {
 		return AF_UNSPEC;
@@ -114,7 +114,7 @@ struct sockaddr* Samurai::IO::Net::InetSocketAddress::getSockAddr()
 {
 	if (!data.empty()) return reinterpret_cast<struct sockaddr*>(data.data());
 
-	if (addr.getType() == Samurai::IO::Net::InetAddress::IPv4) {
+	if (addr.getType() == Samurai::IO::Net::InetAddress::Version::IPv4) {
 		struct sockaddr_in sa = {};
 		sa.sin_family = AF_INET;
 		sa.sin_port = htons(port);
@@ -122,7 +122,7 @@ struct sockaddr* Samurai::IO::Net::InetSocketAddress::getSockAddr()
 		data.resize(sizeof(sa));
 		memcpy(data.data(), &sa, sizeof(sa));
 
-	} else if (addr.getType() == Samurai::IO::Net::InetAddress::IPv6) {
+	} else if (addr.getType() == Samurai::IO::Net::InetAddress::Version::IPv6) {
 		struct sockaddr_in6 sa = {};
 		sa.sin6_family = AF_INET6;
 		sa.sin6_port = htons(port);
@@ -142,9 +142,9 @@ struct sockaddr* Samurai::IO::Net::InetSocketAddress::getSockAddr()
 
 size_t Samurai::IO::Net::InetSocketAddress::getSockAddrSize()
 {
-	if (addr.getType() == Samurai::IO::Net::InetAddress::IPv4) {
+	if (addr.getType() == Samurai::IO::Net::InetAddress::Version::IPv4) {
 		return sizeof(struct sockaddr_in);
-	} else if (addr.getType() == Samurai::IO::Net::InetAddress::IPv6) {
+	} else if (addr.getType() == Samurai::IO::Net::InetAddress::Version::IPv6) {
 		return sizeof(struct sockaddr_in6);
 	} else {
 		return 0;

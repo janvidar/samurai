@@ -76,20 +76,20 @@ void Samurai::IO::Net::DNS::Message::addOffset(size_t offset) {
  */
 
 bool Samurai::IO::Net::DNS::Message::decode16Bits(size_t& offset, uint16_t& data) {
-	if (!buffer->popBinary(offset, data, Samurai::IO::Buffer::BigEndian)) return false;
+	if (!buffer->popBinary(offset, data, Samurai::IO::Buffer::BinaryMode::BigEndian)) return false;
 	offset += sizeof(data);
 	return true;
 }
 
 bool Samurai::IO::Net::DNS::Message::decode32Bits(size_t& offset, uint32_t& data) {
-	if (!buffer->popBinary(offset, data, Samurai::IO::Buffer::BigEndian)) return false;
+	if (!buffer->popBinary(offset, data, Samurai::IO::Buffer::BinaryMode::BigEndian)) return false;
 	offset += sizeof(data);
 	return true;
 }
 
 bool Samurai::IO::Net::DNS::Message::decodeS32Bits(size_t& offset, int32_t& data_) {
 	uint32_t data = 0;
-	if (!buffer->popBinary(offset, data, Samurai::IO::Buffer::BigEndian)) return false;
+	if (!buffer->popBinary(offset, data, Samurai::IO::Buffer::BinaryMode::BigEndian)) return false;
 
 	/* A TTL is a 31 bit value; the top bit is reserved and treated as zero. */
 	data_ = (int32_t) (data & 0x7fffffff);
@@ -189,7 +189,7 @@ bool Samurai::IO::Net::DNS::Message::decodeName(size_t& offset, Name& name, size
 }
 
 
-enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode()
+Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode()
 {
 	if (!buffer) return ResponseCode::FormatError;
 	
@@ -283,7 +283,7 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 				{ QDBG("Truncated A record"); return ResponseCode::FormatError; }
 			offset += record->rdLength;
 			Samurai::IO::Net::InetAddress inet_addr;
-			inet_addr.setRawAddress(addr_bytes, sizeof(addr_bytes), Samurai::IO::Net::InetAddress::IPv4);
+			inet_addr.setRawAddress(addr_bytes, sizeof(addr_bytes), Samurai::IO::Net::InetAddress::Version::IPv4);
 			record->rr = std::make_unique<RR_A>(inet_addr);
 
 		} else if (record->type_class.rr_type == Type::AAAA) {
@@ -293,7 +293,7 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 				{ QDBG("Truncated AAAA record"); return ResponseCode::FormatError; }
 			offset += record->rdLength;
 			Samurai::IO::Net::InetAddress inet_addr;
-			inet_addr.setRawAddress(addr_bytes, sizeof(addr_bytes), Samurai::IO::Net::InetAddress::IPv6);
+			inet_addr.setRawAddress(addr_bytes, sizeof(addr_bytes), Samurai::IO::Net::InetAddress::Version::IPv6);
 			record->rr = std::make_unique<RR_AAAA>(inet_addr);
 
 		} else if (record->type_class.rr_type == Type::SOA) {

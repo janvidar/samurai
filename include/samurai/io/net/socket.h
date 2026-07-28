@@ -85,8 +85,8 @@ class Socket :
 		 * Read up to 'length' bytes.
 		 *
 		 * @param transferred set to the number of bytes read (0 unless the
-		 *        result is ReadOk).
-		 * @param ec set when the result is ReadError.
+		 *        result is Samurai::IO::ReadResult::Ok).
+		 * @param ec set when the result is Samurai::IO::ReadResult::Error.
 		 *
 		 * NOTE: the ssize_t overloads below cannot distinguish a peer that
 		 * closed from one that has simply sent nothing yet, nor either of
@@ -193,7 +193,7 @@ class Socket :
 		bool checkConnectTimeout();
 
 		void EventHostFound(const InetAddress* addr) override;
-		void EventHostError(enum Samurai::IO::Net::DNS::Resolver::Error error) override;
+		void EventHostError(Samurai::IO::Net::DNS::Resolver::Error error) override;
 		void EventTimeout(Samurai::Timer* timer) override;
 		
 	friend class ServerSocket;

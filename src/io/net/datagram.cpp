@@ -85,7 +85,7 @@ Samurai::IO::Buffer* Samurai::IO::Net::DatagramPacket::getBuffer() {
 
 Samurai::IO::Net::DatagramSocket::DatagramSocket(DatagramEventHandler* eh, enum InetAddress::Version version) : SocketBase(SocketType::Datagram), eventHandler(eh), myPacket(nullptr)
 {
-	int af = (version == InetAddress::IPv4 ? AF_INET : version == InetAddress::IPv6 ? AF_INET6 : AF_UNSPEC);
+	int af = (version == InetAddress::Version::IPv4 ? AF_INET : version == InetAddress::Version::IPv6 ? AF_INET6 : AF_UNSPEC);
 	createDescriptor(af);
 }
 
@@ -186,7 +186,7 @@ int Samurai::IO::Net::DatagramSocket::read(DatagramPacket* packet) {
 	size_t length = sizeof(readbuf);
 	uint8_t* data = readbuf;
 
-	/* sockaddr_storage, so the source address of an IPv6 datagram fits too. */
+	/* sockaddr_storage, so the source address of an Version::IPv6 datagram fits too. */
 	struct sockaddr_storage sa;
 	socklen_t sl = sizeof(sa);
 	memset(&sa, 0, sizeof(sa));
@@ -209,12 +209,12 @@ int Samurai::IO::Net::DatagramSocket::read(DatagramPacket* packet) {
 	if (sa.ss_family == AF_INET) {
 		struct sockaddr_in* sin = (struct sockaddr_in*) &sa;
 		taddr.setRawSocketAddress(&sin->sin_addr, sizeof(sin->sin_addr),
-		                          ntohs(sin->sin_port), Samurai::IO::Net::InetAddress::IPv4);
+		                          ntohs(sin->sin_port), Samurai::IO::Net::InetAddress::Version::IPv4);
 		have_addr = true;
 	} else if (sa.ss_family == AF_INET6) {
 		struct sockaddr_in6* sin6 = (struct sockaddr_in6*) &sa;
 		taddr.setRawSocketAddress(&sin6->sin6_addr, sizeof(sin6->sin6_addr),
-		                          ntohs(sin6->sin6_port), Samurai::IO::Net::InetAddress::IPv6);
+		                          ntohs(sin6->sin6_port), Samurai::IO::Net::InetAddress::Version::IPv6);
 		have_addr = true;
 	}
 

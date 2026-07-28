@@ -56,7 +56,7 @@ bool Samurai::Crypto::Digest::HashValue::getFormattedString(enum Format format, 
 	const size_t size = m_data.size();
 
 	buf[0] = 0;
-	if (format == FormatHex) {
+	if (format == Format::Hex) {
 		/* Two characters per byte, plus the terminator. */
 		if (buflen < (size*2)+1)
 			return false;
@@ -64,7 +64,7 @@ bool Samurai::Crypto::Digest::HashValue::getFormattedString(enum Format format, 
 			snprintf(&buf[n*2], 3, "%02x", (unsigned) m_data[n]);
 		buf[size*2] = 0;
 
-	} else  if (format == FormatBase32) {
+	} else  if (format == Format::Base32) {
 		/* NOTE: base32 expands rather than contracts - every 5 bits become
 		   one character, so the output is ceil(size*8/5) characters plus a
 		   terminator. */

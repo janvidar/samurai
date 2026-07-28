@@ -20,7 +20,7 @@ EXO_TEST(inet_addr_invalid_1,
 EXO_TEST(inet_addr_invalid_2,
 {
 	Samurai::IO::Net::InetAddress addr;
-	return addr.getType() == Samurai::IO::Net::InetAddress::Unspecified;
+	return addr.getType() == Samurai::IO::Net::InetAddress::Version::Unspecified;
 });
 
 EXO_TEST(inet_addr_invalid_3,
@@ -44,7 +44,7 @@ EXO_TEST(inet_addr_invalid_5,
 
 EXO_TEST(inet_addr_ipv4_basic_1,
 {
-	Samurai::IO::Net::InetAddress addr("1.2.3.4", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("1.2.3.4", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isValid();
 });
 
@@ -56,13 +56,13 @@ EXO_TEST(inet_addr_ipv4_basic_1,
    does so on some platforms. */
 EXO_TEST(inet_addr_ipv4_leading_zeros_rejected,
 {
-	Samurai::IO::Net::InetAddress addr("001.002.003.004", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("001.002.003.004", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return !addr.isValid();
 });
 
 EXO_TEST(inet_addr_ipv4_basic_3,
 {
-	Samurai::IO::Net::InetAddress addr("1.2.3.4", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("1.2.3.4", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isResolved();
 });
 
@@ -75,7 +75,7 @@ EXO_TEST(inet_addr_ipv4_basic_4,
 EXO_TEST(inet_addr_ipv4_basic_5,
 {
 	Samurai::IO::Net::InetAddress addr("localhost");
-	return addr.getType() == Samurai::IO::Net::InetAddress::Unspecified;
+	return addr.getType() == Samurai::IO::Net::InetAddress::Version::Unspecified;
 });
 
 EXO_TEST(inet_addr_ipv4_basic_6,
@@ -87,13 +87,13 @@ EXO_TEST(inet_addr_ipv4_basic_6,
 EXO_TEST(inet_addr_ipv4_basic_7,
 {
 	Samurai::IO::Net::InetAddress addr("1.2.3.4");
-	return addr.getType() == Samurai::IO::Net::InetAddress::IPv4;
+	return addr.getType() == Samurai::IO::Net::InetAddress::Version::IPv4;
 });
 
 EXO_TEST(inet_addr_ipv4_basic_8,
 {
 	Samurai::IO::Net::InetAddress addr("1.2.3.4");
-	return addr.getType() != Samurai::IO::Net::InetAddress::IPv6;
+	return addr.getType() != Samurai::IO::Net::InetAddress::Version::IPv6;
 });
 
 EXO_TEST(inet_addr_ipv4_string_compare_1,
@@ -111,20 +111,20 @@ EXO_TEST(inet_addr_ipv4_string_compare_2,
 
 EXO_TEST(inet_addr_ipv6_basic_1,
 {
-	Samurai::IO::Net::InetAddress addr("2002::2001:1", Samurai::IO::Net::InetAddress::IPv6);
+	Samurai::IO::Net::InetAddress addr("2002::2001:1", Samurai::IO::Net::InetAddress::Version::IPv6);
 	return !addr.isMulticast();
 });
 
 EXO_TEST(inet_addr_ipv6_basic_2,
 {
-	Samurai::IO::Net::InetAddress addr("2002::2001:1", Samurai::IO::Net::InetAddress::IPv6);
+	Samurai::IO::Net::InetAddress addr("2002::2001:1", Samurai::IO::Net::InetAddress::Version::IPv6);
 	return addr.isValid();
 });
 
 EXO_TEST(inet_addr_ipv6_basic_3,
 {
 	Samurai::IO::Net::InetAddress addr("2002::2001:1");
-	return addr.getType() == Samurai::IO::Net::InetAddress::IPv6;
+	return addr.getType() == Samurai::IO::Net::InetAddress::Version::IPv6;
 });
 
 EXO_TEST(inet_addr_ipv6_basic_4,
@@ -136,13 +136,13 @@ EXO_TEST(inet_addr_ipv6_basic_4,
 EXO_TEST(inet_addr_ipv6_basic_5,
 {
 	Samurai::IO::Net::InetAddress addr("fe80::201:2ff:fefa:f34e");
-	return addr.getType() != Samurai::IO::Net::InetAddress::IPv4;
+	return addr.getType() != Samurai::IO::Net::InetAddress::Version::IPv4;
 });
 
 EXO_TEST(inet_addr_ipv6_basic_6,
 {
 	Samurai::IO::Net::InetAddress addr("fe80::201:2ff:fefa:f34e");
-	return addr.getType() == Samurai::IO::Net::InetAddress::IPv6;
+	return addr.getType() == Samurai::IO::Net::InetAddress::Version::IPv6;
 });
 
 EXO_TEST(inet_addr_ipv6_basic_7,
@@ -155,44 +155,44 @@ EXO_TEST(inet_addr_ipv6_basic_7,
 EXO_TEST(inet_addr_ipv4_detection_1,
 {
 	Samurai::IO::Net::InetAddress addr("10.21.43.9");
-	return addr.getType() == Samurai::IO::Net::InetAddress::IPv4;
+	return addr.getType() == Samurai::IO::Net::InetAddress::Version::IPv4;
 });
 
 EXO_TEST(inet_addr_ipv4_detection_2,
 {
 	Samurai::IO::Net::InetAddress addr1("10.21.43.9");
-	Samurai::IO::Net::InetAddress addr2("10.21.43.9", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr2("10.21.43.9", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr1 == addr2;
 });
 
 EXO_TEST(inet_addr_ipv6_detection_1,
 {
 	Samurai::IO::Net::InetAddress addr("fe80::201:2ff:fefa:f34e");
-	return addr.getType() == Samurai::IO::Net::InetAddress::IPv6;
+	return addr.getType() == Samurai::IO::Net::InetAddress::Version::IPv6;
 });
 
 EXO_TEST(inet_addr_ipv6_detection_2,
 {
 	Samurai::IO::Net::InetAddress addr1("fe80::201:2ff:fefa:f34e");
-	Samurai::IO::Net::InetAddress addr2("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::IPv6);
+	Samurai::IO::Net::InetAddress addr2("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::Version::IPv6);
 	return addr1 == addr2;
 });
 
 EXO_TEST(inet_addr_ipv4_loopback_1,
 {
-	Samurai::IO::Net::InetAddress addr("127.0.0.1", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("127.0.0.1", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isLoopback();
 });
 
 EXO_TEST(inet_addr_ipv4_loopback_2,
 {
-	Samurai::IO::Net::InetAddress addr("127.0.0.1", Samurai::IO::Net::InetAddress::IPv4);
-	return addr.isValid() && addr.getType() == Samurai::IO::Net::InetAddress::IPv4;
+	Samurai::IO::Net::InetAddress addr("127.0.0.1", Samurai::IO::Net::InetAddress::Version::IPv4);
+	return addr.isValid() && addr.getType() == Samurai::IO::Net::InetAddress::Version::IPv4;
 });
 
 EXO_TEST(inet_addr_ipv4_loopback_3,
 {
-	Samurai::IO::Net::InetAddress addr("127.0.0.1", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("127.0.0.1", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.toString() == std::string("127.0.0.1");
 });
 
@@ -204,7 +204,7 @@ EXO_TEST(inet_addr_ipv4_loopback_4,
 
 EXO_TEST(inet_addr_ipv4_loopback_5,
 {
-	Samurai::IO::Net::InetAddress addr("192.168.0.1", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("192.168.0.1", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return !addr.isLoopback();
 });
 
@@ -213,19 +213,19 @@ EXO_TEST(inet_addr_ipv4_loopback_5,
 
 EXO_TEST(inet_addr_ipv6_loopback_1,
 {
-	Samurai::IO::Net::InetAddress addr("::1", Samurai::IO::Net::InetAddress::IPv6);
+	Samurai::IO::Net::InetAddress addr("::1", Samurai::IO::Net::InetAddress::Version::IPv6);
 	return addr.isLoopback();
 });
 
 EXO_TEST(inet_addr_ipv6_loopback_2,
 {
-	Samurai::IO::Net::InetAddress addr("::1", Samurai::IO::Net::InetAddress::IPv6);
+	Samurai::IO::Net::InetAddress addr("::1", Samurai::IO::Net::InetAddress::Version::IPv6);
 	return addr.isValid();
 });
 
 EXO_TEST(inet_addr_ipv6_loopback_3,
 {
-	Samurai::IO::Net::InetAddress addr("::1", Samurai::IO::Net::InetAddress::IPv6);
+	Samurai::IO::Net::InetAddress addr("::1", Samurai::IO::Net::InetAddress::Version::IPv6);
 	if (!addr.toString().empty())
 	    return addr.toString() == std::string("::1");
 	return false;
@@ -233,7 +233,7 @@ EXO_TEST(inet_addr_ipv6_loopback_3,
 
 EXO_TEST(inet_addr_ipv6_loopback_4,
 {
-	Samurai::IO::Net::InetAddress addr("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::IPv6);
+	Samurai::IO::Net::InetAddress addr("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::Version::IPv6);
 	return !addr.isLoopback();
 });
 
@@ -242,265 +242,265 @@ EXO_TEST(inet_addr_ipv6_loopback_4,
 
 EXO_TEST(inet_addr_ipv4_private_1,
 {
-	Samurai::IO::Net::InetAddress addr("192.168.0.0", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("192.168.0.0", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv4_private_2,
 {
-	Samurai::IO::Net::InetAddress addr("192.168.123.45", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("192.168.123.45", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv4_private_3,
 {
-	Samurai::IO::Net::InetAddress addr("192.168.255.255", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("192.168.255.255", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv4_private_4,
 {
-	Samurai::IO::Net::InetAddress addr("172.16.0.0", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("172.16.0.0", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv4_private_5,
 {
-	Samurai::IO::Net::InetAddress addr("172.17.12.51", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("172.17.12.51", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv4_private_6,
 {
-	Samurai::IO::Net::InetAddress addr("172.19.255.255", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("172.19.255.255", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv4_private_7,
 {
-	Samurai::IO::Net::InetAddress addr("10.0.0.0", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("10.0.0.0", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv4_private_8,
 {
-	Samurai::IO::Net::InetAddress addr("10.71.1.26", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("10.71.1.26", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv4_private_9,
 {
-	Samurai::IO::Net::InetAddress addr("10.255.255.255", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("10.255.255.255", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv4_private_10,
 {
-	Samurai::IO::Net::InetAddress addr("8.24.15.23", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("8.24.15.23", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return !addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv4_private_11,
 {
-	Samurai::IO::Net::InetAddress addr("80.124.5.171", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("80.124.5.171", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return !addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv4_private_12,
 {
-	Samurai::IO::Net::InetAddress addr("193.102.12.11", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("193.102.12.11", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return !addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv4_private_13,
 {
-	Samurai::IO::Net::InetAddress addr("222.255.255.255", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("222.255.255.255", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return !addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv4_private_14,
 {
-	Samurai::IO::Net::InetAddress addr("240.1.2.3", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("240.1.2.3", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return !addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv4_private_15,
 {
-	Samurai::IO::Net::InetAddress addr("172.20.0.0", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("172.20.0.0", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv4_private_16,
 {
-	Samurai::IO::Net::InetAddress addr("172.31.255.255", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("172.31.255.255", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv4_private_17,
 {
-	Samurai::IO::Net::InetAddress addr("172.15.255.255", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("172.15.255.255", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return !addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv4_private_18,
 {
-	Samurai::IO::Net::InetAddress addr("172.32.0.0", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("172.32.0.0", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return !addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv6_private_1,
 {
-	Samurai::IO::Net::InetAddress addr("fd00::1", Samurai::IO::Net::InetAddress::IPv6);
+	Samurai::IO::Net::InetAddress addr("fd00::1", Samurai::IO::Net::InetAddress::Version::IPv6);
 	return addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv6_private_2,
 {
-	Samurai::IO::Net::InetAddress addr("2001:db8::1", Samurai::IO::Net::InetAddress::IPv6);
+	Samurai::IO::Net::InetAddress addr("2001:db8::1", Samurai::IO::Net::InetAddress::Version::IPv6);
 	return !addr.isPrivate();
 });
 
 EXO_TEST(inet_addr_ipv4_linklocal_1,
 {
-	Samurai::IO::Net::InetAddress addr("169.254.0.0", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("169.254.0.0", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isLinkLocal();
 });
 
 EXO_TEST(inet_addr_ipv4_linklocal_2,
 {
-	Samurai::IO::Net::InetAddress addr("169.254.255.255", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("169.254.255.255", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isLinkLocal();
 });
 
 EXO_TEST(inet_addr_ipv4_linklocal_3,
 {
-	Samurai::IO::Net::InetAddress addr("127.0.0.1", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("127.0.0.1", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return !addr.isLinkLocal();
 });
 
 EXO_TEST(inet_addr_ipv4_linklocal_4,
 {
-	Samurai::IO::Net::InetAddress addr("169.253.255.255", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("169.253.255.255", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return !addr.isLinkLocal();
 });
 
 EXO_TEST(inet_addr_ipv6_linklocal_1,
 {
-	Samurai::IO::Net::InetAddress addr("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::IPv6);
+	Samurai::IO::Net::InetAddress addr("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::Version::IPv6);
 	return addr.isLinkLocal();
 });
 
 EXO_TEST(inet_addr_ipv6_linklocal_2,
 {
-	Samurai::IO::Net::InetAddress addr("febf::1", Samurai::IO::Net::InetAddress::IPv6);
+	Samurai::IO::Net::InetAddress addr("febf::1", Samurai::IO::Net::InetAddress::Version::IPv6);
 	return addr.isLinkLocal();
 });
 
 EXO_TEST(inet_addr_ipv6_linklocal_3,
 {
-	Samurai::IO::Net::InetAddress addr("::1", Samurai::IO::Net::InetAddress::IPv6);
+	Samurai::IO::Net::InetAddress addr("::1", Samurai::IO::Net::InetAddress::Version::IPv6);
 	return !addr.isLinkLocal();
 });
 
 EXO_TEST(inet_addr_ipv6_linklocal_4,
 {
-	Samurai::IO::Net::InetAddress addr("fec0::1", Samurai::IO::Net::InetAddress::IPv6);
+	Samurai::IO::Net::InetAddress addr("fec0::1", Samurai::IO::Net::InetAddress::Version::IPv6);
 	return !addr.isLinkLocal();
 });
 
 
 EXO_TEST(inet_addr_ipv4_multicast_1,
 {
-	Samurai::IO::Net::InetAddress addr("227.12.92.16", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("227.12.92.16", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isMulticast();
 });
 
 EXO_TEST(inet_addr_ipv4_multicast_2,
 {
-	Samurai::IO::Net::InetAddress addr("224.0.0.0", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("224.0.0.0", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isMulticast();
 });
 
 EXO_TEST(inet_addr_ipv4_multicast_3,
 {
-	Samurai::IO::Net::InetAddress addr("239.255.255.255", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("239.255.255.255", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr.isMulticast();
 });
 
 EXO_TEST(inet_addr_ipv4_multicast_4,
 {
-	Samurai::IO::Net::InetAddress addr("240.0.0.0", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("240.0.0.0", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return !addr.isMulticast();
 });
 
 EXO_TEST(inet_addr_ipv4_multicast_5,
 {
-	Samurai::IO::Net::InetAddress addr("8.24.15.23", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr("8.24.15.23", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return !addr.isMulticast();
 });
 
 EXO_TEST(inet_addr_ipv4_compare_1,
 {
-	Samurai::IO::Net::InetAddress addr1("1.2.3.4", Samurai::IO::Net::InetAddress::IPv4);
-	Samurai::IO::Net::InetAddress addr2("1.2.3.4", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr1("1.2.3.4", Samurai::IO::Net::InetAddress::Version::IPv4);
+	Samurai::IO::Net::InetAddress addr2("1.2.3.4", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr1 == addr2;
 });
 
 EXO_TEST(inet_addr_ipv4_compare_2,
 {
-	Samurai::IO::Net::InetAddress addr1("1.2.3.4", Samurai::IO::Net::InetAddress::IPv4);
-	Samurai::IO::Net::InetAddress addr2("1.2.3.4", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr1("1.2.3.4", Samurai::IO::Net::InetAddress::Version::IPv4);
+	Samurai::IO::Net::InetAddress addr2("1.2.3.4", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return !(addr1 != addr2);
 });
 
 
 EXO_TEST(inet_addr_ipv4_compare_3,
 {
-	Samurai::IO::Net::InetAddress addr1("1.2.3.4", Samurai::IO::Net::InetAddress::IPv4);
-	Samurai::IO::Net::InetAddress addr2("4.3.2.1", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr1("1.2.3.4", Samurai::IO::Net::InetAddress::Version::IPv4);
+	Samurai::IO::Net::InetAddress addr2("4.3.2.1", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return addr1 != addr2;
 });
 
 EXO_TEST(inet_addr_ipv4_compare_4,
 {
-	Samurai::IO::Net::InetAddress addr1("1.2.3.4", Samurai::IO::Net::InetAddress::IPv4);
-	Samurai::IO::Net::InetAddress addr2("4.3.2.1", Samurai::IO::Net::InetAddress::IPv4);
+	Samurai::IO::Net::InetAddress addr1("1.2.3.4", Samurai::IO::Net::InetAddress::Version::IPv4);
+	Samurai::IO::Net::InetAddress addr2("4.3.2.1", Samurai::IO::Net::InetAddress::Version::IPv4);
 	return !(addr1 == addr2);
 });
 
 EXO_TEST(inet_addr_ipv6_compare_1,
 {
-	Samurai::IO::Net::InetAddress addr1("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::IPv6);
-	Samurai::IO::Net::InetAddress addr2("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::IPv6);
+	Samurai::IO::Net::InetAddress addr1("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::Version::IPv6);
+	Samurai::IO::Net::InetAddress addr2("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::Version::IPv6);
 	return addr1 == addr2;
 });
 
 EXO_TEST(inet_addr_ipv6_compare_2,
 {
-	Samurai::IO::Net::InetAddress addr1("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::IPv6);
-	Samurai::IO::Net::InetAddress addr2("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::IPv6);
+	Samurai::IO::Net::InetAddress addr1("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::Version::IPv6);
+	Samurai::IO::Net::InetAddress addr2("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::Version::IPv6);
 	return !(addr1 != addr2);
 });
 
 
 EXO_TEST(inet_addr_ipv6_compare_3,
 {
-	Samurai::IO::Net::InetAddress addr1("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::IPv6);
-	Samurai::IO::Net::InetAddress addr2("2002::2001:1", Samurai::IO::Net::InetAddress::IPv6);
+	Samurai::IO::Net::InetAddress addr1("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::Version::IPv6);
+	Samurai::IO::Net::InetAddress addr2("2002::2001:1", Samurai::IO::Net::InetAddress::Version::IPv6);
 	return addr1 != addr2;
 });
 
 EXO_TEST(inet_addr_ipv6_compare_4,
 {
-	Samurai::IO::Net::InetAddress addr1("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::IPv6);
-	Samurai::IO::Net::InetAddress addr2("2002::2001:1", Samurai::IO::Net::InetAddress::IPv6);
+	Samurai::IO::Net::InetAddress addr1("fe80::201:2ff:fefa:f34e", Samurai::IO::Net::InetAddress::Version::IPv6);
+	Samurai::IO::Net::InetAddress addr2("2002::2001:1", Samurai::IO::Net::InetAddress::Version::IPv6);
 	return !(addr1 == addr2);
 });
 
 EXO_TEST(inet_addr_ipv6_compare_5,
 {
-	Samurai::IO::Net::InetAddress addr1("fe80:0:0:0:201:0:0:f34e", Samurai::IO::Net::InetAddress::IPv6);
-	Samurai::IO::Net::InetAddress addr2("fe80::201:0:0:f34e", Samurai::IO::Net::InetAddress::IPv6);
+	Samurai::IO::Net::InetAddress addr1("fe80:0:0:0:201:0:0:f34e", Samurai::IO::Net::InetAddress::Version::IPv6);
+	Samurai::IO::Net::InetAddress addr2("fe80::201:0:0:f34e", Samurai::IO::Net::InetAddress::Version::IPv6);
 	return addr1 == addr2;
 });
 

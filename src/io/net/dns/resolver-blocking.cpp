@@ -39,7 +39,7 @@ void Samurai::IO::Net::DNS::BlockingResolver::lookup(const char* address) {
 
 	struct addrinfo hints;
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_family   = AF_UNSPEC;   /* IPv4 and IPv6 */
+	hints.ai_family   = AF_UNSPEC;   /* Version::IPv4 and Version::IPv6 */
 	hints.ai_socktype = SOCK_STREAM;
 
 	struct addrinfo* result = nullptr;
@@ -69,11 +69,11 @@ void Samurai::IO::Net::DNS::BlockingResolver::lookup(const char* address) {
 		if (ai->ai_family == AF_INET && ai->ai_addrlen >= sizeof(struct sockaddr_in)) {
 			struct sockaddr_in* sin = (struct sockaddr_in*) ai->ai_addr;
 			found = inet_addr.setRawAddress(&sin->sin_addr, sizeof(sin->sin_addr),
-			                                Samurai::IO::Net::InetAddress::IPv4);
+			                                Samurai::IO::Net::InetAddress::Version::IPv4);
 		} else if (ai->ai_family == AF_INET6 && ai->ai_addrlen >= sizeof(struct sockaddr_in6)) {
 			struct sockaddr_in6* sin6 = (struct sockaddr_in6*) ai->ai_addr;
 			found = inet_addr.setRawAddress(&sin6->sin6_addr, sizeof(sin6->sin6_addr),
-			                                Samurai::IO::Net::InetAddress::IPv6);
+			                                Samurai::IO::Net::InetAddress::Version::IPv6);
 		}
 	}
 

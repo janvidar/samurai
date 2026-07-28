@@ -10,7 +10,7 @@ bool testTiger(const char* input, const char* expected) {
 	Samurai::Crypto::Digest::Tiger tiger;
 	tiger.update((uint8_t*) input, strlen(input));
 	Samurai::Crypto::Digest::HashValue* value = tiger.digest();
-	value->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatHex, buf, 64);
+	value->getFormattedString(Samurai::Crypto::Digest::HashValue::Format::Hex, buf, 64);
 	return strcasecmp(buf, expected) == 0;
 }
 
@@ -20,7 +20,7 @@ bool testTTH(const char* input, const char* expected) {
 	Samurai::Crypto::Digest::MerkleTree merkle(&tiger, strlen(input));
 	merkle.update((uint8_t*) input, strlen(input));
 	Samurai::Crypto::Digest::HashValue* value = merkle.digest();
-	value->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, buf, 64);
+	value->getFormattedString(Samurai::Crypto::Digest::HashValue::Format::Base32, buf, 64);
 	return strcasecmp(buf, expected) == 0;
 }
 
@@ -30,7 +30,7 @@ EXO_TEST(hash_tiger_1, {
 	Samurai::Crypto::Digest::Tiger tiger;
 	tiger.update((uint8_t*) "abc", 3);
 	Samurai::Crypto::Digest::HashValue* value = tiger.digest();
-	value->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, buf, 64);
+	value->getFormattedString(Samurai::Crypto::Digest::HashValue::Format::Base32, buf, 64);
 	return strcmp(buf, "FKVRJBHIYFMPFP5YYX7UDNL2KJISSEY4SV5V7EY") == 0;
 });
 
@@ -41,7 +41,7 @@ EXO_TEST(hash_tiger_2, {
 	tiger.update((uint8_t*) "b", 1);
 	tiger.update((uint8_t*) "c", 1);
 	Samurai::Crypto::Digest::HashValue* value = tiger.digest();
-	value->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, buf, 64);
+	value->getFormattedString(Samurai::Crypto::Digest::HashValue::Format::Base32, buf, 64);
 	return strcmp(buf, "FKVRJBHIYFMPFP5YYX7UDNL2KJISSEY4SV5V7EY") == 0;
 });
 
@@ -89,7 +89,7 @@ EXO_TEST(hash_tiger_11, {
 	tiger.update((uint8_t*) "c", 1);
 	Samurai::Crypto::Digest::HashValue* value = tiger.digest();
 	char buf[64];
-	value->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatHex, buf, 64);
+	value->getFormattedString(Samurai::Crypto::Digest::HashValue::Format::Hex, buf, 64);
 	return strcasecmp(buf, "2AAB1484E8C158F2BFB8C5FF41B57A525129131C957B5F93") == 0;
 });
 
@@ -99,7 +99,7 @@ EXO_TEST(hash_tiger_12, {
 	tiger.update((uint8_t*) "c", 1);
 	Samurai::Crypto::Digest::HashValue* value = tiger.digest();
 	char buf[64];
-	value->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatHex, buf, 64);
+	value->getFormattedString(Samurai::Crypto::Digest::HashValue::Format::Hex, buf, 64);
 	return strcasecmp(buf, "2AAB1484E8C158F2BFB8C5FF41B57A525129131C957B5F93") == 0;
 });
 
@@ -111,7 +111,7 @@ EXO_TEST(hash_tiger_13, {
 	}
 	Samurai::Crypto::Digest::HashValue* value = tiger.digest();
 	char buf[64];
-	value->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatHex, buf, 64);
+	value->getFormattedString(Samurai::Crypto::Digest::HashValue::Format::Hex, buf, 64);
 	return strcasecmp(buf, "6DB0E2729CBEAD93D715C6A7D36302E9B3CEE0D2BC314B41") == 0;
 });
 
@@ -123,7 +123,7 @@ EXO_TEST(hash_tiger_14, {
 	}
 	Samurai::Crypto::Digest::HashValue* value = tiger.digest();
 	char buf[64];
-	value->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatHex, buf, 64);
+	value->getFormattedString(Samurai::Crypto::Digest::HashValue::Format::Hex, buf, 64);
 	return strcasecmp(buf, "1C14795529FD9F207A958F84C52F11E887FA0CABDFD91BFD") == 0;
 });
 
@@ -173,7 +173,7 @@ EXO_TEST(hash_tth_stream_1mb, {
 	for (unsigned n = 0; n < 10; n++)
 		merkle.update(temp.data(), temp.size());
 
-	merkle.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, buf, 64);
+	merkle.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::Format::Base32, buf, 64);
 	return strcasecmp(buf, "KEPTIGT4CQKF7S5EUVNJZSXXIPNMB3XSOAAQS4Y") == 0;
 });
 
@@ -185,7 +185,7 @@ EXO_TEST(hash_tth_stream_2m_bytewise, {
 	for (size_t n = 0; n < 2000000; n++)
 		merkle.update((const uint8_t*) "a", 1);
 
-	merkle.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, buf, 64);
+	merkle.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::Format::Base32, buf, 64);
 	return strcasecmp(buf, "XD2AKUE5DFPBXNGML5P3QSOO7LOV2EKOICJWX3A") == 0;
 });
 
@@ -196,7 +196,7 @@ EXO_TEST(hash_tth_stream_4m_bytewise, {
 	for (size_t n = 0; n < 4000000; n++)
 		merkle.update((const uint8_t*) "a", 1);
 
-	merkle.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, buf, 64);
+	merkle.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::Format::Base32, buf, 64);
 	return strcasecmp(buf, "4WDBG7VHOVUQ23TIDFPZCFJ3PGXUXVGJINVU4PI") == 0;
 });
 
@@ -207,7 +207,7 @@ EXO_TEST(hash_tth_stream_8m_bytewise, {
 	for (size_t n = 0; n < 8000000; n++)
 		merkle.update((const uint8_t*) "a", 1);
 
-	merkle.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, buf, 64);
+	merkle.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::Format::Base32, buf, 64);
 	return strcasecmp(buf, "6L6GMENTBLX2UE5JIVSCPX4P5PQYB7YUIY6PJ6I") == 0;
 });
 
@@ -225,7 +225,7 @@ EXO_TEST(hash_tth_stream_matches_reference_impl, {
 	Samurai::Crypto::Digest::Tiger tiger;
 	Samurai::Crypto::Digest::MerkleTree merkle(&tiger, 0);
 	merkle.update(data.data(), N);
-	merkle.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, from_tree, 64);
+	merkle.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::Format::Base32, from_tree, 64);
 
 	Samurai::Crypto::Digest::TT_CONTEXT ctx;
 	Samurai::Crypto::Digest::tt_init(&ctx);

@@ -35,12 +35,12 @@ namespace IO {
 /**
  * Outcome of a read() on a stream that can end.
  */
-enum ReadResult
+enum class ReadResult
 {
-	ReadOk,        /**< bytes were transferred */
-	ReadWouldBlock,/**< nothing available right now; try again on the next event */
-	ReadEndOfFile, /**< the peer closed; no more data will arrive */
-	ReadError      /**< failed; the error_code says why */
+	Ok,        /**< bytes were transferred */
+	WouldBlock,/**< nothing available right now; try again on the next event */
+	EndOfFile, /**< the peer closed; no more data will arrive */
+	Error      /**< failed; the error_code says why */
 };
 
 }
