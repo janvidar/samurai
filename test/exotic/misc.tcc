@@ -11,6 +11,9 @@
 #include <samurai/util/format.h>
 #include <samurai/timestamp.h>
 #include <samurai/stdc.h>
+#include <time.h>
+#include <unistd.h>
+#include <samurai/messagehandler.h>
 #include <string>
 #include <algorithm>
 #include <span>
@@ -390,4 +393,331 @@ EXO_TEST(convert_to_uint16_rejects_out_of_range,
 	return Samurai::Util::Convert::to_uint16("65535") == 65535
 		&& Samurai::Util::Convert::to_uint16("65536") == 0
 		&& Samurai::Util::Convert::to_uint16("70000") == 0;
+});
+
+/* ------------------------------------------------------------------------- */
+/* MessageHandler                                                            */
+/*                                                                           */
+/* A MessageListener registers itself with the singleton from its            */
+/* constructor, so these listeners filter on a message id of their own -      */
+/* anything else in the suite that listens would otherwise see these, and     */
+/* these would see its.                                                      */
+/* ------------------------------------------------------------------------- */
+
+namespace {
+
+class CountingListener final : public Samurai::MessageListener
+{
+	public:
+		explicit CountingListener(size_t id) : wanted(id) { }
+
+		bool EventMessage(const Samurai::Message* msg) override
+		{
+			if (!msg || msg->getID() != wanted) return false;
+
+			seen++;
+			last_arg1 = msg->getArg1();
+			last_arg2 = msg->getArg2();
+			last_data = msg->getData();
+			return true;
+		}
+
+		size_t seen = 0;
+		size_t last_arg1 = 0;
+		size_t last_arg2 = 0;
+		void* last_data = nullptr;
+
+	private:
+		size_t wanted;
+};
+
+/* Posts one further message the first time it is called, which is the
+   carry-over path: a message posted while process() is running belongs to the
+   next pass, not this one. */
+class RepostingListener final : public Samurai::MessageListener
+{
+	public:
+		RepostingListener(size_t id, size_t repost_as) : wanted(id), repost(repost_as) { }
+
+		bool EventMessage(const Samurai::Message* msg) override
+		{
+			if (!msg) return false;
+
+			if (msg->getID() == wanted && !reposted)
+			{
+				reposted = true;
+				Samurai::MessageHandler::getInstance()->postMessage(repost, nullptr, 0, 0);
+				return true;
+			}
+
+			if (msg->getID() == repost) { saw_repost = true; return true; }
+			return false;
+		}
+
+		bool reposted = false;
+		bool saw_repost = false;
+
+	private:
+		size_t wanted;
+		size_t repost;
+};
+
+}
+
+EXO_TEST(messagehandler_instance_exists,
+{
+	return Samurai::MessageHandler::getInstance() != nullptr;
+});
+
+/* Nothing queued must be a safe no-op, not a pop from an empty deque. */
+EXO_TEST(messagehandler_process_of_an_empty_queue_is_safe,
+{
+	Samurai::MessageHandler::getInstance()->process();
+	return true;
+});
+
+EXO_TEST(messagehandler_delivers_a_posted_message,
+{
+	CountingListener listener(0x51000001);
+	Samurai::MessageHandler* mh = Samurai::MessageHandler::getInstance();
+
+	mh->postMessage(0x51000001, nullptr, 7, 9);
+	mh->process();
+
+	return listener.seen == 1 && listener.last_arg1 == 7 && listener.last_arg2 == 9;
+});
+
+EXO_TEST(messagehandler_carries_the_data_pointer,
+{
+	int payload = 42;
+	CountingListener listener(0x51000002);
+
+	Samurai::MessageHandler::getInstance()->postMessage(0x51000002, &payload, 0, 0);
+	Samurai::MessageHandler::getInstance()->process();
+
+	return listener.seen == 1 && listener.last_data == &payload;
+});
+
+/* Every listener sees every message; EventMessage returning true does not
+   stop delivery to the others. */
+EXO_TEST(messagehandler_delivers_to_every_listener,
+{
+	CountingListener first(0x51000003);
+	CountingListener second(0x51000003);
+
+	Samurai::MessageHandler::getInstance()->postMessage(0x51000003, nullptr, 0, 0);
+	Samurai::MessageHandler::getInstance()->process();
+
+	return first.seen == 1 && second.seen == 1;
+});
+
+EXO_TEST(messagehandler_drains_the_queue,
+{
+	CountingListener listener(0x51000004);
+	Samurai::MessageHandler* mh = Samurai::MessageHandler::getInstance();
+
+	for (int n = 0; n < 5; n++) mh->postMessage(0x51000004, nullptr, 0, 0);
+	mh->process();
+
+	/* One pass takes all five, and a second pass finds nothing left. */
+	const size_t after_first = listener.seen;
+	mh->process();
+
+	return after_first == 5 && listener.seen == 5;
+});
+
+/* A listener deregisters itself when it goes out of scope. */
+EXO_TEST(messagehandler_stops_delivering_to_a_destroyed_listener,
+{
+	Samurai::MessageHandler* mh = Samurai::MessageHandler::getInstance();
+
+	{
+		CountingListener listener(0x51000005);
+		mh->postMessage(0x51000005, nullptr, 0, 0);
+		mh->process();
+		if (listener.seen != 1) return false;
+	}
+
+	/* If the destroyed listener were still registered this would use freed
+	   memory, which the sanitizer build would report. */
+	mh->postMessage(0x51000005, nullptr, 0, 0);
+	mh->process();
+	return true;
+});
+
+EXO_TEST(messagehandler_remove_listener_stops_delivery,
+{
+	CountingListener listener(0x51000006);
+	Samurai::MessageHandler* mh = Samurai::MessageHandler::getInstance();
+
+	mh->removeMessageListener(&listener);
+	mh->postMessage(0x51000006, nullptr, 0, 0);
+	mh->process();
+
+	const bool silent = listener.seen == 0;
+
+	/* Put it back so the destructor's own remove has something to find. */
+	mh->addMessageListener(&listener);
+	return silent;
+});
+
+/*
+ * The carry-over. postMessage() called while process() is draining the queue
+ * puts the message on busy_queue, which is moved back to queue at the end of
+ * the pass - so it is delivered by the *next* process(), never by the one that
+ * is already running. Without that, the loop could feed itself forever.
+ */
+EXO_TEST(messagehandler_message_posted_during_process_waits_for_the_next_pass,
+{
+	RepostingListener listener(0x51000007, 0x51000008);
+	Samurai::MessageHandler* mh = Samurai::MessageHandler::getInstance();
+
+	mh->postMessage(0x51000007, nullptr, 0, 0);
+	mh->process();
+
+	/* The repost happened, but was not delivered within the same pass. */
+	if (!listener.reposted || listener.saw_repost) return false;
+
+	mh->process();
+	return listener.saw_repost;
+});
+
+/* The standalone postMessage() reaches the same queue. */
+EXO_TEST(messagehandler_standalone_post_reaches_listeners,
+{
+	CountingListener listener(0x51000009);
+
+	Samurai::postMessage(0x51000009, nullptr, 1, 2);
+	Samurai::MessageHandler::getInstance()->process();
+
+	return listener.seen == 1 && listener.last_arg1 == 1 && listener.last_arg2 == 2;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Bandwidth accounting                                                      */
+/*                                                                           */
+/* getBps() deliberately ignores the second still filling, so a reading taken */
+/* in the same second as the data is always zero - which means these need a   */
+/* second boundary to cross, and the stale-window case needs the whole window */
+/* to elapse.                                                                 */
+/*                                                                            */
+/* Waiting once per case cost the suite about eight seconds. All the readings */
+/* are therefore taken by one fixture, built lazily and shared, which spends  */
+/* the window once and lets every case assert against what it recorded.       */
+/* ------------------------------------------------------------------------- */
+
+namespace {
+
+static void wait_for_the_next_second()
+{
+	const time_t start = time(nullptr);
+	while (time(nullptr) == start)
+		usleep(20 * 1000);
+}
+
+constexpr size_t bw_window = Samurai::Util::BANDWIDTH_ESTIMATION_TIMEOUT;
+
+struct BandwidthReadings
+{
+	/* Taken in the same second as the data. */
+	size_t estimator_same_second = 1;
+
+	/* Taken one tick later. */
+	size_t estimator_single = 0;
+	size_t estimator_accumulated = 0;
+	size_t manager_send = 0;
+	size_t manager_recv = 0;
+	size_t manager_mixed_send = 0;
+	size_t manager_recv_only_send = 1;
+	size_t manager_recv_only_recv = 0;
+
+	/* Taken after the whole window has passed. */
+	size_t estimator_after_window = 1;
+};
+
+static const BandwidthReadings& bandwidth_readings()
+{
+	static const BandwidthReadings readings = []
+	{
+		BandwidthReadings r;
+
+		Samurai::Util::RateEstimator single;
+		Samurai::Util::RateEstimator accumulated;
+		Samurai::IO::Net::BandwidthManager both;
+		Samurai::IO::Net::BandwidthManager mixed;
+		Samurai::IO::Net::BandwidthManager recv_only;
+
+		single.add(3000);
+		accumulated.add(1000);
+		accumulated.add(1000);
+		accumulated.add(1000);
+		both.dataSendTCP(6000);
+		both.dataRecvTCP(3000);
+		mixed.dataSendTCP(3000);
+		mixed.dataSendUDP(3000);
+		recv_only.dataRecvTCP(9000);
+
+		r.estimator_same_second = single.getBps();
+
+		wait_for_the_next_second();
+
+		r.estimator_single = single.getBps();
+		r.estimator_accumulated = accumulated.getBps();
+		r.manager_send = both.getSendBps();
+		r.manager_recv = both.getRecvBps();
+		r.manager_mixed_send = mixed.getSendBps();
+		r.manager_recv_only_send = recv_only.getSendBps();
+		r.manager_recv_only_recv = recv_only.getRecvBps();
+
+		for (size_t n = 0; n < bw_window; n++)
+			wait_for_the_next_second();
+
+		r.estimator_after_window = single.getBps();
+		return r;
+	}();
+	return readings;
+}
+
+}
+
+/* The second the data landed in is still filling, so it does not count yet. */
+EXO_TEST(rate_estimator_ignores_the_second_still_filling,
+{
+	return bandwidth_readings().estimator_same_second == 0;
+});
+
+/* The rate is the average over the window, not the raw total. */
+EXO_TEST(rate_estimator_reports_what_was_added_once_the_second_ticks,
+{
+	return bandwidth_readings().estimator_single == 3000 / bw_window;
+});
+
+EXO_TEST(rate_estimator_accumulates_within_one_second,
+{
+	return bandwidth_readings().estimator_accumulated == 3000 / bw_window;
+});
+
+/* Data older than the window is forgotten rather than counted forever. */
+EXO_TEST(rate_estimator_forgets_a_stale_window,
+{
+	return bandwidth_readings().estimator_after_window == 0;
+});
+
+EXO_TEST(bandwidth_manager_counts_tcp_send_and_receive,
+{
+	return bandwidth_readings().manager_send == 6000 / bw_window
+		&& bandwidth_readings().manager_recv == 3000 / bw_window;
+});
+
+/* UDP and TCP feed the same direction counter. */
+EXO_TEST(bandwidth_manager_counts_udp_with_tcp,
+{
+	return bandwidth_readings().manager_mixed_send == 6000 / bw_window;
+});
+
+/* The two directions are accounted separately. */
+EXO_TEST(bandwidth_manager_directions_are_independent,
+{
+	return bandwidth_readings().manager_recv_only_send == 0
+		&& bandwidth_readings().manager_recv_only_recv == 9000 / bw_window;
 });
