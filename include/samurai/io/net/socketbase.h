@@ -71,6 +71,11 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		SocketBase(const Samurai::IO::Net::SocketAddress& addr, enum SocketType = Stream);
 		SocketBase(enum SocketType = Stream);
 		virtual ~SocketBase();
+
+		/* Releases raw pointers in its destructor, so the implicit copy
+		 * operations would release them a second time. */
+		SocketBase(const SocketBase&) = delete;
+		SocketBase& operator=(const SocketBase&) = delete;
 		
 		socket_t getFD() const { return sd; }
 		

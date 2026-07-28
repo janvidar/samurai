@@ -138,7 +138,7 @@ struct sockaddr* Samurai::IO::Net::InetSocketAddress::getSockAddr()
 		data.resize(sizeof(sa));
 		memcpy(data.data(), &sa, sizeof(sa));
 	} else {
-		return 0;
+		return nullptr;
 	}
 
 	return reinterpret_cast<struct sockaddr*>(data.data());

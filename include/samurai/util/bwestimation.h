@@ -19,6 +19,11 @@ class RateEstimator {
 	public:
 		RateEstimator();
 		~RateEstimator();
+
+		/* Releases raw pointers in its destructor, so the implicit copy
+		 * operations would release them a second time. */
+		RateEstimator(const RateEstimator&) = delete;
+		RateEstimator& operator=(const RateEstimator&) = delete;
 		
 		void add(size_t bytesTransfered);
 		size_t getBps();

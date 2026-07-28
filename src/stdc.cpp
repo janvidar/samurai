@@ -10,7 +10,7 @@
 
 static const char* samurai_skip_ws_sign(const char* value, bool* negative) {
 	*negative = false;
-	if (!value) return 0;
+	if (!value) return nullptr;
 
 	while (*value == ' ' || *value == '\t' || *value == '\n' ||
 	       *value == '\r' || *value == '\v' || *value == '\f')

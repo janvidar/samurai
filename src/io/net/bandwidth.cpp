@@ -6,7 +6,7 @@
 #include <samurai/samurai.h>
 #include <samurai/io/net/bandwidth.h>
 
-Samurai::IO::Net::BandwidthManager* Samurai::IO::Net::BandwidthManager::instance = 0;
+Samurai::IO::Net::BandwidthManager* Samurai::IO::Net::BandwidthManager::instance = nullptr;
 
 Samurai::IO::Net::BandwidthManager* Samurai::IO::Net::BandwidthManager::getInstance()
 {

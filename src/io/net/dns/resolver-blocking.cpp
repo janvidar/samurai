@@ -42,7 +42,7 @@ void Samurai::IO::Net::DNS::BlockingResolver::lookup(const char* address) {
 	hints.ai_family   = AF_UNSPEC;   /* IPv4 and IPv6 */
 	hints.ai_socktype = SOCK_STREAM;
 
-	struct addrinfo* result = 0;
+	struct addrinfo* result = nullptr;
 	const int rc = ::getaddrinfo(address, 0, &hints, &result);
 
 	if (rc != 0) {

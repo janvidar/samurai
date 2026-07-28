@@ -19,7 +19,7 @@
 
 /* static: a name at global scope is not mangled, so external linkage would
    export plain "g_dns_config" from the shared library. */
-static Samurai::IO::Net::DNS::ResolveConfiguration* g_dns_config = 0;
+static Samurai::IO::Net::DNS::ResolveConfiguration* g_dns_config = nullptr;
 
 
 Samurai::IO::Net::DNS::BuiltinResolver::BuiltinResolver(Samurai::IO::Net::ResolveEventHandler* eh) : Samurai::IO::Net::DNS::Resolver(eh)
@@ -31,9 +31,9 @@ Samurai::IO::Net::DNS::BuiltinResolver::BuiltinResolver(Samurai::IO::Net::Resolv
 
 	jobId = 0;
 	numTries = 0;
-	hostname = 0;
-	rrname = 0;
-	timer = 0;
+	hostname = nullptr;
+	rrname = nullptr;
+	timer = nullptr;
 }
 
 Samurai::IO::Net::DNS::BuiltinResolver::~BuiltinResolver()

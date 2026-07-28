@@ -7,7 +7,7 @@
 #include <samurai/timestamp.h>
 #include <samurai/io/net/dns/cache.h>
 
-Samurai::IO::Net::DNS::CacheStorage* Samurai::IO::Net::DNS::CacheStorage::g_dns_cache = 0;
+Samurai::IO::Net::DNS::CacheStorage* Samurai::IO::Net::DNS::CacheStorage::g_dns_cache = nullptr;
 
 Samurai::IO::Net::DNS::CacheStorage* Samurai::IO::Net::DNS::CacheStorage::getInstance()
 {
@@ -79,5 +79,5 @@ Samurai::IO::Net::DNS::ResourceRecord* Samurai::IO::Net::DNS::CacheStorage::look
 			return record;
 	}
 
-	return 0;
+	return nullptr;
 }

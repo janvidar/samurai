@@ -20,6 +20,11 @@ class BandwidthManager {
 	public:
 		BandwidthManager();
 		~BandwidthManager();
+
+		/* Releases raw pointers in its destructor, so the implicit copy
+		 * operations would release them a second time. */
+		BandwidthManager(const BandwidthManager&) = delete;
+		BandwidthManager& operator=(const BandwidthManager&) = delete;
 		
 		void accept();
 		void connected();

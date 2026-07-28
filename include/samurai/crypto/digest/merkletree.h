@@ -119,6 +119,11 @@ class MerkleWorkStack
 		MerkleWorkStack(size_t capacity);
 		~MerkleWorkStack();
 
+		/* Releases raw pointers in its destructor, so the implicit copy
+		 * operations would release them a second time. */
+		MerkleWorkStack(const MerkleWorkStack&) = delete;
+		MerkleWorkStack& operator=(const MerkleWorkStack&) = delete;
+
 		uint64_t getSize()   { return size; }
 		size_t getPosition() { return pos; }
 		size_t getCapacity() { return capacity; }
@@ -157,6 +162,11 @@ class MerkleTree : public Samurai::Crypto::Digest::Hash
 		MerkleTree(Samurai::Crypto::Digest::Hash* hasher, size_t block_size = 1024, size_t max_levels = 7);
 
 		~MerkleTree() override;
+
+		/* Releases raw pointers in its destructor, so the implicit copy
+		 * operations would release them a second time. */
+		MerkleTree(const MerkleTree&) = delete;
+		MerkleTree& operator=(const MerkleTree&) = delete;
 
 		/*
 		 * size() is inherited. Declaring one here would hide the base's rather

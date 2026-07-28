@@ -7,29 +7,29 @@
 #include <samurai/crypto/digest/hashvalue.h>
 #include <samurai/util/base32.h>
 
-Samurai::Crypto::Digest::HashValue::HashValue() : m_data(0), m_size(0)
+Samurai::Crypto::Digest::HashValue::HashValue() : m_data(nullptr), m_size(0)
 {
 }
 
-Samurai::Crypto::Digest::HashValue::HashValue(size_t size, uint8_t* data) : m_data(0), m_size(size)
+Samurai::Crypto::Digest::HashValue::HashValue(size_t size, uint8_t* data) : m_data(nullptr), m_size(size)
 {
 	m_data = new uint8_t[m_size];
 	memcpy(m_data, data, m_size);
 }
 
-Samurai::Crypto::Digest::HashValue::HashValue(size_t size) : m_data(0), m_size(size)
+Samurai::Crypto::Digest::HashValue::HashValue(size_t size) : m_data(nullptr), m_size(size)
 {
 	m_data = new uint8_t[m_size];
 	memset(m_data, 0, m_size);
 }
 
-Samurai::Crypto::Digest::HashValue::HashValue(Samurai::Crypto::Digest::HashValue* copy) : m_data(0), m_size(copy->m_size)
+Samurai::Crypto::Digest::HashValue::HashValue(Samurai::Crypto::Digest::HashValue* copy) : m_data(nullptr), m_size(copy->m_size)
 {
 	m_data = new uint8_t[m_size];
 	memcpy(m_data, copy->m_data, m_size);
 }
 
-Samurai::Crypto::Digest::HashValue::HashValue(const Samurai::Crypto::Digest::HashValue& copy) : m_data(0), m_size(copy.m_size)
+Samurai::Crypto::Digest::HashValue::HashValue(const Samurai::Crypto::Digest::HashValue& copy) : m_data(nullptr), m_size(copy.m_size)
 {
 	m_data = new uint8_t[m_size];
 	memcpy(m_data, copy.m_data, m_size);
@@ -46,7 +46,7 @@ void Samurai::Crypto::Digest::HashValue::setData(const uint8_t* data)
 Samurai::Crypto::Digest::HashValue::HashValue(Samurai::Crypto::Digest::HashValue&& other) noexcept
 	: m_data(other.m_data), m_size(other.m_size)
 {
-	other.m_data = 0;
+	other.m_data = nullptr;
 	other.m_size = 0;
 }
 
@@ -57,14 +57,14 @@ Samurai::Crypto::Digest::HashValue& Samurai::Crypto::Digest::HashValue::operator
 	delete[] m_data;
 	m_data = other.m_data;
 	m_size = other.m_size;
-	other.m_data = 0;
+	other.m_data = nullptr;
 	other.m_size = 0;
 	return *this;
 }
 
 Samurai::Crypto::Digest::HashValue::~HashValue()
 {
-	delete[] m_data; m_data = 0;
+	delete[] m_data; m_data = nullptr;
 }
 
 size_t Samurai::Crypto::Digest::HashValue::size() const
@@ -116,7 +116,7 @@ Samurai::Crypto::Digest::HashValue& Samurai::Crypto::Digest::HashValue::operator
 	if (m_size != copy.m_size)
 	{
 		delete[] m_data;
-		m_data = 0;
+		m_data = nullptr;
 		m_size = copy.m_size;
 	}
 

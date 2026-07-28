@@ -12,7 +12,7 @@
 #include <samurai/io/net/bandwidth.h>
 
 
-Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::SocketAddress& addr_, enum SocketType type_) : sd(INVALID_SOCKET), addr(0), state(Connected), ia(0), local_ia(0),  monitor_trigger(0), monitored(false), type(type_) {
+Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::SocketAddress& addr_, enum SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(0), monitored(false), type(type_) {
 
 	if (const Samurai::IO::Net::InetSocketAddress* isa =
 		dynamic_cast<const Samurai::IO::Net::InetSocketAddress*>(&addr_))
@@ -22,7 +22,7 @@ Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::SocketAddress& 
 }
 
 
-Samurai::IO::Net::SocketBase::SocketBase(socket_t sd_, const Samurai::IO::Net::SocketAddress& addr_, enum SocketType type_) : sd(sd_), addr(0), state(Connected), ia(0), local_ia(0),  monitor_trigger(0), monitored(false), type(type_)
+Samurai::IO::Net::SocketBase::SocketBase(socket_t sd_, const Samurai::IO::Net::SocketAddress& addr_, enum SocketType type_) : sd(sd_), addr(nullptr), state(Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(0), monitored(false), type(type_)
 {
 	if (const Samurai::IO::Net::InetSocketAddress* isa =
 		dynamic_cast<const Samurai::IO::Net::InetSocketAddress*>(&addr_))
@@ -31,14 +31,14 @@ Samurai::IO::Net::SocketBase::SocketBase(socket_t sd_, const Samurai::IO::Net::S
 	bandwidthManager = Samurai::IO::Net::BandwidthManager::getInstance();
 }
 
-Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::InetAddress& addr_, uint16_t port_, enum SocketType type_) : sd(INVALID_SOCKET), addr(0), state(Connected), ia(0), local_ia(0),  monitor_trigger(0), monitored(false), type(type_) {
+Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::InetAddress& addr_, uint16_t port_, enum SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(0), monitored(false), type(type_) {
 	addr = new Samurai::IO::Net::InetSocketAddress(addr_, port_);
 
 	bandwidthManager = Samurai::IO::Net::BandwidthManager::getInstance();
 }
 
 
-Samurai::IO::Net::SocketBase::SocketBase(enum SocketType type_) : sd(INVALID_SOCKET), addr(0), state(Disconnected), ia(0), local_ia(0), monitor_trigger(0), monitored(false), type(type_)
+Samurai::IO::Net::SocketBase::SocketBase(enum SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(Disconnected), ia(nullptr), local_ia(nullptr), monitor_trigger(0), monitored(false), type(type_)
 {
 	bandwidthManager = Samurai::IO::Net::BandwidthManager::getInstance();
 }
@@ -56,31 +56,31 @@ const Samurai::IO::Net::InetAddress* Samurai::IO::Net::SocketBase::getLocalAddre
 	 * remote address, and setRawAddress() is given the length that family
 	 * requires - it rejects anything shorter.
 	 */
-	if (sd == INVALID_SOCKET) return 0;
+	if (sd == INVALID_SOCKET) return nullptr;
 
 	struct sockaddr_storage localaddr;
 	socklen_t len = sizeof(localaddr);
 	memset(&localaddr, 0, sizeof(localaddr));
 
-	if (getsockname(sd, (sockaddr*) &localaddr, &len) != 0) return 0;
+	if (getsockname(sd, (sockaddr*) &localaddr, &len) != 0) return nullptr;
 
 	if (!local_ia) local_ia = new Samurai::IO::Net::InetAddress();
 
 	if (localaddr.ss_family == AF_INET) {
 		struct sockaddr_in* sin = (struct sockaddr_in*) &localaddr;
 		if (!local_ia->setRawAddress(&sin->sin_addr, sizeof(sin->sin_addr),
-		                       Samurai::IO::Net::InetAddress::IPv4)) return 0;
+		                       Samurai::IO::Net::InetAddress::IPv4)) return nullptr;
 		return local_ia;
 	}
 
 	if (localaddr.ss_family == AF_INET6) {
 		struct sockaddr_in6* sin6 = (struct sockaddr_in6*) &localaddr;
 		if (!local_ia->setRawAddress(&sin6->sin6_addr, sizeof(sin6->sin6_addr),
-		                       Samurai::IO::Net::InetAddress::IPv6)) return 0;
+		                       Samurai::IO::Net::InetAddress::IPv6)) return nullptr;
 		return local_ia;
 	}
 
-	return 0;
+	return nullptr;
 }
 
 bool Samurai::IO::Net::SocketBase::bind(Samurai::IO::Net::SocketAddress* sa) {
@@ -152,10 +152,10 @@ uint16_t Samurai::IO::Net::SocketBase::getLocalPort() const {
  */
 const Samurai::IO::Net::InetAddress* Samurai::IO::Net::SocketBase::getAddress() const {
 	InetSocketAddress* isa = dynamic_cast<InetSocketAddress*>(addr);
-	if (!isa) return 0;
+	if (!isa) return nullptr;
 
 	const Samurai::IO::Net::InetAddress* peer = isa->getAddress();
-	if (!peer) return 0;
+	if (!peer) return nullptr;
 
 	if (!ia) ia = new Samurai::IO::Net::InetAddress();
 	*ia = *peer;

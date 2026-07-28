@@ -15,7 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 
-Samurai::IO::Net::ServerSocket::ServerSocket() : eventHandler(0) {}
+Samurai::IO::Net::ServerSocket::ServerSocket() : eventHandler(nullptr) {}
 
 Samurai::IO::Net::ServerSocket::ServerSocket(ServerSocketEventHandler* eh, const Samurai::IO::Net::SocketAddress& addr_) :
 	Samurai::IO::Net::SocketBase(addr_, Stream), eventHandler(eh)

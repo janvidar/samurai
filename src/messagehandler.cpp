@@ -6,7 +6,7 @@
 #include <samurai/samurai.h>
 #include <samurai/messagehandler.h>
 
-static Samurai::MessageHandler* g_message_handler = 0;
+static Samurai::MessageHandler* g_message_handler = nullptr;
 
 Samurai::MessageHandler* Samurai::MessageHandler::getInstance()
 {

@@ -32,7 +32,7 @@ class TimeStamp {
 		/**
 		 * Returns a printable timestamp
 		 */
-		const char* getTime(const char* format = 0);
+		const char* getTime(const char* format = nullptr);
 		
 		
 		/**

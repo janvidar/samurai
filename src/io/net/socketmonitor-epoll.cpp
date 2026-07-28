@@ -128,10 +128,10 @@ void Samurai::IO::Net::EPollSocketMonitor::internal_remove(Samurai::IO::Net::Soc
 {
 	if (socket->getFD() == INVALID_SOCKET) return;
 
-	// Linux < 2.6.9 cannot handle this as NULL
+	// Linux < 2.6.9 cannot handle this as a null pointer
 	struct epoll_event ev;
 	memset(&ev, 0, sizeof(struct epoll_event));
-	struct epoll_event* ev_ptr = NULL; // &ev;
+	struct epoll_event* ev_ptr = nullptr; // &ev;
 	
 	int ret = epoll_ctl(epfd, EPOLL_CTL_DEL, socket->getFD(), ev_ptr);
 	if (ret == -1 && errno == ENOENT)

@@ -29,45 +29,45 @@
 
 Samurai::IO::Net::Socket::Socket(Samurai::IO::Net::SocketEventHandler* eh, const std::string& address_, uint16_t port_) :
 	SocketBase(),
-	address(0),
+	address(nullptr),
 	port(port_),
 	autoConnectAfterLookup(false),
 	eventHandler(eh),
-	timer(0),
+	timer(nullptr),
 	outbound(true),
 	readable(0),
 	writable(false)
-	,tls(0)
+	,tls(nullptr)
 {
 	address = new InetAddress(address_);
 }
 
 Samurai::IO::Net::Socket::Socket(SocketEventHandler* eh, const InetAddress& addr_, uint16_t port_) :
 	SocketBase(),
-	address(0),
+	address(nullptr),
 	port(port_),
 	autoConnectAfterLookup(false),
 	eventHandler(eh),
-	timer(0),
+	timer(nullptr),
 	outbound(false),
 	readable(0),
 	writable(false)
-	,tls(0)
+	,tls(nullptr)
 {
 	address = new InetAddress(addr_);
 }
 
 Samurai::IO::Net::Socket::Socket(socket_t sd_, const Samurai::IO::Net::SocketAddress& addr_) :
 	SocketBase(sd_, addr_, Stream),
-	address(0),
+	address(nullptr),
 	port(0),
 	autoConnectAfterLookup(false),
-	eventHandler(0),
-	timer(0),
+	eventHandler(nullptr),
+	timer(nullptr),
 	outbound(false),
 	readable(0),
 	writable(false)
-	,tls(0)
+	,tls(nullptr)
 {
 
 }
@@ -76,7 +76,7 @@ Samurai::IO::Net::Socket::Socket(socket_t sd_, const Samurai::IO::Net::SocketAdd
 Samurai::IO::Net::Socket::~Socket() {
 	TLSDeinitialize();
 	close();
-	delete timer; timer = 0;
+	delete timer; timer = nullptr;
 	delete address;
 }
 
@@ -315,7 +315,7 @@ void Samurai::IO::Net::Socket::connect()
 {
 	if (!(state == Disconnected || state == HostFound)) return;
 
-	if (addr == 0) {
+	if (addr == nullptr) {
 		autoConnectAfterLookup = true;
 		lookup();
 		return;
@@ -339,7 +339,7 @@ void Samurai::IO::Net::Socket::connect()
 
 	// connect and reset connection timer.
 	delete timer;
-	timer = 0;
+	timer = nullptr;
 
 	int ret = ::connect(sd, addr->getSockAddr(), addr->getSockAddrSize());
 	timer = new Samurai::Timer(this, CONNECT_TIMEOUT, true);
@@ -577,7 +577,7 @@ void Samurai::IO::Net::Socket::EventTimeout(Samurai::Timer*) {
 	}
 
 	delete timer;
-	timer = 0;
+	timer = nullptr;
 }
 
 
@@ -610,7 +610,7 @@ void Samurai::IO::Net::Socket::TLSDeinitialize() {
 	if (!tls) return;
 	tls->deinitialize();
 	delete tls;
-	tls = 0;
+	tls = nullptr;
 }
 
 
@@ -889,7 +889,7 @@ ssize_t Samurai::IO::Net::Socket::write(std::span<const std::string_view> buffer
 
 #ifdef SAMURAI_WINSOCK
 	DWORD sent = 0;
-	int ret = WSASend(sd, vec, (DWORD) count, &sent, 0, NULL, NULL);
+	int ret = WSASend(sd, vec, (DWORD) count, &sent, 0, nullptr, nullptr);
 	if (ret == 0)
 	{
 		if (bandwidthManager) bandwidthManager->dataSendTCP((size_t) sent);

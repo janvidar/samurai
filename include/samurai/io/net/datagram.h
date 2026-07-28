@@ -29,6 +29,11 @@ class DatagramPacket {
 		DatagramPacket();
 		~DatagramPacket();
 
+		/* Releases raw pointers in its destructor, so the implicit copy
+		 * operations would release them a second time. */
+		DatagramPacket(const DatagramPacket&) = delete;
+		DatagramPacket& operator=(const DatagramPacket&) = delete;
+
 		size_t size();
 		
 		int peek(uint8_t*, size_t);
@@ -88,6 +93,11 @@ class DatagramSocket : public SocketBase {
 		DatagramSocket(DatagramEventHandler* eh, enum Samurai::IO::Net::InetAddress::Version version);
 	public:
 		~DatagramSocket() override;
+
+		/* Releases raw pointers in its destructor, so the implicit copy
+		 * operations would release them a second time. */
+		DatagramSocket(const DatagramSocket&) = delete;
+		DatagramSocket& operator=(const DatagramSocket&) = delete;
 
 		/* Virtual so that MulticastSocket, which has to set SO_REUSEPORT and
 		 * register with the monitor, replaces it rather than hiding it. */

@@ -131,7 +131,7 @@ void Samurai::IO::Net::NetworkInterfaceUnix::extractHardwareAddress()
 	if (getInfo(SIOCGIFHWADDR))
 	memcpy(hwaddr_bytes, &m_ifr.ifr_hwaddr.sa_data, 6);
 #elif defined(SAMURAI_BSD)
-	struct ifaddrs* first = 0;
+	struct ifaddrs* first = nullptr;
 	struct sockaddr_dl* link;
 	if (getifaddrs(&first) == 0)
 	{
@@ -343,13 +343,13 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_A
 Samurai::IO::Net::NetworkInterface* Samurai::IO::Net::NetworkInterface::getInterface(const Samurai::IO::Net::InetAddress& addr)
 {
 	(void) addr;
-	return 0;
+	return nullptr;
 }
 
 Samurai::IO::Net::NetworkInterface* Samurai::IO::Net::NetworkInterface::getInterface(const char* name)
 {
 	(void) name;
-	return 0;
+	return nullptr;
 }
 
 bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<NetworkInterface*>& interfaces)
@@ -446,11 +446,11 @@ bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<NetworkInterf
 }
 
 Samurai::IO::Net::NetworkInterface::NetworkInterface()
-	: m_hwaddr(0)
-	, m_address(0)
-	, m_netmask(0)
-	, m_broadcast(0)
-	, m_destination(0)
+	: m_hwaddr(nullptr)
+	, m_address(nullptr)
+	, m_netmask(nullptr)
+	, m_broadcast(nullptr)
+	, m_destination(nullptr)
 	, m_flags(0)
 {
 
@@ -468,7 +468,7 @@ Samurai::IO::Net::NetworkInterface::~NetworkInterface()
 const char* Samurai::IO::Net::NetworkInterface::getName() const
 {
 	assert(! "Samurai::IO::Net::NetworkInterface::getName()");
-	return 0;
+	return nullptr;
 }
 
 int Samurai::IO::Net::NetworkInterface::getMtu() const

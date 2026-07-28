@@ -102,7 +102,7 @@ bool Samurai::IO::Net::TlsFactory::getOwnCertificateSHA256(uint8_t* digest, size
 		return false;
 	}
 
-	X509* cert = PEM_read_bio_X509(bio, 0, 0, 0);
+	X509* cert = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
 	BIO_free(bio);
 
 	if (!cert)
@@ -134,8 +134,8 @@ bool Samurai::IO::Net::TlsFactory::global_deinit()
 
 Samurai::IO::Net::OpenSSL::OpenSSL()
 {
-	ssl = 0;
-	ctx = 0;
+	ssl = nullptr;
+	ctx = nullptr;
 }
 
 Samurai::IO::Net::OpenSSL::~OpenSSL()
@@ -161,7 +161,7 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 		method = TLS_server_method();
 
 	ctx = SSL_CTX_new(method);
-	ssl = 0;
+	ssl = nullptr;
 	if (!ctx)
 	{
 		char msg[SSL_ERRBUF_SIZE];
@@ -184,7 +184,7 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 
 	if (verify)
 	{
-		SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 0);
+		SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
 
 		/* Without a trust store SSL_VERIFY_PEER can never succeed. */
 		if (SSL_CTX_set_default_verify_paths(ctx) != 1)
@@ -197,7 +197,7 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 	}
 	else
 	{
-		SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, 0);
+		SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, nullptr);
 	}
 
 	Samurai::IO::File* cert = TlsFactory::getCertificate();
@@ -276,8 +276,8 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::deinitia
 {
 	if (ssl) SSL_free(ssl);
 	if (ctx) SSL_CTX_free(ctx);
-	ssl = 0;
-	ctx = 0;
+	ssl = nullptr;
+	ctx = nullptr;
 	return Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
 }
 

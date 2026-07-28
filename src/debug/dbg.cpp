@@ -57,10 +57,10 @@ void samurai_debug_init() {
 }
 
 void samurai_debug_fini() {
-	delete samurai_dump_sch; samurai_dump_sch = 0;
-	delete samurai_dump_hub; samurai_dump_hub = 0;
-	delete samurai_dump_dbg; samurai_dump_dbg = 0;
-	delete samurai_dump_net; samurai_dump_net = 0;
+	delete samurai_dump_sch; samurai_dump_sch = nullptr;
+	delete samurai_dump_hub; samurai_dump_hub = nullptr;
+	delete samurai_dump_dbg; samurai_dump_dbg = nullptr;
+	delete samurai_dump_net; samurai_dump_net = nullptr;
 }
 
 void samurai_debug(const char* /*func*/, const char* file, int line, const char *format, ...) {
