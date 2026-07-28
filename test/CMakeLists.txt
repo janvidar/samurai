@@ -131,6 +131,12 @@ set_target_properties(autotest PROPERTIES
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF)
 
+# The suite was the one target built without these, so a warning in a test went
+# unseen while the library it exercises stayed clean.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(autotest PRIVATE -Wall -Wextra)
+endif()
+
 add_test(NAME exotic COMMAND autotest)
 
 set_tests_properties(exotic PROPERTIES
