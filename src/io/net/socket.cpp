@@ -666,6 +666,12 @@ void Samurai::IO::Net::Socket::TLSsendHandshake() {
 }
 
 
+bool Samurai::IO::Net::Socket::TLSgetPeerCertificateSHA256(uint8_t* digest, size_t length) {
+	if (!tls) return false;
+	return tls->getPeerCertificateSHA256(digest, length);
+}
+
+
 void Samurai::IO::Net::Socket::TLSsendGoodbye() {
 	if (tls && (state == SSLConnected || state == SSLBye)) {
 		state = SSLBye;
