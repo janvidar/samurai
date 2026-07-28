@@ -69,6 +69,7 @@ set(SAMURAI_EXOTIC_INPUTS
     interface.tcc
     misc.tcc
     sockets.tcc
+    tls.tcc
     url.tcc)
 
 set(SAMURAI_EXOTIC_INPUT_PATHS "")
