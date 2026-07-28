@@ -51,7 +51,7 @@ void samurai_debug_init() {
 	
 #ifdef SAMURAI_MEMDBG
 	samurai_dump_mem = new Samurai::IO::File(DUMP_FILE_MEM);
-	samurai_dump_mem->open(Samurai::IO::File::MODEWO, true);
+	samurai_dump_mem->open(Samurai::IO::File::Write | Samurai::IO::File::Truncate);
 #endif
 	
 	samurai_dump_net = new Samurai::IO::File(DUMP_FILE_NETWORK);
