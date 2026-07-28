@@ -29,7 +29,8 @@ class UnicodePrivate
 
 		~UnicodePrivate()
 		{
-			iconv_close(cd);
+			if (cd != (iconv_t) (-1))
+				iconv_close(cd);
 		}
 
 		bool convert(char* in, size_t& inlen, char* out, size_t& outlen)
