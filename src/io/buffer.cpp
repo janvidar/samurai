@@ -271,6 +271,7 @@ char Samurai::IO::Buffer::operator[](size_t offset) const {
 }
 
 char Samurai::IO::Buffer::at(size_t offset) const {
+	if (offset >= len - head) return 0;
 	return buf[head + offset];
 }
 

@@ -58,6 +58,7 @@ if(NOT SAMURAI_EXOTIC_EXECUTABLE)
 endif()
 
 set(SAMURAI_EXOTIC_INPUTS
+    buffer.tcc
     file.tcc
     hash_tiger.tcc
     inetaddress.tcc
