@@ -7,31 +7,37 @@
 #define HAVE_DNS_RESOLVER_COMMONS_H
 
 #include <stdint.h>
+#include <stddef.h>
 
-#define DNS_SERVER_PORT         53
+namespace Samurai {
+namespace IO {
+namespace Net {
+namespace DNS {
 
-#define DNS_LABEL_SIZE          63
-#define DNS_NAME_SIZE           255
-#define DNS_MAX_PACKET_SIZE     512 /* A UDP message is limited to 512 bytes */
+inline constexpr uint16_t DNS_SERVER_PORT        = 53;
 
-#define DNS_CACHE_NEGATIVE_TTL  600 /* 10 minutes */
-#define DNS_CACHE_MAX_STORAGE   64  /* Store up to this number of entries in cache */
+inline constexpr size_t   DNS_LABEL_SIZE         = 63;
+inline constexpr size_t   DNS_NAME_SIZE          = 255;
+inline constexpr size_t   DNS_MAX_PACKET_SIZE    = 512; /* a UDP message is limited to 512 bytes */
 
-#define DNS_RECURSE_MAX         10 /* most 10 recursions allowed for aliases (CNAME) */
+inline constexpr int      DNS_CACHE_NEGATIVE_TTL = 600; /* 10 minutes */
+inline constexpr size_t   DNS_CACHE_MAX_STORAGE  = 64;  /* entries kept in the cache */
+
+inline constexpr size_t   DNS_RECURSE_MAX        = 10;  /* alias (CNAME) recursion limit */
 
 /*
  * MAXNS and RES_TIMEOUT would come from <resolv.h> on the platforms that have
- * it, but MAXNS bounds a public member array, so taking it from a system
- * header would make the layout of ResolveConfiguration vary by platform.
- * These are the values every build has actually used.
+ * it, but MAXNS bounds a public member array, so taking it from a system header
+ * would make the layout of ResolveConfiguration vary by platform. These are the
+ * values every build has actually used.
  */
-#ifndef MAXNS
-#define MAXNS 3
-#endif
+inline constexpr size_t   MAXNS                  = 3;
+inline constexpr int      RES_TIMEOUT            = 5;
 
-#ifndef RES_TIMEOUT
-#define RES_TIMEOUT 5
-#endif
+}
+}
+}
+}
 
 
 namespace Samurai {
