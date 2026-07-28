@@ -63,6 +63,7 @@ class ServerSocket : public SocketBase {
 
 	protected:
 		ServerSocket();
+		void handleMonitorEvent(int trig);
 		void internal_create();
 		void internal_accept();
 		bool isServer() const { return true; }

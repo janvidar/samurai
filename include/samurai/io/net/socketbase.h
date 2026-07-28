@@ -206,6 +206,19 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		virtual void initialize() { }
 
 		/**
+		 * Act on a readiness event from the socket monitor.
+		 *
+		 * NOTE: the monitor used to work out what kind of socket it was
+		 * holding with three dynamic_casts per event, on every event, and then
+		 * branch on the state of a class it should not have had to know about.
+		 * Each socket class knows what its own states mean, so it answers for
+		 * itself.
+		 *
+		 * @param trig see SocketMonitor::Triggers (ORed)
+		 */
+		virtual void handleMonitorEvent(int trig) { (void) trig; }
+
+		/**
 		 * Create socket and return true if the call succeeded.
 		 * This basically call socket()
 		 * If tcp is true then a TCP stream is created,

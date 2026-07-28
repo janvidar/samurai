@@ -122,6 +122,8 @@ class Socket :
 		void sslDeinitialize();
 
 	protected:
+		void handleMonitorEvent(int trig);
+
 		void internal_canRead();
 		void internal_canWrite();
 		void internal_error(int);
