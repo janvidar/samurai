@@ -467,3 +467,166 @@ EXO_TEST(merkle_reset_after_finalize_allows_reuse,
 
 	return merkle_root_base32(tree) == expected;
 });
+
+/* ------------------------------------------------------------------------- */
+/* Finalization is once and for all                                          */
+/*                                                                           */
+/* Nothing set m_finalized for Tiger - the only assignment in the tree was in */
+/* merkletree.cpp - so internal_finalize()'s own guard never fired. A second  */
+/* digest() padded the already padded state and returned a different, wrong   */
+/* value, and update() after finalize was absorbed instead of ignored.        */
+/* ------------------------------------------------------------------------- */
+
+static std::string tiger_hex(Samurai::Crypto::Digest::Hash& hash)
+{
+	char buf[64];
+	hash.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::Format::Hex, buf, 64);
+	return std::string(buf);
+}
+
+EXO_TEST(hash_tiger_digest_is_stable_across_calls,
+{
+	Samurai::Crypto::Digest::Tiger tiger;
+	tiger.update((const uint8_t*) "abc", 3);
+
+	const std::string first = tiger_hex(tiger);
+	const std::string second = tiger_hex(tiger);
+	const std::string third = tiger_hex(tiger);
+
+	return first == second && second == third
+		&& first == "2aab1484e8c158f2bfb8c5ff41b57a525129131c957b5f93";
+});
+
+EXO_TEST(hash_tiger_update_after_finalize_is_ignored,
+{
+	Samurai::Crypto::Digest::Tiger tiger;
+	tiger.update((const uint8_t*) "abc", 3);
+	const std::string before = tiger_hex(tiger);
+
+	tiger.update((const uint8_t*) "def", 3);
+	return tiger_hex(tiger) == before;
+});
+
+/* reset() is the documented way back, and must restore a usable hasher. */
+EXO_TEST(hash_tiger_reset_allows_reuse,
+{
+	Samurai::Crypto::Digest::Tiger reference;
+	reference.update((const uint8_t*) "abc", 3);
+	const std::string expected = tiger_hex(reference);
+
+	Samurai::Crypto::Digest::Tiger tiger;
+	tiger.update((const uint8_t*) "something else entirely", 23);
+	tiger_hex(tiger);
+
+	tiger.reset();
+	tiger.update((const uint8_t*) "abc", 3);
+	return tiger_hex(tiger) == expected;
+});
+
+EXO_TEST(hash_merkle_digest_is_stable_across_calls,
+{
+	Samurai::Crypto::Digest::Tiger tiger;
+	Samurai::Crypto::Digest::MerkleTree tree(&tiger, 0);
+	const std::vector<uint8_t> data(50000, 'a');
+	tree.update(data.data(), data.size());
+
+	const std::string first = tiger_hex(tree);
+	return first == tiger_hex(tree) && first == tiger_hex(tree);
+});
+
+/* ------------------------------------------------------------------------- */
+/* getFormattedString bounds                                                 */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(hashvalue_hex_needs_room_for_the_terminator,
+{
+	Samurai::Crypto::Digest::Tiger tiger;
+	tiger.update((const uint8_t*) "abc", 3);
+	Samurai::Crypto::Digest::HashValue* value = tiger.digest();
+
+	const size_t exact = value->size() * 2 + 1;
+	std::vector<char> just_enough(exact);
+	std::vector<char> one_short(exact - 1);
+
+	return value->getFormattedString(
+			Samurai::Crypto::Digest::HashValue::Format::Hex, just_enough.data(), exact)
+		&& !value->getFormattedString(
+			Samurai::Crypto::Digest::HashValue::Format::Hex, one_short.data(), exact - 1);
+});
+
+/* A refused call still leaves a terminated, empty string behind. */
+EXO_TEST(hashvalue_short_buffer_is_left_empty,
+{
+	Samurai::Crypto::Digest::Tiger tiger;
+	tiger.update((const uint8_t*) "abc", 3);
+	Samurai::Crypto::Digest::HashValue* value = tiger.digest();
+
+	char buf[8];
+	memset(buf, 'x', sizeof(buf));
+	const bool refused = !value->getFormattedString(
+		Samurai::Crypto::Digest::HashValue::Format::Hex, buf, sizeof(buf));
+
+	return refused && buf[0] == '\0';
+});
+
+EXO_TEST(hashvalue_base32_needs_room_for_the_terminator,
+{
+	Samurai::Crypto::Digest::Tiger tiger;
+	tiger.update((const uint8_t*) "abc", 3);
+	Samurai::Crypto::Digest::HashValue* value = tiger.digest();
+
+	const size_t exact = ((value->size() * 8 + 4) / 5) + 1;
+	std::vector<char> just_enough(exact);
+	std::vector<char> one_short(exact - 1);
+
+	return value->getFormattedString(
+			Samurai::Crypto::Digest::HashValue::Format::Base32, just_enough.data(), exact)
+		&& !value->getFormattedString(
+			Samurai::Crypto::Digest::HashValue::Format::Base32, one_short.data(), exact - 1);
+});
+
+EXO_TEST(hashvalue_rejects_null_and_zero_length,
+{
+	Samurai::Crypto::Digest::Tiger tiger;
+	tiger.update((const uint8_t*) "abc", 3);
+	Samurai::Crypto::Digest::HashValue* value = tiger.digest();
+
+	char buf[64];
+	return !value->getFormattedString(
+			Samurai::Crypto::Digest::HashValue::Format::Hex, nullptr, sizeof(buf))
+		&& !value->getFormattedString(
+			Samurai::Crypto::Digest::HashValue::Format::Hex, buf, 0);
+});
+
+/* ------------------------------------------------------------------------- */
+/* HashValue move semantics                                                  */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(hashvalue_move_transfers_the_digest,
+{
+	Samurai::Crypto::Digest::Tiger tiger;
+	tiger.update((const uint8_t*) "abc", 3);
+
+	Samurai::Crypto::Digest::HashValue original(*tiger.digest());
+	char before[64];
+	original.getFormattedString(
+		Samurai::Crypto::Digest::HashValue::Format::Hex, before, sizeof(before));
+
+	Samurai::Crypto::Digest::HashValue moved(std::move(original));
+	char after[64];
+	moved.getFormattedString(
+		Samurai::Crypto::Digest::HashValue::Format::Hex, after, sizeof(after));
+
+	return strcmp(before, after) == 0 && moved.size() == 24;
+});
+
+EXO_TEST(hashvalue_copy_is_independent,
+{
+	Samurai::Crypto::Digest::Tiger tiger;
+	tiger.update((const uint8_t*) "abc", 3);
+
+	Samurai::Crypto::Digest::HashValue a(*tiger.digest());
+	Samurai::Crypto::Digest::HashValue b(a);
+
+	return a == b && a.size() == b.size();
+});
