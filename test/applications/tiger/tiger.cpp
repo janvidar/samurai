@@ -86,7 +86,9 @@ int main(int argc, char* argv[]) {
 	
 	for (int i = n; i < argc; i++) {
 		uint8_t hash[Samurai::Crypto::Digest::TIGERSIZE];
-		char* digest = new char[HASH];
+		/* On the stack so that sizeof() below is the buffer's length rather
+		 * than a pointer's, and so the 'continue' paths do not leak it. */
+		char digest[HASH];
 
 		Samurai::IO::File file(argv[i]);
 		if (file.isDirectory()) {

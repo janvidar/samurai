@@ -15,10 +15,8 @@ bool arg_show_all = false;
 
 int main(int argc, char** argv)
 {
-	(void) argc;
-	(void) argv;
-	
-	for (int n = 0; n < argc; n++)
+	/* From 1: argv[0] is the program name, not an option. */
+	for (int n = 1; n < argc; n++)
 	{
 		if (strcmp(argv[n], "-a") == 0 || strcmp(argv[n], "--all") == 0)
 			arg_show_all = true;
