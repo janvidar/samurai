@@ -42,7 +42,7 @@ Samurai::IO::Net::InetSocketAddress::InetSocketAddress(uint16_t port_)
 }
 
 
-Samurai::IO::Net::InetSocketAddress::InetSocketAddress(const char* ip, uint16_t port_, enum Samurai::IO::Net::InetAddress::Version  version)
+Samurai::IO::Net::InetSocketAddress::InetSocketAddress(const char* ip, uint16_t port_, Samurai::IO::Net::InetAddress::Version  version)
 	: addr(ip, version)
 	, port(port_)
 {
@@ -151,7 +151,7 @@ size_t Samurai::IO::Net::InetSocketAddress::getSockAddrSize()
 	}
 }
 
-void Samurai::IO::Net::InetSocketAddress::setRawSocketAddress(void* sockaddr_data, size_t sockaddr_len, uint16_t port_, enum Samurai::IO::Net::InetAddress::Version version_)
+void Samurai::IO::Net::InetSocketAddress::setRawSocketAddress(void* sockaddr_data, size_t sockaddr_len, uint16_t port_, Samurai::IO::Net::InetAddress::Version version_)
 {
 	addr = InetAddress();
 	addr.setRawAddress(sockaddr_data, sockaddr_len, version_);

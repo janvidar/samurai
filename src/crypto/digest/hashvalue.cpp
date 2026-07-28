@@ -48,7 +48,7 @@ const uint8_t* Samurai::Crypto::Digest::HashValue::getData() const
 	return m_data.data();
 }
 
-bool Samurai::Crypto::Digest::HashValue::getFormattedString(enum Format format, char* buf, size_t buflen) const
+bool Samurai::Crypto::Digest::HashValue::getFormattedString(Format format, char* buf, size_t buflen) const
 {
 	if (!buf || buflen == 0)
 		return false;

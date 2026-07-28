@@ -15,15 +15,6 @@
 #define USE_ADAPTER_INFO
 #endif
 
-enum NetworkInterfaceFlags
-{
-	InterfaceEnabled      = 0x01,
-	InterfaceLoopback     = 0x02,
-	InterfacePointToPoint = 0x04,
-	InterfaceBroadcast    = 0x10,
-	InterfaceMulticast    = 0x20,
-};
-
 namespace Samurai {
 namespace IO {
 namespace Net {
@@ -171,11 +162,11 @@ void Samurai::IO::Net::NetworkInterfaceUnix::extractAddresses()
 	if (getInfo(SIOCGIFNETMASK))
 		m_netmask = std::make_unique<Samurai::IO::Net::InetAddress>(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_addr)->sin_addr));
 
-	if ((m_flags & InterfaceBroadcast) && getInfo(SIOCGIFBRDADDR))
+	if (any(m_flags & NetworkInterfaceFlags::Broadcast) && getInfo(SIOCGIFBRDADDR))
 		m_broadcast = std::make_unique<Samurai::IO::Net::InetAddress>(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_broadaddr)->sin_addr));
 
 #ifdef SIOCGIFDSTADDR
-	if ((m_flags & InterfacePointToPoint) && getInfo(SIOCGIFDSTADDR))
+	if (any(m_flags & NetworkInterfaceFlags::PointToPoint) && getInfo(SIOCGIFDSTADDR))
 		m_destination = std::make_unique<Samurai::IO::Net::InetAddress>(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_dstaddr)->sin_addr));
 #endif
 }
@@ -185,7 +176,7 @@ void Samurai::IO::Net::NetworkInterfaceUnix::extractFlags()
 	if (getInfo(SIOCGIFFLAGS))
 	{
 		int f = m_ifr.ifr_flags;
-		m_flags = 0;
+		m_flags = NetworkInterfaceFlags::None;
 
 		if (true
 #ifdef IFF_UP
@@ -195,20 +186,20 @@ void Samurai::IO::Net::NetworkInterfaceUnix::extractFlags()
 			&& (f & IFF_RUNNING)
 #endif
 			)
-			m_flags |= InterfaceEnabled;
+			m_flags |= NetworkInterfaceFlags::Enabled;
 
 		if (f & IFF_LOOPBACK)
-			m_flags |= InterfaceLoopback;
+			m_flags |= NetworkInterfaceFlags::Loopback;
 
 		if (f & IFF_BROADCAST)
-			m_flags |= InterfaceBroadcast;
+			m_flags |= NetworkInterfaceFlags::Broadcast;
 
 		if (f & IFF_MULTICAST)
-			m_flags |= InterfaceMulticast;
+			m_flags |= NetworkInterfaceFlags::Multicast;
 
 #ifdef IFF_POINTOPOINT
 		if (f & IFF_POINTOPOINT)
-			m_flags |= InterfacePointToPoint;
+			m_flags |= NetworkInterfaceFlags::PointToPoint;
 #endif
 	}
 }
@@ -263,10 +254,10 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_I
 			m_hwaddr = std::make_unique<Samurai::IO::Net::HardwareAddress>(hwaddr_bytes);
 	}
 
-	m_flags |= InterfaceEnabled;
-	if (info->Type == MIB_IF_TYPE_LOOPBACK)   m_flags |= InterfaceLoopback;
-	if (info->Type == MIB_IF_TYPE_PPP)        m_flags |= InterfacePointToPoint;
-	if (info->Type == MIB_IF_TYPE_ETHERNET)   m_flags |= (InterfaceBroadcast | InterfaceMulticast);
+	m_flags |= NetworkInterfaceFlags::Enabled;
+	if (info->Type == MIB_IF_TYPE_LOOPBACK)   m_flags |= NetworkInterfaceFlags::Loopback;
+	if (info->Type == MIB_IF_TYPE_PPP)        m_flags |= NetworkInterfaceFlags::PointToPoint;
+	if (info->Type == MIB_IF_TYPE_ETHERNET)   m_flags |= (NetworkInterfaceFlags::Broadcast | NetworkInterfaceFlags::Multicast);
 
 	/* Only the first address of the adapter is represented, so the list is not
 	   walked; assigning inside a loop would leak all but the last anyway. */
@@ -298,22 +289,22 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_A
 	}
 
 	if (info->OperStatus == IfOperStatusUp)
-		m_flags |= InterfaceEnabled;
+		m_flags |= NetworkInterfaceFlags::Enabled;
 
 	/* The negation has to apply to the masked bit, not to Flags: '!' binds
 	   tighter than '&', so testing !Flags & BIT asks whether Flags is zero. */
 	if (!(info->Flags & IP_ADAPTER_NO_MULTICAST))
-		m_flags |= InterfaceMulticast;
+		m_flags |= NetworkInterfaceFlags::Multicast;
 
 	if (info->IfType == IF_TYPE_SOFTWARE_LOOPBACK)
-		m_flags |= InterfaceLoopback;
+		m_flags |= NetworkInterfaceFlags::Loopback;
 
 	if (info->IfType == IF_TYPE_PPP || info->IfType == IF_TYPE_TUNNEL)
-		m_flags |= InterfacePointToPoint;
+		m_flags |= NetworkInterfaceFlags::PointToPoint;
 
 	if (info->IfType == IF_TYPE_ETHERNET_CSMACD || info->IfType == IF_TYPE_IEEE80211)
 	{
-		m_flags |= InterfaceBroadcast;
+		m_flags |= NetworkInterfaceFlags::Broadcast;
 	}
 
 	/* The address lives on the adapter's first unicast entry; IP_ADAPTER_ADDRESSES
@@ -445,7 +436,7 @@ Samurai::IO::Net::NetworkInterface::NetworkInterface()
 	, m_netmask(nullptr)
 	, m_broadcast(nullptr)
 	, m_destination(nullptr)
-	, m_flags(0)
+	, m_flags(NetworkInterfaceFlags::None)
 {
 
 }
@@ -497,28 +488,28 @@ Samurai::IO::Net::HardwareAddress* Samurai::IO::Net::NetworkInterface::getHWAddr
 
 bool Samurai::IO::Net::NetworkInterface::isEnabled() const
 {
-	return m_flags & InterfaceEnabled;
+	return any(m_flags & NetworkInterfaceFlags::Enabled);
 }
 
 bool Samurai::IO::Net::NetworkInterface::isMulticast() const
 {
 
-	return m_flags & InterfaceMulticast;
+	return any(m_flags & NetworkInterfaceFlags::Multicast);
 }
 
 bool Samurai::IO::Net::NetworkInterface::isBroadcast() const
 {
-	return m_flags & InterfaceBroadcast;
+	return any(m_flags & NetworkInterfaceFlags::Broadcast);
 }
 
 bool Samurai::IO::Net::NetworkInterface::isLoopback() const
 {
-	return m_flags & InterfaceLoopback;
+	return any(m_flags & NetworkInterfaceFlags::Loopback);
 }
 
 bool Samurai::IO::Net::NetworkInterface::isPointToPoint() const
 {
-	return m_flags & InterfacePointToPoint;
+	return any(m_flags & NetworkInterfaceFlags::PointToPoint);
 }
 
 bool Samurai::IO::Net::NetworkInterface::operator==(const NetworkInterface& other)

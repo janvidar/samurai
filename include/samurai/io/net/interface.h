@@ -8,6 +8,7 @@
 
 #include <vector>
 #include <samurai/io/net/socketglue.h>
+#include <samurai/bitmask.h>
 #include <memory>
 #include <vector>
 
@@ -24,6 +25,17 @@ class NetworkInterfacePrivate;
  * 1) Does not provide means to extract multiple IP addresses for one interface.
  * 2) No Version::IPv6 support (see 1).
  */
+/** Capabilities and state of an interface, as reported by the platform. */
+enum class NetworkInterfaceFlags : unsigned
+{
+	None            = 0x00,
+	Enabled         = 0x01,
+	Loopback        = 0x02,
+	PointToPoint    = 0x04,
+	Broadcast       = 0x10,
+	Multicast       = 0x20,
+};
+
 class NetworkInterface
 {
 	public:
@@ -114,8 +126,11 @@ class NetworkInterface
 		std::unique_ptr<InetAddress> m_netmask;
 		std::unique_ptr<InetAddress> m_broadcast;
 		std::unique_ptr<InetAddress> m_destination;
-		int m_flags;
+		NetworkInterfaceFlags m_flags;
 };
+
+/* NetworkInterfaceFlags is a flag set; see samurai/bitmask.h. */
+SAMURAI_DECLARE_BITMASK(NetworkInterfaceFlags)
 
 }
 }

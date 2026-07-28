@@ -91,7 +91,7 @@ class DatagramSocket : public SocketBase {
 		 * Set up a SocketType::Datagram Socket to bind on any address (0.0.0.0), and
 		 * any available OS-assigned port.
 		 */
-		DatagramSocket(DatagramEventHandler* eh, enum Samurai::IO::Net::InetAddress::Version version);
+		DatagramSocket(DatagramEventHandler* eh, Samurai::IO::Net::InetAddress::Version version);
 	public:
 		~DatagramSocket() override;
 

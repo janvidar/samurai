@@ -37,12 +37,12 @@ namespace Samurai {
 					InetSocketAddress(const InetSocketAddress&);
 					InetSocketAddress(const InetAddress& addr, uint16_t port);
 					InetSocketAddress(uint16_t port);
-					InetSocketAddress(const char* ip, uint16_t port, enum Samurai::IO::Net::InetAddress::Version version);
+					InetSocketAddress(const char* ip, uint16_t port, Samurai::IO::Net::InetAddress::Version version);
 					~InetSocketAddress() override;
 
 					InetSocketAddress& operator=(const InetSocketAddress& isa);
 
-					void setRawSocketAddress(void* sockaddr_data, size_t sockaddr_len, uint16_t port, enum Samurai::IO::Net::InetAddress::Version version);
+					void setRawSocketAddress(void* sockaddr_data, size_t sockaddr_len, uint16_t port, Samurai::IO::Net::InetAddress::Version version);
 					const InetAddress* getAddress() const;
 					uint16_t     getPort();
 					std::string  toString() override;

@@ -103,7 +103,7 @@ class SocketEventHandler : public EventHandler {
 		/** 
 		 * An error occured, see the error message.
 		 */
-		virtual void EventError(const Socket*, enum SocketError, const char*) { }
+		virtual void EventError(const Socket*, SocketError, const char*) { }
 		
 	friend class Socket;
 };
