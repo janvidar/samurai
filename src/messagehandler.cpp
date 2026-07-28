@@ -5,6 +5,7 @@
 
 #include <samurai/samurai.h>
 #include <samurai/messagehandler.h>
+#include <memory>
 
 /*
  * A function-local static is initialised once, and without the check-then-assign
@@ -25,51 +26,32 @@ Samurai::MessageHandler::MessageHandler() {
 	busy = false;
 }
 
-Samurai::MessageHandler::~MessageHandler() {
-	while (queue.size()) {
-		Samurai::Message* msg = queue.back();
-		delete msg;
-		queue.pop_back();
-	}
-	
-	while (busy_queue.size()) {
-		Samurai::Message* msg = busy_queue.back();
-		delete msg;
-		busy_queue.pop_back();
-	}
-
-}
+Samurai::MessageHandler::~MessageHandler() = default;
 	
 void Samurai::MessageHandler::postMessage(size_t id, void* data, size_t arg1, size_t arg2)
 {
 	// We should perhaps allocate the new message from inside a static buffer.
 	// In that case we could ignore freeing up memory, but it is always uncertain what the
 	// worst case of queued messages would look like.
-	Samurai::Message* msg = new Samurai::Message(id, data, arg1, arg2);
-	
+	auto msg = std::make_unique<Samurai::Message>(id, data, arg1, arg2);
+
 	if (!busy)
-	{
-		queue.push_front(msg);
-	}
+		queue.push_front(std::move(msg));
 	else
-	{
-		busy_queue.push_front(msg);
-	}
+		busy_queue.push_front(std::move(msg));
 }
 
 void Samurai::MessageHandler::process() {
 	busy = true;
 	while (queue.size()) {
-		Samurai::Message* msg = queue.back();
-		handleMessage(msg);
-		delete msg;
+		handleMessage(queue.back().get());
 		queue.pop_back();
 	}
 
+	/* Anything posted while processing is carried over to the next pass. */
 	while (busy_queue.size()) {
-		Samurai::Message* msg = busy_queue.back();
+		queue.push_front(std::move(busy_queue.back()));
 		busy_queue.pop_back();
-		queue.push_front(msg);
 	}
 	
 	busy = false;

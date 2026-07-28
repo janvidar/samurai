@@ -76,7 +76,7 @@ void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 		/* TODO: Go through domain and search options */
 	}
 
-	Samurai::IO::Buffer* buffer = new Samurai::IO::Buffer(512);
+	auto buffer = std::make_unique<Samurai::IO::Buffer>(512);
 	jobId = (uint16_t) Samurai::Util::pseudoRandom(1, 65535);
 	uint16_t flags = 0x0100;
 	uint16_t qdcount = 1;
@@ -102,7 +102,7 @@ void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 	buffer->appendBinary((uint16_t) dns_type, Samurai::IO::Buffer::BigEndian);
 	buffer->appendBinary((uint16_t) Class_IN, Samurai::IO::Buffer::BigEndian);
 
-	DatagramPacket* packet = new DatagramPacket(buffer);
+	auto packet = std::make_unique<DatagramPacket>(buffer.get());
 
 	InetSocketAddress addr(server, DNS_SERVER_PORT);
 	packet->setAddress(&addr);
@@ -113,12 +113,8 @@ void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 	sock->connect();
 #endif
 	sock = Samurai::IO::Net::DatagramSocket::create(this, server->getType());
-	std::dynamic_pointer_cast<Samurai::IO::Net::DatagramSocket>(sock)->send(packet);
+	std::dynamic_pointer_cast<Samurai::IO::Net::DatagramSocket>(sock)->send(packet.get());
 
-	/* DatagramPacket copies the buffer it is handed, and send() copies out of
-	   the packet; neither was freed here. */
-	delete packet;
-	delete buffer;
 
 	timer = std::make_unique<Samurai::Timer>(this, RES_TIMEOUT, true);
 }

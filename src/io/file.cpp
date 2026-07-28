@@ -13,6 +13,7 @@
 
 #include <stdio.h>
 #include <samurai/io/file.h>
+#include <vector>
 #include <samurai/error.h>
 #include <filesystem>
 #include <samurai/io/buffer.h>
@@ -353,19 +354,13 @@ ssize_t Samurai::IO::File::write(const char* data, size_t length, std::error_cod
 ssize_t Samurai::IO::File::read(Samurai::IO::Buffer* data, size_t length) {
 	RETURN_IF_NOT_OPEN(fd, -1);
 
-	char* buf = new char[length];
-	int status = ::read(fd, buf, length);
-	if (status == -1) {
-		delete[] buf;
-		return -1;
-	} if (status == 0) {
-		delete[] buf;
-		return 0;
-	} else {
-		data->append(buf, (size_t) status);
-		delete[] buf;
+	std::vector<char> buf(length);
+	int status = ::read(fd, buf.data(), length);
+	if (status <= 0)
 		return status;
-	}
+
+	data->append(buf.data(), (size_t) status);
+	return status;
 }
 
 ssize_t Samurai::IO::File::write(Samurai::IO::Buffer* data, size_t length, bool remove) {
@@ -374,18 +369,15 @@ ssize_t Samurai::IO::File::write(Samurai::IO::Buffer* data, size_t length, bool 
 	size_t len = length;
 	if (len > data->size()) len = data->size();
 
-	char* buf = new char[len];
+	std::vector<char> buf(len);
 
-	data->pop(buf, length);
-	int status = ::write(fd, buf, len);
-	if (status == -1) {
-		delete[] buf;
+	data->pop(buf.data(), length);
+	int status = ::write(fd, buf.data(), len);
+	if (status == -1)
 		return (errno == EAGAIN) ? 0 : -1;
-	}
 
 	if (remove) data->remove((size_t) status);
 
-	delete[] buf;
 	return status;
 }
 
