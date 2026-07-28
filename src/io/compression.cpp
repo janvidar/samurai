@@ -19,18 +19,13 @@ class Bz2Private
 	public:
 		Bz2Private()
 		{
-			stream = new bz_stream;
+			stream = std::make_unique<bz_stream>();
 			stream->bzalloc = 0;
 			stream->bzfree = 0;
 			stream->opaque = 0;
 		}
 
-		~Bz2Private()
-		{
-			delete stream;
-		}
-
-		bz_stream* stream;
+		std::unique_ptr<bz_stream> stream;
 
 		/* Owns a codec stream: copying would release it twice. */
 		Bz2Private(const Bz2Private&) = delete;
@@ -42,18 +37,13 @@ class GzPrivate
 	public:
 		GzPrivate()
 		{
-			stream = new z_stream;
+			stream = std::make_unique<z_stream>();
 			stream->zalloc = 0;
 			stream->zfree = 0;
 			stream->opaque = 0;
 		}
 
-		~GzPrivate()
-		{
-			delete stream;
-		}
-
-		z_stream* stream;
+		std::unique_ptr<z_stream> stream;
 
 		/* Owns a codec stream: copying would release it twice. */
 		GzPrivate(const GzPrivate&) = delete;
@@ -93,7 +83,7 @@ Samurai::IO::BZip2Compressor::BZip2Compressor()
 	m_last_status = 0;
 	d = std::make_unique<Bz2Private>();
 	
-	if (BZ2_bzCompressInit(d->stream, 5, 0, 0) != BZ_OK)
+	if (BZ2_bzCompressInit(d->stream.get(), 5, 0, 0) != BZ_OK)
 	{
 		d.reset();
 	}
@@ -106,7 +96,7 @@ Samurai::IO::BZip2Compressor::~BZip2Compressor()
 		printf("~BZ2_Compressor, %u/%u = %.04f\n", d->stream->total_out_lo32, d->stream->total_in_lo32,  (float) d->stream->total_out_lo32 / (float)(d->stream->total_in_lo32 + 1));
 #endif
 	if (d && d->stream)
-		BZ2_bzCompressEnd(d->stream);
+		BZ2_bzCompressEnd(d->stream.get());
 }
 
 bool Samurai::IO::BZip2Compressor::exec(char* input, size_t& input_len, char* output, size_t& output_len)
@@ -119,7 +109,7 @@ bool Samurai::IO::BZip2Compressor::exec(char* input, size_t& input_len, char* ou
 	d->stream->next_out = output;
 	
 	int action = (input_len) ? BZ_RUN : BZ_FINISH;
-	int retval = BZ2_bzCompress(d->stream, action);
+	int retval = BZ2_bzCompress(d->stream.get(), action);
 	m_last_status = retval;
 
 	if (retval == BZ_RUN_OK || retval == BZ_FINISH_OK || retval == BZ_STREAM_END)
@@ -137,7 +127,7 @@ Samurai::IO::BZip2Decompressor::BZip2Decompressor()
 	m_last_status = 0;
 	d = std::make_unique<Bz2Private>();
 	
-	if (BZ2_bzDecompressInit(d->stream, 0, 0) != BZ_OK)
+	if (BZ2_bzDecompressInit(d->stream.get(), 0, 0) != BZ_OK)
 	{
 		d.reset();
 	}
@@ -150,7 +140,7 @@ Samurai::IO::BZip2Decompressor::~BZip2Decompressor()
 		printf("~BZip2Decompressor, %u/%u = %.04f\n", d->stream->total_out_lo32, d->stream->total_in_lo32,  (float)d->stream->total_out_lo32 / (float)(d->stream->total_in_lo32 + 1));
 #endif
 	if (d && d->stream)
-		BZ2_bzDecompressEnd(d->stream);
+		BZ2_bzDecompressEnd(d->stream.get());
 }
 
 bool Samurai::IO::BZip2Decompressor::exec(char* input, size_t& input_len, char* output, size_t& output_len)
@@ -162,7 +152,7 @@ bool Samurai::IO::BZip2Decompressor::exec(char* input, size_t& input_len, char* 
 	d->stream->avail_out = output_len;
 	d->stream->next_out = (char*) output;
 
-	int retval = BZ2_bzDecompress(d->stream);
+	int retval = BZ2_bzDecompress(d->stream.get());
 	m_last_status = retval;
 
 	if (retval == BZ_OK || retval == BZ_STREAM_END)
@@ -180,7 +170,7 @@ Samurai::IO::GzipCompressor::GzipCompressor()
 	d = std::make_unique<GzPrivate>();
 	
 	 // FIXME: Default compression level: 5
-	if (deflateInit(d->stream, 5) != Z_OK)
+	if (deflateInit(d->stream.get(), 5) != Z_OK)
 	{
 		d.reset();
 	}
@@ -189,7 +179,7 @@ Samurai::IO::GzipCompressor::GzipCompressor()
 Samurai::IO::GzipCompressor::~GzipCompressor()
 {
 	if (d && d->stream)
-		deflateEnd(d->stream);
+		deflateEnd(d->stream.get());
 }
 
 
@@ -204,7 +194,7 @@ bool Samurai::IO::GzipCompressor::exec(char* input, size_t& input_len, char* out
 	d->stream->next_out = (Bytef*) output;
 	
 	int action = (input_len) ? Z_NO_FLUSH : Z_FINISH;
-	int retval = deflate(d->stream, action);
+	int retval = deflate(d->stream.get(), action);
 	m_last_status = retval;
 
 	if (retval == Z_OK || retval == Z_STREAM_END)
@@ -221,7 +211,7 @@ Samurai::IO::GzipDecompressor::GzipDecompressor()
 {
 	m_last_status = 0;
 	d = std::make_unique<GzPrivate>();
-	if (inflateInit(d->stream) != Z_OK)
+	if (inflateInit(d->stream.get()) != Z_OK)
 	{
 		d.reset();
 	}
@@ -231,7 +221,7 @@ Samurai::IO::GzipDecompressor::GzipDecompressor()
 Samurai::IO::GzipDecompressor::~GzipDecompressor()
 {
 	if (d && d->stream)
-		inflateEnd(d->stream);
+		inflateEnd(d->stream.get());
 }
 
 bool Samurai::IO::GzipDecompressor::exec(char* input, size_t& input_len, char* output, size_t& output_len)
@@ -243,7 +233,7 @@ bool Samurai::IO::GzipDecompressor::exec(char* input, size_t& input_len, char* o
 	d->stream->avail_out = output_len;
 	d->stream->next_out = (Bytef*) output;
 
-	int retval = inflate(d->stream, Z_NO_FLUSH);
+	int retval = inflate(d->stream.get(), Z_NO_FLUSH);
 	m_last_status = retval;
 	
 	if (retval == Z_OK || retval == Z_STREAM_END) {

@@ -7,6 +7,7 @@
 #define HAVE_SAMURAI_MESSAGE_HANDLER_H
 
 #include <deque>
+#include <memory>
 #include <vector>
 
 
@@ -83,8 +84,8 @@ class MessageHandler {
 		void handleMessage(Message*);
 		
 	private:
-		std::deque<Message*> queue;
-		std::deque<Message*> busy_queue;
+		std::deque<std::unique_ptr<Message>> queue;
+		std::deque<std::unique_ptr<Message>> busy_queue;
 		std::vector<MessageListener*> listener;
 		bool busy;
 };

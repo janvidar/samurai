@@ -9,6 +9,7 @@
 #include <samurai/io/net/socket.h>
 #include <samurai/io/net/serversocket.h>
 #include <samurai/io/net/socketmonitor.h>
+#include <memory>
 #include <samurai/io/net/datagram.h>
 
 #include "socketmonitor-backend.h"
@@ -191,6 +192,17 @@ bool Samurai::IO::Net::SocketMonitor::setSocketMonitor(Samurai::IO::Net::SocketM
 
 
 
+/*
+ * Construct a backend and keep it only if it came up. The winner is released
+ * from the unique_ptr deliberately: the chosen monitor is never destroyed.
+ */
+template<typename T>
+static Samurai::IO::Net::SocketMonitor* tryBackend()
+{
+	auto candidate = std::make_unique<T>();
+	return candidate->isValid() ? candidate.release() : nullptr;
+}
+
 static Samurai::IO::Net::SocketMonitor* createDefaultMonitor()
 {
 	Samurai::IO::Net::SocketMonitor* monitor = nullptr;
@@ -198,24 +210,14 @@ static Samurai::IO::Net::SocketMonitor* createDefaultMonitor()
 #ifdef SOCKET_NOTIFY_EPOLL
 	if (!monitor)
 	{
-		monitor = new Samurai::IO::Net::EPollSocketMonitor();
-		if (!monitor->isValid())
-		{
-			delete monitor;
-			monitor = 0;
-		}
+		monitor = tryBackend<Samurai::IO::Net::EPollSocketMonitor>();
 	}
 #endif // SOCKET_NOTIFY_EPOLL
 
 #ifdef SOCKET_NOTIFY_KQUEUE
 	if (!monitor)
 	{
-		monitor = new Samurai::IO::Net::KQueueSocketMonitor();
-		if (!monitor->isValid())
-		{
-			delete monitor;
-			monitor = nullptr;
-		}
+		monitor = tryBackend<Samurai::IO::Net::KQueueSocketMonitor>();
 	}
 #endif // SOCKET_NOTIFY_KQUEUE
 
@@ -223,24 +225,14 @@ static Samurai::IO::Net::SocketMonitor* createDefaultMonitor()
 #ifdef SOCKET_NOTIFY_POLL
 	if (!monitor)
 	{
-		monitor = new Samurai::IO::Net::PollSocketMonitor();
-		if (!monitor->isValid())
-		{
-			delete monitor;
-			monitor = nullptr;
-		}
+		monitor = tryBackend<Samurai::IO::Net::PollSocketMonitor>();
 	}
 #endif // SOCKET_NOTIFY_POLL
 
 #ifdef SOCKET_NOTIFY_SELECT
 	if (!monitor)
 	{
-		monitor = new Samurai::IO::Net::SelectSocketMonitor();
-		if (!monitor->isValid())
-		{
-			delete monitor;
-			monitor = nullptr;
-		}
+		monitor = tryBackend<Samurai::IO::Net::SelectSocketMonitor>();
 	}
 #endif // SOCKET_NOTIFY_SELECT
 
