@@ -93,6 +93,56 @@ void Samurai::IO::Net::SocketMonitor::modify(Samurai::IO::Net::SocketBase* socke
 }
 
 
+void Samurai::IO::Net::SocketMonitor::wait(int time_ms)
+{
+	/* Blocking for the full timeout with data already decrypted and waiting
+	   would delay it by that much for no reason, so the poll only collects
+	   whatever the descriptors have to add. */
+	const bool buffered = haveBufferedInput();
+
+	internal_wait(buffered ? 0 : time_ms);
+
+	/* Rescanned rather than reusing the list gathered above: the poll just
+	   dispatched, and a handler may have consumed the buffered data, closed the
+	   socket holding it, or produced more on another one. */
+	dispatchBufferedInput();
+}
+
+
+bool Samurai::IO::Net::SocketMonitor::haveBufferedInput() const
+{
+	std::map<socket_t, std::weak_ptr<SocketBase> >::const_iterator it;
+	for (it = registry.begin(); it != registry.end(); it++)
+	{
+		std::shared_ptr<SocketBase> socket = it->second.lock();
+		if (socket && socket->bufferedInput())
+			return true;
+	}
+	return false;
+}
+
+
+void Samurai::IO::Net::SocketMonitor::dispatchBufferedInput()
+{
+	/* Collected before dispatching anything: a handler is free to add or
+	   remove registry entries, which would invalidate an iterator held across
+	   the callback. dispatch() looks each descriptor up again and skips one
+	   that has since gone away. */
+	std::vector<socket_t> ready;
+
+	std::map<socket_t, std::weak_ptr<SocketBase> >::const_iterator it;
+	for (it = registry.begin(); it != registry.end(); it++)
+	{
+		std::shared_ptr<SocketBase> socket = it->second.lock();
+		if (socket && socket->bufferedInput())
+			ready.push_back(it->first);
+	}
+
+	for (size_t n = 0; n < ready.size(); n++)
+		dispatch(ready[n], MRead);
+}
+
+
 void Samurai::IO::Net::SocketMonitor::dispatch(socket_t fd, int trig)
 {
 	std::map<socket_t, std::weak_ptr<SocketBase> >::iterator it = registry.find(fd);

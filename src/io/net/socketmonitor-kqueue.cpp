@@ -216,7 +216,7 @@ void Samurai::IO::Net::KQueueSocketMonitor::internal_modify(Samurai::IO::Net::So
 	internal_set(socket);
 }
 
-void Samurai::IO::Net::KQueueSocketMonitor::wait(int time_ms)
+void Samurai::IO::Net::KQueueSocketMonitor::internal_wait(int time_ms)
 {
 	struct timespec timeout;
 	timeout.tv_sec  = time_ms / 1000;

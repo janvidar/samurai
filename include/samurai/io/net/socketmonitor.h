@@ -76,8 +76,19 @@ class SocketMonitor
 		 * Wait for one or more events to occur, but not for longer than
 		 * the given amount of milliseconds before returning.
 		 * Events are triggered automatically.
+		 *
+		 * NOTE: readiness of the descriptor is not the whole story once TLS is
+		 * involved. Reading one TLS record takes all of it off the descriptor
+		 * and decrypts it, so a caller that asked for less than the record held
+		 * leaves application data buffered in the TLS layer while the
+		 * descriptor itself has nothing further to report - and no amount of
+		 * polling will say so. This used to strand that data until the peer
+		 * happened to send something else, which for a request/response
+		 * protocol means never: each side waits for the other. Buffered data is
+		 * therefore reported as readable in its own right, and the poll below
+		 * does not block while any is outstanding.
 		 */
-		 virtual void wait(int time_ms) = 0;
+		void wait(int time_ms);
 		
 		/**
 		 * Returns the number of sockets currently being monitored.
@@ -116,7 +127,13 @@ class SocketMonitor
 		 * This will replace the current trigger filter.
 		 */
 		virtual void internal_modify(SocketBase* socket) = 0;
-	
+
+		/**
+		 * Poll the descriptors and dispatch what the operating system reports,
+		 * waiting no longer than the given number of milliseconds.
+		 */
+		virtual void internal_wait(int time_ms) = 0;
+
 		/**
 		 * The default handler for the socket events.
 		 * This one will tell each socket what to do based on their status.
@@ -137,6 +154,13 @@ class SocketMonitor
 		 * and one that was already released is skipped instead of followed.
 		 */
 		void dispatch(socket_t fd, int trig);
+
+	private:
+		/** Whether any monitored socket holds buffered input right now. */
+		bool haveBufferedInput() const;
+
+		/** Deliver a read event to every socket that holds buffered input. */
+		void dispatchBufferedInput();
 
 	protected:
 		SocketMonitor(const char* name);

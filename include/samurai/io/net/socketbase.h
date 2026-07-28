@@ -219,6 +219,18 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		virtual void handleMonitorEvent(int trig) { (void) trig; }
 
 		/**
+		 * Input already buffered above the descriptor, which a readiness poll
+		 * cannot see.
+		 *
+		 * Only a TLS socket ever has any: reading one record decrypts all of
+		 * it, so the descriptor can be drained while application data remains
+		 * to be handed out. The monitor uses this to decide whether it may
+		 * block, and which sockets are readable regardless of what the
+		 * operating system says.
+		 */
+		virtual size_t bufferedInput() const { return 0; }
+
+		/**
 		 * Create socket and return true if the call succeeded.
 		 * This basically call socket()
 		 * If tcp is true then a TCP stream is created,

@@ -30,6 +30,8 @@ class OpenSSL : public TlsFactory {
 		ssize_t read(char* data, size_t length, enum TlsStatus& status);
 		ssize_t peek(char* data, size_t length, enum TlsStatus& status);
 
+		size_t pending() const;
+
 	protected:
 		SSL_CTX *ctx;
 		SSL *ssl;

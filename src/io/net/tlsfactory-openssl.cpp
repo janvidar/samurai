@@ -514,6 +514,14 @@ ssize_t Samurai::IO::Net::OpenSSL::peek(char* data, size_t length, enum Samurai:
 	}
 }
 
+size_t Samurai::IO::Net::OpenSSL::pending() const
+{
+	if (!ssl) return 0;
+
+	int ret = SSL_pending(ssl);
+	return (ret > 0) ? (size_t) ret : 0;
+}
+
 ssize_t Samurai::IO::Net::OpenSSL::write(const char* data, size_t length, enum Samurai::IO::Net::TlsFactory::TlsStatus& status)
 {
 	if (!ssl)
