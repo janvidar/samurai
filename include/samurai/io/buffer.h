@@ -92,8 +92,17 @@ class Buffer {
 		size_t find(const char* str, size_t offset = 0);
 
 		/**
-		 * Allocate memory and return a chunk based on the
-		 * given offset and length.
+		 * Copy the bytes in [offset, end) out of the buffer without consuming
+		 * them.
+		 *
+		 * @return an empty string if the range is not entirely within the live
+		 *         data. Note that an empty range yields the same result.
+		 */
+		std::string copyRange(size_t offset, size_t end) const;
+
+		/**
+		 * As copyRange(), but returning a malloc()ed, NUL terminated copy the
+		 * caller must free(), or null if the range is out of bounds.
 		 */
 		char* memdup(size_t offset, size_t end);
 

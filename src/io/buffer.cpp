@@ -143,6 +143,13 @@ size_t Samurai::IO::Buffer::pop(char* data, size_t offset, size_t len_) {
  * given offset and length.
  * Returns 0 if the range is outside the buffer, or on allocation failure.
  */
+std::string Samurai::IO::Buffer::copyRange(size_t offset, size_t end) const {
+	const size_t live = len - head;
+	if (offset > end || end > live) return std::string();
+
+	return std::string(&buf[head + offset], end - offset);
+}
+
 char* Samurai::IO::Buffer::memdup(size_t offset, size_t end) {
 	const size_t live = len - head;
 	if (offset > end || end > live) return nullptr;

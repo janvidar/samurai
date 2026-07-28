@@ -32,7 +32,7 @@ Samurai::IO::Net::EPollSocketMonitor::EPollSocketMonitor() : Samurai::IO::Net::S
 {
 	max = Samurai::OS::getMaxOpenSockets();
 	num = 0;
-	act = new struct epoll_event[EPOLL_BATCH];
+	act.resize(EPOLL_BATCH);
 	memset(act, 0, sizeof(struct epoll_event) * EPOLL_BATCH);
 	epfd = epoll_create(max);
 }
@@ -40,7 +40,6 @@ Samurai::IO::Net::EPollSocketMonitor::EPollSocketMonitor() : Samurai::IO::Net::S
 Samurai::IO::Net::EPollSocketMonitor::~EPollSocketMonitor()
 {
 	close(epfd);
-	delete[] act;
 }
 
 bool Samurai::IO::Net::EPollSocketMonitor::isValid()
@@ -163,7 +162,7 @@ void Samurai::IO::Net::EPollSocketMonitor::internal_modify(Samurai::IO::Net::Soc
 
 void Samurai::IO::Net::EPollSocketMonitor::internal_wait(int time_ms)
 {
-	int nfds = epoll_wait(epfd, act, EPOLL_BATCH, time_ms);
+	int nfds = epoll_wait(epfd, act.data(), EPOLL_BATCH, time_ms);
 	if (nfds == 0) return;
 	
 	if (nfds == -1) {

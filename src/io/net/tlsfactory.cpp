@@ -8,8 +8,8 @@
 #include <samurai/io/file.h>
 
 
-Samurai::IO::File* Samurai::IO::Net::TlsFactory::pem_key = nullptr;
-Samurai::IO::File* Samurai::IO::Net::TlsFactory::pem_cert = nullptr;
+std::unique_ptr<Samurai::IO::File> Samurai::IO::Net::TlsFactory::pem_key;
+std::unique_ptr<Samurai::IO::File> Samurai::IO::Net::TlsFactory::pem_cert;
 bool Samurai::IO::Net::TlsFactory::allow_untrusted = true;
 
 void Samurai::IO::Net::TlsFactory::priv_init()
@@ -35,14 +35,12 @@ void Samurai::IO::Net::TlsFactory::setAllowUntrustedConnections(bool toggle)
 
 void Samurai::IO::Net::TlsFactory::resetKeys()
 {
-	pem_key = nullptr;
-	pem_cert = nullptr;
+	pem_key.reset();
+	pem_cert.reset();
 }
 
 void Samurai::IO::Net::TlsFactory::freeKeys()
 {
-	delete pem_key;
-	delete pem_cert;
 	resetKeys();
 }
 
@@ -50,17 +48,17 @@ void Samurai::IO::Net::TlsFactory::setKeys(const char* private_key, const char* 
 {
 	freeKeys();
 	
-	pem_key = new Samurai::IO::File(private_key);
-	pem_cert = new Samurai::IO::File(public_key);
+	pem_key = std::make_unique<Samurai::IO::File>(private_key);
+	pem_cert = std::make_unique<Samurai::IO::File>(public_key);
 }
 
 Samurai::IO::File* Samurai::IO::Net::TlsFactory::getPrivateKey()
 {
-	return pem_key;
+	return pem_key.get();
 }
 
 Samurai::IO::File* Samurai::IO::Net::TlsFactory::getCertificate()
 {
-	return pem_cert;
+	return pem_cert.get();
 }
 

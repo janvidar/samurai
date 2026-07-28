@@ -7,6 +7,7 @@
 #define HAVE_SAMURAI_SOCKET_SSL_API_H
 
 #include <samurai/io/net/socketglue.h>
+#include <memory>
 #include <string>
 
 namespace Samurai {
@@ -132,8 +133,11 @@ class TlsFactory {
 		enum TlsOperation mode;
 		std::string peer_name;
 
-		static Samurai::IO::File* pem_key;
-		static Samurai::IO::File* pem_cert;
+		/* Owned here. getPrivateKey() and getCertificate() hand out a
+		   borrowed pointer: they are accessors to this static state, not
+		   factories, so they must not transfer ownership. */
+		static std::unique_ptr<Samurai::IO::File> pem_key;
+		static std::unique_ptr<Samurai::IO::File> pem_cert;
 		static bool allow_untrusted;
 		
 		static void priv_init();

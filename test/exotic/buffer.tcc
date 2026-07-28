@@ -156,3 +156,75 @@ EXO_TEST(buffer_move_assign,
 	b = std::move(a);
 	return b.size() == 6 && b.at(0) == 'a' && a.size() == 0;
 });
+
+/* ------------------------------------------------------------------------- */
+/* copyRange(): a non-consuming copy of a sub-range                          */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(buffer_copyrange_whole,
+{
+	Samurai::IO::Buffer buf;
+	buf.append("hello world");
+	return buf.copyRange(0, buf.size()) == "hello world";
+});
+
+EXO_TEST(buffer_copyrange_prefix,
+{
+	Samurai::IO::Buffer buf;
+	buf.append("hello world");
+	return buf.copyRange(0, 5) == "hello";
+});
+
+EXO_TEST(buffer_copyrange_middle,
+{
+	Samurai::IO::Buffer buf;
+	buf.append("hello world");
+	return buf.copyRange(6, 11) == "world";
+});
+
+EXO_TEST(buffer_copyrange_does_not_consume,
+{
+	Samurai::IO::Buffer buf;
+	buf.append("hello");
+	buf.copyRange(0, 5);
+	return buf.size() == 5;
+});
+
+/* The range is relative to the live data, so a consumed prefix shifts it. */
+EXO_TEST(buffer_copyrange_after_remove,
+{
+	Samurai::IO::Buffer buf;
+	buf.append("hello world");
+	buf.remove(6);
+	return buf.copyRange(0, buf.size()) == "world";
+});
+
+EXO_TEST(buffer_copyrange_empty_range,
+{
+	Samurai::IO::Buffer buf;
+	buf.append("hello");
+	return buf.copyRange(2, 2).empty();
+});
+
+EXO_TEST(buffer_copyrange_past_end_is_empty,
+{
+	Samurai::IO::Buffer buf;
+	buf.append("hello");
+	return buf.copyRange(0, 99).empty();
+});
+
+EXO_TEST(buffer_copyrange_reversed_is_empty,
+{
+	Samurai::IO::Buffer buf;
+	buf.append("hello");
+	return buf.copyRange(4, 1).empty();
+});
+
+/* Binary safe: the copy is sized, not NUL terminated. */
+EXO_TEST(buffer_copyrange_keeps_embedded_nul,
+{
+	Samurai::IO::Buffer buf;
+	buf.append("ab\0cd", 5);
+	const std::string out = buf.copyRange(0, 5);
+	return out.size() == 5 && out[2] == '\0' && out[4] == 'd';
+});

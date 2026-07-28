@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <samurai/debug/dbg.h>
 #include <samurai/io/file.h>
+#include <memory>
 
 #define DUMP_FILE_NETWORK "~/.samurai/debug/network.log"
 #define DUMP_FILE_SEARCH  "~/.samurai/debug/search.log"
@@ -26,10 +27,10 @@
 #define DUPLICATE_TO_DEBUG
 
 
-static Samurai::IO::File* samurai_dump_net;
-static Samurai::IO::File* samurai_dump_sch;
-static Samurai::IO::File* samurai_dump_dbg;
-static Samurai::IO::File* samurai_dump_hub;
+static std::unique_ptr<Samurai::IO::File> samurai_dump_net;
+static std::unique_ptr<Samurai::IO::File> samurai_dump_sch;
+static std::unique_ptr<Samurai::IO::File> samurai_dump_dbg;
+static std::unique_ptr<Samurai::IO::File> samurai_dump_hub;
 
 static bool g_debug_stderr = false;
 
@@ -45,10 +46,10 @@ void samurai_debug_init() {
 		fprintf(stderr, "    (dumping debug messages to stderr)\n");
 	}
 	
-	samurai_dump_net = new Samurai::IO::File(DUMP_FILE_NETWORK);
-	samurai_dump_sch = new Samurai::IO::File(DUMP_FILE_SEARCH);
-	samurai_dump_dbg = new Samurai::IO::File(DUMP_FILE_DEBUG);
-	samurai_dump_hub = new Samurai::IO::File(DUMP_FILE_HUB);
+	samurai_dump_net = std::make_unique<Samurai::IO::File>(DUMP_FILE_NETWORK);
+	samurai_dump_sch = std::make_unique<Samurai::IO::File>(DUMP_FILE_SEARCH);
+	samurai_dump_dbg = std::make_unique<Samurai::IO::File>(DUMP_FILE_DEBUG);
+	samurai_dump_hub = std::make_unique<Samurai::IO::File>(DUMP_FILE_HUB);
 	samurai_dump_net->open(Samurai::IO::File::Write | Samurai::IO::File::Truncate);
 	samurai_dump_sch->open(Samurai::IO::File::Write | Samurai::IO::File::Append);
 	samurai_dump_dbg->open(Samurai::IO::File::Write | Samurai::IO::File::Truncate);
@@ -57,10 +58,10 @@ void samurai_debug_init() {
 }
 
 void samurai_debug_fini() {
-	delete samurai_dump_sch; samurai_dump_sch = nullptr;
-	delete samurai_dump_hub; samurai_dump_hub = nullptr;
-	delete samurai_dump_dbg; samurai_dump_dbg = nullptr;
-	delete samurai_dump_net; samurai_dump_net = nullptr;
+	samurai_dump_sch.reset();
+	samurai_dump_hub.reset();
+	samurai_dump_dbg.reset();
+	samurai_dump_net.reset();
 }
 
 void samurai_debug(const char* /*func*/, const char* file, int line, const char *format, ...) {

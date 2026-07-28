@@ -26,9 +26,9 @@ Samurai::IO::Net::PollSocketMonitor::PollSocketMonitor() : Samurai::IO::Net::Soc
 {
 	
 	max = MIN(Samurai::OS::getMaxOpenSockets(), MAXSOCK);
-	list = new struct pollfd[max];
-	act  = new struct poll_act[max];
-	sockets = new SocketBase*[max];
+	list.resize(max);
+	act.resize(max);
+	sockets.assign(max, nullptr);
 	
 	for (size_t n = 0; n < max; n++)
 	{
@@ -37,18 +37,12 @@ Samurai::IO::Net::PollSocketMonitor::PollSocketMonitor() : Samurai::IO::Net::Soc
 		list[n].revents = 0;
 		act[n].fd = INVALID_SOCKET;
 		act[n].trig = 0;
-		sockets[n] = 0;
 	}
 	num = 0;
 }
 
 
-Samurai::IO::Net::PollSocketMonitor::~PollSocketMonitor()
-{
-	delete[] act;
-	delete[] list;
-	delete[] sockets;
-}
+Samurai::IO::Net::PollSocketMonitor::~PollSocketMonitor() = default;
 
 
 bool Samurai::IO::Net::PollSocketMonitor::isValid()
@@ -135,7 +129,7 @@ void Samurai::IO::Net::PollSocketMonitor::internal_wait(int time_ms)
 {
 	if (num == 0) return;
 
-	int ret = ::poll(list, num, time_ms);
+	int ret = ::poll(list.data(), num, time_ms);
 	if (ret == 0) return;
 	
 	if (ret == -1)

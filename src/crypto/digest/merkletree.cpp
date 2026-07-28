@@ -6,6 +6,7 @@
 #include <samurai/samurai.h>
 #include <samurai/crypto/digest/tiger.h>
 #include <samurai/crypto/digest/merkletree.h>
+#include <algorithm>
 #include <samurai/util/base32.h>
 
 static uint8_t leaf_hash_prefix[1] = { 0x00 };
@@ -56,30 +57,17 @@ Samurai::Crypto::Digest::MerkleNode::~MerkleNode()
 
 }
 
-Samurai::Crypto::Digest::MerkleWorkStack::MerkleWorkStack(size_t capacity_) : capacity(capacity_)
+Samurai::Crypto::Digest::MerkleWorkStack::MerkleWorkStack(size_t capacity_)
+	: nodes(capacity_, nullptr)
 {
-	nodes = new Samurai::Crypto::Digest::MerkleNode*[capacity];
 	clear();
 }
 
-Samurai::Crypto::Digest::MerkleWorkStack::~MerkleWorkStack()
-{
-	delete[] nodes;
-}
+Samurai::Crypto::Digest::MerkleWorkStack::~MerkleWorkStack() = default;
 
 void Samurai::Crypto::Digest::MerkleWorkStack::grow()
 {
-	size_t sz = capacity * 2;
-	MerkleNode** new_nodes = new MerkleNode*[sz];
-	size_t i = 0;
-	for (; i < capacity; i++)
-		new_nodes[i] = nodes[i];
-	for (; i < sz; i++)
-		new_nodes[i] = nullptr;
-	
-	delete[] nodes;
-	nodes = new_nodes;	
-	capacity = sz;
+	nodes.resize(nodes.size() * 2, nullptr);
 }
 
 
@@ -126,22 +114,20 @@ void Samurai::Crypto::Digest::MerkleWorkStack::clear()
 {
 	size = 0;
 	pos = 0;
-	for (size_t i = 0; i < capacity; i++)
-		nodes[i] = nullptr;	
+	std::fill(nodes.begin(), nodes.end(), nullptr);
 }
 
 
 void Samurai::Crypto::Digest::MerkleWorkStack::setPosition(size_t npos)
 {
 	pos = npos;
-	for (size_t i = pos; i < capacity; i++)
-		nodes[i] = nullptr;
+	std::fill(nodes.begin() + pos, nodes.end(), nullptr);
 }
 
 
 bool Samurai::Crypto::Digest::MerkleWorkStack::isFull() const
 {
-	return pos == capacity;
+	return pos == nodes.size();
 }
 
 
