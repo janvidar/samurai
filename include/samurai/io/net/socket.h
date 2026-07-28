@@ -125,6 +125,19 @@ class Socket :
 		ssize_t write(const char* data, size_t length);
 		ssize_t read(char* data, size_t length);
 		ssize_t peek(char* data, size_t length);
+
+		/** The same transfers with the extent carried by the argument. */
+		Samurai::IO::ReadResult read(std::span<char> data, size_t& transferred, std::error_code& ec)
+		{ return read(data.data(), data.size(), transferred, ec); }
+
+		Samurai::IO::ReadResult peek(std::span<char> data, size_t& transferred, std::error_code& ec)
+		{ return peek(data.data(), data.size(), transferred, ec); }
+
+		ssize_t write(std::span<const char> data, std::error_code& ec)
+		{ return write(data.data(), data.size(), ec); }
+
+		ssize_t write(std::span<const char> data)
+		{ return write(data.data(), data.size()); }
 		
 		bool TLSInitialize(bool server);
 		void TLSDeinitialize();

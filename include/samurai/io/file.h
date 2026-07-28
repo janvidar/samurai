@@ -10,6 +10,7 @@
 #include <samurai/timestamp.h>
 #include <samurai/error.h>
 #include <sys/stat.h>
+#include <span>
 #include <string>
 
 
@@ -111,6 +112,19 @@ class File {
 		virtual ssize_t write(const char* data, size_t length, std::error_code& ec);
 		virtual ssize_t read(Samurai::IO::Buffer* data, size_t length = 65536);
 		virtual ssize_t write(Samurai::IO::Buffer* data, size_t length = 65536, bool remove = true);
+
+		/** The same transfers with the extent carried by the argument. */
+		ssize_t read(std::span<char> data)
+		{ return read(data.data(), data.size()); }
+
+		ssize_t write(std::span<const char> data)
+		{ return write(data.data(), data.size()); }
+
+		ssize_t read(std::span<char> data, std::error_code& ec)
+		{ return read(data.data(), data.size(), ec); }
+
+		ssize_t write(std::span<const char> data, std::error_code& ec)
+		{ return write(data.data(), data.size(), ec); }
 		
 		// Returns the file size
 		virtual off_t size() const;
