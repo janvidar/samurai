@@ -124,8 +124,7 @@ class MerkleWorkStack
 		MerkleWorkStack(size_t capacity);
 		~MerkleWorkStack();
 
-		/* Releases raw pointers in its destructor, so the implicit copy
-		 * operations would release them a second time. */
+		/* Owns its nodes, so it is movable but not copyable. */
 		MerkleWorkStack(const MerkleWorkStack&) = delete;
 		MerkleWorkStack& operator=(const MerkleWorkStack&) = delete;
 
@@ -134,28 +133,36 @@ class MerkleWorkStack
 		size_t getCapacity() { return nodes.size(); }
 		bool isFull() const;
 
+		/** Destroy every node held and rewind to empty. */
 		void clear();
 
-		void add(MerkleNode* node);
+		void add(std::unique_ptr<MerkleNode> node);
 
-		void set(MerkleNode* node, size_t position);
+		void set(std::unique_ptr<MerkleNode> node, size_t position);
 		void setPosition(size_t position);
 
+		/* Observers. The stack keeps ownership; the pointer is valid until the
+		   slot is overwritten, released or cleared. */
 		MerkleNode* get(size_t pos);
 		MerkleNode* getFirst();
 		MerkleNode* getLast();
 
-		void removeLast();
+		/** Hand the node at 'pos' to the caller, leaving the slot empty. */
+		std::unique_ptr<MerkleNode> release(size_t pos);
+
+		/** release() of the node getFirst() would return, and pop it. */
+		std::unique_ptr<MerkleNode> releaseFirst();
+
+		/** Destroy the node at 'pos', leaving the slot empty. */
+		void destroy(size_t pos);
 
 		void grow();
 
 	private:
-		/*
-		 * Non-owning: the nodes belong to the MerkleTree, which moves them
-		 * between its two stacks and releases them in deleteNodes(). The
-		 * vector replaces a hand-grown array, not the ownership model.
-		 */
-		std::vector<MerkleNode*> nodes;
+		/* The stack owns its nodes. A slot may be empty: release() and
+		   destroy() leave one behind, and everything below getPosition() is
+		   otherwise occupied. */
+		std::vector<std::unique_ptr<MerkleNode>> nodes;
 		uint64_t size;
 		size_t pos;
 
@@ -241,16 +248,7 @@ class MerkleTree : public Samurai::Crypto::Digest::Hash
 		/**
 		 * Combines two hashes and produces a new node of the internal hash of the two.
 		 */
-		MerkleNode* combine(MerkleNode* a, MerkleNode* b);
-
-		/**
-		 * Delete every node the stack still holds, and reset it.
-		 *
-		 * MerkleWorkStack stores bare pointers and does not own the nodes -
-		 * its destructor frees only the pointer array - so the tree has to
-		 * release them itself.
-		 */
-		void deleteNodes(MerkleWorkStack* stack);
+		void combine(MerkleNode& a, const MerkleNode& b);
 
 		/**
 		 * Internal mehod for hashing leaf data.
