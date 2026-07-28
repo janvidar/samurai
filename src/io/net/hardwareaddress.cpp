@@ -5,18 +5,39 @@
 
 #include <samurai/samurai.h>
 #include <samurai/io/net/hardwareaddress.h>
+#include <stdio.h>
+#include <string.h>
+
+namespace {
+
+/* %02x takes an unsigned int, so the octets cannot be passed straight through. */
+void formatOctets(char (&out)[18], const uint8_t (&octets)[6])
+{
+	snprintf(out, sizeof(out), "%02x:%02x:%02x:%02x:%02x:%02x",
+		(unsigned) octets[0], (unsigned) octets[1], (unsigned) octets[2],
+		(unsigned) octets[3], (unsigned) octets[4], (unsigned) octets[5]);
+}
+
+}
 
 Samurai::IO::Net::HardwareAddress::HardwareAddress(const char* text)
 {
-	(void) text;
-	// memcpy(macaddr, text, 18);
-	// sscanf(macaddr, "%02x:%02x:%02x:%02x:%02x:%02x", (uint8_t) octets[0], (uint8_t) octets[1], (uint8_t) octets[2], (uint8_t) octets[3], (uint8_t) octets[4], (uint8_t) octets[5]);
+	/* sscanf's %x writes an unsigned int, so it cannot target the octets. */
+	unsigned parsed[6] = {};
+	if (text && sscanf(text, "%2x:%2x:%2x:%2x:%2x:%2x",
+		&parsed[0], &parsed[1], &parsed[2],
+		&parsed[3], &parsed[4], &parsed[5]) == 6)
+	{
+		for (size_t n = 0; n < 6; n++)
+			octets[n] = (uint8_t) parsed[n];
+	}
+	formatOctets(macaddr, octets);
 }
 
 Samurai::IO::Net::HardwareAddress::HardwareAddress(const uint8_t octets_[6])
 {
 	memcpy(octets, octets_, 6);
-	snprintf(macaddr, 18, "%02x:%02x:%02x:%02x:%02x:%02x", octets[0], octets[1], octets[2], octets[3], octets[4], octets[5]);
+	formatOctets(macaddr, octets);
 }
 
 Samurai::IO::Net::HardwareAddress::~HardwareAddress()

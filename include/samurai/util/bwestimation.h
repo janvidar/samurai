@@ -24,8 +24,10 @@ class RateEstimator {
 		size_t getBps();
 		
 	private:
-		time_t current;
-		size_t last;
+		time_t current = 0;
+		/* Carries the previous second's total across a tick, so that getBps()
+		 * does not report a dip while the current second is still filling. */
+		size_t last = 0;
 		size_t* log;
 };
 

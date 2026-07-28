@@ -36,16 +36,16 @@ class BandwidthManager {
 		static BandwidthManager* getInstance();
 
 	protected:
-		size_t count_accepted;
-		size_t count_connected;
-		size_t count_errors;
-		
-		size_t data_tcp_tx;
-		size_t data_tcp_rx;
-		size_t data_udp_tx;
-		size_t data_udp_rx;
-		
-		size_t rate_peak;
+		size_t count_accepted = 0;
+		size_t count_connected = 0;
+		size_t count_errors = 0;
+
+		size_t data_tcp_tx = 0;
+		size_t data_tcp_rx = 0;
+		size_t data_udp_tx = 0;
+		size_t data_udp_rx = 0;
+
+		size_t rate_peak = 0;
 		Samurai::Util::RateEstimator estimator_send;
 		Samurai::Util::RateEstimator estimator_recv;
 		

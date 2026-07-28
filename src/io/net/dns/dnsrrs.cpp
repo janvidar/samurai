@@ -9,7 +9,6 @@
 
 Samurai::IO::Net::DNS::ResourceRecord::ResourceRecord() {
 	name = new Name();
-	rr = 0;
 }
 
 
@@ -114,13 +113,11 @@ Samurai::IO::Net::InetAddress* Samurai::IO::Net::DNS::RR_AAAA::getAddress()
 
 Samurai::IO::Net::DNS::RR_TXT::RR_TXT(const char* txt_)
 {
-	txt = 0;
 	if (txt_)
-		txt = strdup(txt_);
+		txt = txt_;
 }
 
 Samurai::IO::Net::DNS::RR_TXT::~RR_TXT()
 {
-	delete txt;
 }
 

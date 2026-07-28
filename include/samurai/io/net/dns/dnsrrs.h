@@ -8,6 +8,7 @@
 
 #include <samurai/io/net/dns/dnsutil.h>
 #include <samurai/io/net/dns/common.h>
+#include <string>
 
 namespace Samurai {
 namespace IO {
@@ -30,11 +31,14 @@ class ResourceRecord {
 		int32_t getTimeToLive() const { return ttl; }
 		
 	public:
-		Name* name;
+		Name* name = nullptr;
 		TypeClass type_class;
-		int32_t ttl;
-		uint16_t rdLength;
-		RR* rr;
+		/* getTimeToLive() and isExpired() read these before the decoder has
+		 * necessarily filled them in, so an unset record must read as expired
+		 * rather than as an arbitrary lifetime. */
+		int32_t ttl = 0;
+		uint16_t rdLength = 0;
+		RR* rr = nullptr;
 };
 
 
@@ -120,8 +124,10 @@ class RR_TXT : public RR {
 		RR_TXT(const char* txt);
 		virtual ~RR_TXT();
 
+		const std::string& getText() const { return txt; }
+
 	protected:
-		char* txt;
+		std::string txt;
 };
 
 } // namespace DNS

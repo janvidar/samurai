@@ -27,26 +27,18 @@ namespace DNS {
  */
 class MessageHeader {
 	public:
-		uint16_t id;
-		union
-		{
-			struct
-			{
-				uint16_t qr     : 1; /* query(0) or response(1) */
-				uint16_t opcode : 4; /* query type */
-				uint16_t aa     : 1; /* authorative answer */
-				uint16_t tc     : 1; /* was the message truncated? */
-				uint16_t rd     : 1; /* recursion desired */
-				uint16_t ra     : 1; /* recursion available */
-				uint16_t z      : 3; /* must be zero */
-				uint16_t rcode  : 4; /* response code */
-			} flags;
-			uint16_t flags_u16;
-		};
-		uint16_t qdcount; /* number of questions in query */
-		uint16_t ancount; /* number of resource records in answer */
-		uint16_t nscount; /* number of name servers */
-		uint16_t arcount; /* number of additional records */
+		uint16_t id = 0;
+		/*
+		 * The flag word is held as a plain 16-bit value and picked apart with
+		 * the masks below. decode16Bits() has already put it in host order, so
+		 * the masks mean the same thing on either endianness - which a
+		 * bitfield layered over the same storage would not have.
+		 */
+		uint16_t flags_u16 = 0;
+		uint16_t qdcount = 0; /* number of questions in query */
+		uint16_t ancount = 0; /* number of resource records in answer */
+		uint16_t nscount = 0; /* number of name servers */
+		uint16_t arcount = 0; /* number of additional records */
 		
 	public:
 
@@ -100,9 +92,13 @@ class MessageHeader {
 		}
 
 		bool     isValid() {
+			/* The opcode has to be masked off before it is shifted down: '>>'
+			 * binds tighter than '&', so folding the two into one expression
+			 * tests the response code instead and rejects the perfectly valid
+			 * codes 3, 4 and 5 (name error, not implemented, refused). */
 			return (
 				((flags_u16 & 0x000f) <= 5) &&
-				((flags_u16 & 0x7800 >> 11) <= 2) &&
+				(((flags_u16 & 0x7800) >> 11) <= 2) &&
 				((flags_u16 & 0x0070) == 0)
 				);
 		}
@@ -123,7 +119,7 @@ class MessageHeader {
 
 		const char* getResponseCodeStr()
 		{
-			switch (flags_u16 & 0x000f) { // FIXME: This works on little endian.
+			switch (flags_u16 & 0x000f) {
 				case 0: return "ok";
 				case 1: return "format error";
 				case 2: return "server error";

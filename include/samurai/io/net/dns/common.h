@@ -150,9 +150,8 @@ enum Class {
 
 class TypeClass {
 	public:
-		uint16_t rr_type;
-		uint16_t rr_class;
-
+		uint16_t rr_type = Type_Invalid;
+		uint16_t rr_class = Class_Invalid;
 };
 
 enum QueryType
