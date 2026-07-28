@@ -65,18 +65,18 @@ bool Samurai::IO::Net::KQueueSocketMonitor::isValid()
 /* ev->filter names the single filter that fired; it is an identifier (a small
    negative number), not a bitmask, so it has to be compared and not masked.
    The EV_* conditions live in ev->flags. */
-static int get_poll_events(struct kevent* handle)
+static Samurai::IO::Net::SocketMonitor::Triggers get_poll_events(struct kevent* handle)
 {
-	int evt = 0;
+	Samurai::IO::Net::SocketMonitor::Triggers evt = Samurai::IO::Net::SocketMonitor::Triggers::None;
 
 	switch (handle->filter)
 	{
 		case EVFILT_READ:
-			evt |= Samurai::IO::Net::SocketMonitor::MRead;
+			evt |= Samurai::IO::Net::SocketMonitor::Triggers::Read;
 			break;
 
 		case EVFILT_WRITE:
-			evt |= Samurai::IO::Net::SocketMonitor::MWrite;
+			evt |= Samurai::IO::Net::SocketMonitor::Triggers::Write;
 			break;
 
 		default:
@@ -84,7 +84,7 @@ static int get_poll_events(struct kevent* handle)
 	}
 
 	if (handle->flags & EV_EOF)
-		evt |= Samurai::IO::Net::SocketMonitor::MClose;
+		evt |= Samurai::IO::Net::SocketMonitor::Triggers::Close;
 
 	return evt;
 }
@@ -162,13 +162,13 @@ static void print_kevent(struct kevent* event)
    fails with ENOENT. */
 void Samurai::IO::Net::KQueueSocketMonitor::internal_set(Samurai::IO::Net::SocketBase* socket)
 {
-	int trigger = socket->getMonitorTrigger();
+	Samurai::IO::Net::SocketMonitor::Triggers trigger = socket->getMonitorTrigger();
 
-	bool want_read = (trigger & (MRead | MAccept | MClose | MUrgent)) != 0;
-	bool want_write = (trigger & MWrite) != 0;
+	bool want_read = any(trigger & (Samurai::IO::Net::SocketMonitor::Triggers::Read | Samurai::IO::Net::SocketMonitor::Triggers::Accept | Samurai::IO::Net::SocketMonitor::Triggers::Close | Samurai::IO::Net::SocketMonitor::Triggers::Urgent));
+	bool want_write = any(trigger & Samurai::IO::Net::SocketMonitor::Triggers::Write);
 
 	short flags = EV_ADD;
-	if (trigger & MUrgent)
+	if (any(trigger & Samurai::IO::Net::SocketMonitor::Triggers::Urgent))
 		flags |= EV_OOBAND;
 
 	struct kevent* ev = getChangeEventSlot();
@@ -248,7 +248,7 @@ void Samurai::IO::Net::KQueueSocketMonitor::internal_wait(int time_ms)
 			continue;
 		}
 
-		int trig = get_poll_events(ev);
+		Samurai::IO::Net::SocketMonitor::Triggers trig = get_poll_events(ev);
 		QDBG("kqueue - SIG (sd=%d) trigger=%x (%d/%d) ev={%d, %d, %d, %p}",
 			(int) ev->ident, trig, n+1, ret, (int) ev->ident, (int) ev->filter,
 			(unsigned int) ev->fflags, (void*) ev->udata);

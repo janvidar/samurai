@@ -143,23 +143,23 @@ void Samurai::IO::File::getInfo() const {
 }
 
 
-bool Samurai::IO::File::open(int mode)
+bool Samurai::IO::File::open(Mode mode)
 {
 	std::error_code ec;
 	return open(mode, ec);
 }
 
 
-bool Samurai::IO::File::open(int mode, std::error_code& ec)
+bool Samurai::IO::File::open(Mode mode, std::error_code& ec)
 {
 	ec.clear();
 
 	int flags = 0;
 	mode_t fmode = 0666;
 	
-	const bool wants_write  = (mode & Write) != 0;
-	const bool wants_read   = (mode & Read) != 0;
-	const bool wants_append = (mode & Append) != 0;
+	const bool wants_write  = any(mode & Mode::Write);
+	const bool wants_read   = any(mode & Mode::Read);
+	const bool wants_append = any(mode & Mode::Append);
 
 	if ((wants_write || wants_append) && wants_read)
 		flags |= O_RDWR;
@@ -175,20 +175,20 @@ bool Samurai::IO::File::open(int mode, std::error_code& ec)
 		if (wants_append)
 			flags |= O_APPEND;
 
-		if (mode & Truncate)
+		if (any(mode & Mode::Truncate))
 			flags |= O_TRUNC;
 
-		if (mode & Exclusive)
+		if (any(mode & Mode::Exclusive))
 			flags |= O_EXCL;
 	}
 
 #ifdef O_NOFOLLOW
-	if (mode & Paranoid)
+	if (any(mode & Mode::Paranoid))
 		flags |= O_NOFOLLOW;
 #endif
 	
 #ifdef O_NOATIME
-	if (mode & NoAccess)
+	if (any(mode & Mode::NoAccess))
 		flags |= O_NOATIME;
 #endif
 

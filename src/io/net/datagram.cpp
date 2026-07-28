@@ -126,7 +126,7 @@ void Samurai::IO::Net::DatagramSocket::internal_create() {
    in a constructor. */
 void Samurai::IO::Net::DatagramSocket::initialize() {
 	if (sd != INVALID_SOCKET)
-		setMonitor(Samurai::IO::Net::SocketMonitor::MRead);
+		setMonitor(Samurai::IO::Net::SocketMonitor::Triggers::Read);
 }
 
 
@@ -226,12 +226,12 @@ int Samurai::IO::Net::DatagramSocket::read(DatagramPacket* packet) {
 }
 
 
-void Samurai::IO::Net::DatagramSocket::handleMonitorEvent(int trig)
+void Samurai::IO::Net::DatagramSocket::handleMonitorEvent(Samurai::IO::Net::SocketMonitor::Triggers trig)
 {
-	if (trig & SocketMonitor::MRead)
+	if (any(trig & Samurai::IO::Net::SocketMonitor::Triggers::Read))
 		internal_canRead();
 
-	if (trig & (SocketMonitor::MError | SocketMonitor::MClose))
+	if (any(trig & (Samurai::IO::Net::SocketMonitor::Triggers::Error | Samurai::IO::Net::SocketMonitor::Triggers::Close)))
 		internal_error();
 }
 

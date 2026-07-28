@@ -7,6 +7,7 @@
 #define HAVE_SAMURAI_IO_FILE_H
 
 #include <samurai/samurai.h>
+#include <samurai/bitmask.h>
 #include <samurai/timestamp.h>
 #include <samurai/error.h>
 #include <sys/stat.h>
@@ -33,7 +34,7 @@ class File final {
 		File& operator=(File&& other) noexcept;
 		~File();
 		
-		enum Mode
+		enum class Mode : unsigned
 		{
 			Write     = 0x01, /**<<< "Open writing, the file will be created if it does not exist." */
 			Read      = 0x02, /**<<< "Open for reading." */
@@ -48,7 +49,7 @@ class File final {
 		/**
 		 * @short Open a file using a specified access mode.
 		 */
-		bool open(int mode = Read);
+		bool open(Mode mode = Mode::Read);
 
 		/**
 		 * Open, reporting why on failure.
@@ -56,7 +57,7 @@ class File final {
 		 * NOTE: the bool overload above cannot tell a missing file from a
 		 * permission problem from a full descriptor table.
 		 */
-		bool open(int mode, std::error_code& ec);
+		bool open(Mode mode, std::error_code& ec);
 		
 		/**
 		 * @return true if the file is open.
@@ -197,6 +198,9 @@ class File final {
 		mutable std::string temp;
 		int fd;
 };
+
+/* File::Mode is a flag set; see samurai/bitmask.h. */
+SAMURAI_DECLARE_BITMASK(File::Mode)
 
 }
 }

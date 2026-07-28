@@ -159,6 +159,6 @@ bool Samurai::IO::Net::MulticastSocket::listen()
         if (!setNonBlocking(true)) return false;
         if (!bind(addr.get())) return false;
 
-        setMonitor(SocketMonitor::MRead);
+        setMonitor(Samurai::IO::Net::SocketMonitor::Triggers::Read);
         return true;
 }

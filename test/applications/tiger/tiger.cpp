@@ -103,7 +103,7 @@ int main(int argc, char* argv[]) {
 		}
 
 		size_t size = (size_t) file.size();
-		if (!file.open(Samurai::IO::File::Read)) {
+		if (!file.open(Samurai::IO::File::Mode::Read)) {
 			fprintf(stderr, "Cannot open file: %s\n", argv[i]);
 			continue;
 		}

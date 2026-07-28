@@ -32,7 +32,7 @@ struct pollfd;
    dispatch is worthless once a handler has released its socket. */
 struct poll_act {
 	socket_t fd;
-	int trig;
+	Samurai::IO::Net::SocketMonitor::Triggers trig;
 };
 
 namespace Samurai {

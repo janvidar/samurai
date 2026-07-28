@@ -130,7 +130,7 @@ EXO_TEST(file_move_construct, {
 
 EXO_TEST(file_move_assign_open, {
 	Samurai::IO::File a(EXOTIC_DATA_PATH("data/file1"));
-	if (!a.open(Samurai::IO::File::Read)) return false;
+	if (!a.open(Samurai::IO::File::Mode::Read)) return false;
 
 	Samurai::IO::File b;
 	b = std::move(a);
@@ -182,7 +182,7 @@ EXO_TEST(dir_iterate_unopened, {
 
 EXO_TEST(file_read_span, {
 	Samurai::IO::File f(EXOTIC_DATA_PATH("data/file1"));
-	if (!f.open(Samurai::IO::File::Read)) return false;
+	if (!f.open(Samurai::IO::File::Mode::Read)) return false;
 
 	char buf[16];
 	ssize_t n = f.read(std::span<char>(buf, sizeof(buf)));
@@ -195,12 +195,12 @@ EXO_TEST(file_write_span_roundtrip, {
 	const char payload[] = "span round trip";
 
 	Samurai::IO::File w(path);
-	if (!w.open(Samurai::IO::File::Write | Samurai::IO::File::Truncate)) return false;
+	if (!w.open(Samurai::IO::File::Mode::Write | Samurai::IO::File::Mode::Truncate)) return false;
 	ssize_t written = w.write(std::span<const char>(payload, sizeof(payload) - 1));
 	w.close();
 
 	Samurai::IO::File r(path);
-	if (!r.open(Samurai::IO::File::Read)) return false;
+	if (!r.open(Samurai::IO::File::Mode::Read)) return false;
 	char buf[32] = { 0 };
 	ssize_t got = r.read(std::span<char>(buf, sizeof(buf) - 1));
 	r.close();

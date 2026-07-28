@@ -125,7 +125,7 @@ class DatagramSocket : public SocketBase {
 		DatagramSocket();
 		DatagramSocket(SocketAddress*);
 		
-		void handleMonitorEvent(int trig) override;
+		void handleMonitorEvent(SocketMonitor::Triggers trig) override;
 
 		void internal_create();
 		void internal_canRead();

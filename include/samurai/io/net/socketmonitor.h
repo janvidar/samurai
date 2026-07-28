@@ -11,6 +11,7 @@
 #include <vector>
 #include <samurai/samurai.h>
 #include <samurai/io/net/socketglue.h>
+#include <samurai/bitmask.h>
 
 namespace Samurai {
 namespace IO {
@@ -48,15 +49,15 @@ class SocketMonitor
 		 */
 		static bool setSocketMonitor(SocketMonitor* monitor);
 		
-		enum Triggers
+		enum class Triggers : unsigned
 		{
-			MNone   = 0x00,
-			MRead   = 0x01,
-			MWrite  = 0x02,
-			MAccept = 0x04, /**<< "Not used" */
-			MClose  = 0x08, /**<< "Not used" */
-			MUrgent = 0x10, /**<< "Not used -- urgent data to read" */
-			MError  = 0x20, /**<< "Error" -- error */
+			None   = 0x00,
+			Read   = 0x01,
+			Write  = 0x02,
+			Accept = 0x04, /**<< "Not used" */
+			Close  = 0x08, /**<< "Not used" */
+			Urgent = 0x10, /**<< "Not used -- urgent data to read" */
+			Error  = 0x20, /**<< "Error" -- error */
 		};
 
 		/**
@@ -143,7 +144,7 @@ class SocketMonitor
 		 *
 		 * @param trig see enum Triggers (ORed)
 		 */
-		virtual void handleSocketEvent(SocketBase* socket, int trig);
+		virtual void handleSocketEvent(SocketBase* socket, Triggers trig);
 
 		/**
 		 * Deliver an event for the socket registered on the given descriptor.
@@ -156,7 +157,7 @@ class SocketMonitor
 		 * its owner drops mid-dispatch stays alive until the callback returns,
 		 * and one that was already released is skipped instead of followed.
 		 */
-		void dispatch(socket_t fd, int trig);
+		void dispatch(socket_t fd, Triggers trig);
 
 	private:
 		/** Whether any monitored socket holds buffered input right now. */
@@ -172,6 +173,9 @@ class SocketMonitor
 
 		std::map<socket_t, std::weak_ptr<SocketBase> > registry;
 };
+
+/* SocketMonitor::Triggers is a flag set; see samurai/bitmask.h. */
+SAMURAI_DECLARE_BITMASK(SocketMonitor::Triggers)
 
 }
 }

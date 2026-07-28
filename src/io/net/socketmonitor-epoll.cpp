@@ -60,17 +60,17 @@ static void set_poll_events(struct epoll_event* handle, int trigger)
 {
 	memset(handle, 0, sizeof(struct epoll_event));
 
-	if (trigger & Samurai::IO::Net::SocketMonitor::MRead || trigger & Samurai::IO::Net::SocketMonitor::MAccept || trigger & Samurai::IO::Net::SocketMonitor::MClose)
+	if (trigger & Samurai::IO::Net::SocketMonitor::Triggers::Read || trigger & Samurai::IO::Net::SocketMonitor::Triggers::Accept || trigger & Samurai::IO::Net::SocketMonitor::Triggers::Close)
 		handle->events |= EPOLLIN;
 
-	if (trigger & Samurai::IO::Net::SocketMonitor::MWrite)
+	if (any(trigger & Samurai::IO::Net::SocketMonitor::Triggers::Write))
 		handle->events |= EPOLLOUT;
 
-	if (trigger & Samurai::IO::Net::SocketMonitor::MUrgent)
+	if (any(trigger & Samurai::IO::Net::SocketMonitor::Triggers::Urgent))
 		handle->events |= EPOLLPRI;
 
 #ifdef EPOLLRDHUP
-	if (trigger & Samurai::IO::Net::SocketMonitor::MClose)
+	if (any(trigger & Samurai::IO::Net::SocketMonitor::Triggers::Close))
 		handle->events |= EPOLLRDHUP;
 #endif
 }
@@ -80,24 +80,24 @@ static int get_poll_events(struct epoll_event* handle)
 	uint32_t trig = handle->events;
 	int evt  = 0;
 
-	if (trig & EPOLLIN)
-		evt |= Samurai::IO::Net::SocketMonitor::MRead;
+	if (any(trig & EPOLLIN))
+		evt |= Samurai::IO::Net::SocketMonitor::Triggers::Read;
 
-	if (trig & EPOLLPRI)
-		evt |= Samurai::IO::Net::SocketMonitor::MUrgent;
+	if (any(trig & EPOLLPRI))
+		evt |= Samurai::IO::Net::SocketMonitor::Triggers::Urgent;
 
-	if (trig & EPOLLOUT)
-		evt |= Samurai::IO::Net::SocketMonitor::MWrite;
+	if (any(trig & EPOLLOUT))
+		evt |= Samurai::IO::Net::SocketMonitor::Triggers::Write;
 
-	if (trig & EPOLLHUP)
-		evt |= Samurai::IO::Net::SocketMonitor::MClose;
+	if (any(trig & EPOLLHUP))
+		evt |= Samurai::IO::Net::SocketMonitor::Triggers::Close;
 
-	if (trig & EPOLLERR)
-		evt |= Samurai::IO::Net::SocketMonitor::MError;
+	if (any(trig & EPOLLERR))
+		evt |= Samurai::IO::Net::SocketMonitor::Triggers::Error;
 
 #ifdef EPOLLRDHUP
-	if (trig & EPOLLRDHUP)
-		evt |= Samurai::IO::Net::SocketMonitor::MClose;
+	if (any(trig & EPOLLRDHUP))
+		evt |= Samurai::IO::Net::SocketMonitor::Triggers::Close;
 #endif
 	return evt;
 }
