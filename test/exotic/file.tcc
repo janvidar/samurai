@@ -3,6 +3,9 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <system_error>
+#include <vector>
+#include <string>
 #include <samurai/io/file.h>
 #include <samurai/io/dir.h>
 #include <string.h>
@@ -207,4 +210,342 @@ EXO_TEST(file_write_span_roundtrip, {
 	Samurai::IO::File::remove(path.c_str());
 
 	return written == (ssize_t) (sizeof(payload) - 1) && got == written && strcmp(buf, payload) == 0;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Open modes, seeking, size and the directory operations                    */
+/*                                                                           */
+/* Everything here works inside a scratch directory created per case, so the  */
+/* suite leaves nothing behind and cases do not collide.                      */
+/* ------------------------------------------------------------------------- */
+
+namespace {
+
+using FileMode = Samurai::IO::File::Mode;
+
+/* A unique scratch path that removes itself. Named by counter rather than by
+   time, so a run is reproducible. */
+class Scratch
+{
+	public:
+		explicit Scratch(const char* tag)
+		{
+			static int counter = 0;
+			dir = std::string("samurai-file-test-") + tag + "-" + std::to_string(counter++);
+			Samurai::IO::File::mkdir(dir.c_str());
+		}
+
+		~Scratch()
+		{
+			/* Best effort: a case that failed part way may have left files. */
+			for (const std::string& created : files)
+				Samurai::IO::File::remove(created.c_str());
+			Samurai::IO::File::rmdir(dir.c_str());
+		}
+
+		std::string path(const char* leaf)
+		{
+			std::string p = dir + "/" + leaf;
+			files.push_back(p);
+			return p;
+		}
+
+		const std::string& directory() const { return dir; }
+
+		Scratch(const Scratch&) = delete;
+		Scratch& operator=(const Scratch&) = delete;
+
+	private:
+		std::string dir;
+		std::vector<std::string> files;
+};
+
+static bool write_file(const std::string& path, const std::string& content)
+{
+	Samurai::IO::File f(path);
+	if (!f.open(FileMode::Write | FileMode::Truncate)) return false;
+	const bool ok = f.write(content.data(), content.size()) == (ssize_t) content.size();
+	f.close();
+	return ok;
+}
+
+static std::string read_file(const std::string& path)
+{
+	Samurai::IO::File f(path);
+	if (!f.open(FileMode::Read)) return std::string();
+
+	char buf[256] = { 0 };
+	const ssize_t n = f.read(buf, sizeof(buf));
+	f.close();
+	return n > 0 ? std::string(buf, (size_t) n) : std::string();
+}
+
+}
+
+EXO_TEST(file_mkdir_and_rmdir,
+{
+	Scratch scratch("mkdir");
+	Samurai::IO::File dir(scratch.directory());
+	return dir.exists() && dir.isDirectory() && !dir.isRegular();
+});
+
+EXO_TEST(file_write_then_read_round_trip,
+{
+	Scratch scratch("roundtrip");
+	const std::string path = scratch.path("data.txt");
+
+	return write_file(path, "hello file") && read_file(path) == "hello file";
+});
+
+EXO_TEST(file_size_reports_what_was_written,
+{
+	Scratch scratch("size");
+	const std::string path = scratch.path("sized.bin");
+	if (!write_file(path, std::string(1234, 'z'))) return false;
+
+	Samurai::IO::File f(path);
+	return f.size() == 1234;
+});
+
+EXO_TEST(file_is_regular_not_directory,
+{
+	Scratch scratch("regular");
+	const std::string path = scratch.path("plain.txt");
+	if (!write_file(path, "x")) return false;
+
+	Samurai::IO::File f(path);
+	return f.isRegular() && !f.isDirectory();
+});
+
+/* Truncate must discard what was there, not overwrite a prefix of it. */
+EXO_TEST(file_truncate_discards_previous_content,
+{
+	Scratch scratch("truncate");
+	const std::string path = scratch.path("t.txt");
+
+	if (!write_file(path, "a long original line")) return false;
+	if (!write_file(path, "short")) return false;
+
+	return read_file(path) == "short";
+});
+
+/* Append must keep it. */
+EXO_TEST(file_append_adds_to_the_end,
+{
+	Scratch scratch("append");
+	const std::string path = scratch.path("a.txt");
+	if (!write_file(path, "first")) return false;
+
+	Samurai::IO::File f(path);
+	if (!f.open(FileMode::Write | FileMode::Append)) return false;
+	f.write("second", 6);
+	f.close();
+
+	return read_file(path) == "firstsecond";
+});
+
+/* Exclusive refuses to create a file that is already there. */
+EXO_TEST(file_exclusive_refuses_an_existing_file,
+{
+	Scratch scratch("exclusive");
+	const std::string path = scratch.path("e.txt");
+	if (!write_file(path, "already here")) return false;
+
+	Samurai::IO::File f(path);
+	return !f.open(FileMode::Write | FileMode::Exclusive);
+});
+
+EXO_TEST(file_exclusive_creates_a_new_file,
+{
+	Scratch scratch("exclusive-new");
+	const std::string path = scratch.path("fresh.txt");
+
+	Samurai::IO::File f(path);
+	const bool opened = f.open(FileMode::Write | FileMode::Exclusive);
+	if (opened) f.close();
+	return opened;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Seeking                                                                   */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(file_seek_moves_the_read_position,
+{
+	Scratch scratch("seek");
+	const std::string path = scratch.path("s.txt");
+	if (!write_file(path, "0123456789")) return false;
+
+	Samurai::IO::File f(path);
+	if (!f.open(FileMode::Read)) return false;
+	if (!f.seek(4)) { f.close(); return false; }
+
+	char buf[4] = { 0 };
+	const ssize_t n = f.read(buf, 3);
+	f.close();
+	return n == 3 && memcmp(buf, "456", 3) == 0;
+});
+
+EXO_TEST(file_current_position_follows_reads_and_seeks,
+{
+	Scratch scratch("tell");
+	const std::string path = scratch.path("p.txt");
+	if (!write_file(path, "0123456789")) return false;
+
+	Samurai::IO::File f(path);
+	if (!f.open(FileMode::Read)) return false;
+
+	const bool at_start = f.getCurrentPosition() == 0;
+
+	char buf[4];
+	f.read(buf, 4);
+	const bool after_read = f.getCurrentPosition() == 4;
+
+	f.seek(2);
+	const bool after_seek = f.getCurrentPosition() == 2;
+
+	f.close();
+	return at_start && after_read && after_seek;
+});
+
+EXO_TEST(file_seek_to_the_end_reads_nothing,
+{
+	Scratch scratch("seek-end");
+	const std::string path = scratch.path("e.txt");
+	if (!write_file(path, "abcdef")) return false;
+
+	Samurai::IO::File f(path);
+	if (!f.open(FileMode::Read)) return false;
+	f.seek(6);
+
+	char buf[4];
+	const ssize_t n = f.read(buf, sizeof(buf));
+	f.close();
+	return n == 0;
+});
+
+/* ------------------------------------------------------------------------- */
+/* rename, remove, flush                                                     */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(file_rename_moves_the_content,
+{
+	Scratch scratch("rename");
+	const std::string from = scratch.path("from.txt");
+	const std::string to = scratch.path("to.txt");
+	if (!write_file(from, "carried across")) return false;
+
+	Samurai::IO::File f(from);
+	if (!f.rename(to)) return false;
+
+	return !Samurai::IO::File::exists(from.c_str())
+		&& read_file(to) == "carried across";
+});
+
+EXO_TEST(file_remove_deletes_it,
+{
+	Scratch scratch("remove");
+	const std::string path = scratch.path("gone.txt");
+	if (!write_file(path, "temporary")) return false;
+	if (!Samurai::IO::File::exists(path.c_str())) return false;
+
+	Samurai::IO::File f(path);
+	return f.remove() && !Samurai::IO::File::exists(path.c_str());
+});
+
+EXO_TEST(file_flush_makes_content_readable,
+{
+	Scratch scratch("flush");
+	const std::string path = scratch.path("f.txt");
+
+	Samurai::IO::File writer(path);
+	if (!writer.open(FileMode::Write | FileMode::Truncate)) return false;
+	writer.write("flushed", 7);
+	const bool flushed = writer.flush();
+
+	const std::string seen = read_file(path);
+	writer.close();
+
+	return flushed && seen == "flushed";
+});
+
+/* ------------------------------------------------------------------------- */
+/* The std::error_code overloads                                             */
+/*                                                                           */
+/* The whole point of these is telling a missing file from a permission       */
+/* problem, which the bool cannot.                                           */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(file_open_missing_reports_no_such_file,
+{
+	Scratch scratch("enoent");
+	Samurai::IO::File f(scratch.directory() + "/definitely-not-here.txt");
+
+	std::error_code ec;
+	const bool opened = f.open(FileMode::Read, ec);
+	return !opened && ec == std::errc::no_such_file_or_directory;
+});
+
+EXO_TEST(file_open_success_clears_the_error_code,
+{
+	Scratch scratch("ok-ec");
+	const std::string path = scratch.path("good.txt");
+	if (!write_file(path, "fine")) return false;
+
+	Samurai::IO::File f(path);
+	std::error_code ec = std::make_error_code(std::errc::io_error);
+	const bool opened = f.open(FileMode::Read, ec);
+	if (opened) f.close();
+
+	return opened && !ec;
+});
+
+EXO_TEST(file_exclusive_reports_file_exists,
+{
+	Scratch scratch("eexist");
+	const std::string path = scratch.path("there.txt");
+	if (!write_file(path, "here")) return false;
+
+	Samurai::IO::File f(path);
+	std::error_code ec;
+	const bool opened = f.open(FileMode::Write | FileMode::Exclusive, ec);
+	return !opened && ec == std::errc::file_exists;
+});
+
+EXO_TEST(file_read_and_write_error_code_overloads_succeed,
+{
+	Scratch scratch("rw-ec");
+	const std::string path = scratch.path("rw.txt");
+
+	Samurai::IO::File writer(path);
+	std::error_code ec;
+	if (!writer.open(FileMode::Write | FileMode::Truncate, ec) || ec) return false;
+	if (writer.write("payload", 7, ec) != 7 || ec) return false;
+	writer.close();
+
+	Samurai::IO::File reader(path);
+	if (!reader.open(FileMode::Read, ec) || ec) return false;
+
+	char buf[8] = { 0 };
+	const ssize_t n = reader.read(buf, 7, ec);
+	reader.close();
+
+	return n == 7 && !ec && memcmp(buf, "payload", 7) == 0;
+});
+
+EXO_TEST(file_remove_missing_reports_no_such_file,
+{
+	Scratch scratch("rm-ec");
+	Samurai::IO::File f(scratch.directory() + "/never-existed.txt");
+
+	std::error_code ec;
+	return !f.remove(ec) && ec == std::errc::no_such_file_or_directory;
+});
+
+/* size() of something that is not there is not a valid length. */
+EXO_TEST(file_size_of_missing_file_is_not_positive,
+{
+	Scratch scratch("size-missing");
+	Samurai::IO::File f(scratch.directory() + "/absent.bin");
+	return f.size() <= 0;
 });
