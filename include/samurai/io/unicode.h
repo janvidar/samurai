@@ -8,6 +8,7 @@
 
 #include <sys/types.h>
 #include <samurai/io/codec.h>
+#include <memory>
 
 namespace Samurai {
 namespace IO {
@@ -27,7 +28,7 @@ class Unicode final : public Codec
 		Unicode& operator=(const Unicode&) = delete;
 
 	protected:
-		UnicodePrivate* cvt;
+		std::unique_ptr<UnicodePrivate> cvt;
 };
 	
 

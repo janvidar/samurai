@@ -7,6 +7,7 @@
 #define HAVE_SAMURAI_HASH_VALUE_H
 
 #include <samurai/samurai.h>
+#include <vector>
 
 namespace Samurai {
 namespace Crypto {
@@ -21,39 +22,43 @@ class HashValue
 {
 	public:
 		enum Format { FormatHex, FormatBase32 };
-	
+
 	public:
-		HashValue(HashValue* copy);
-		HashValue(const HashValue& copy);
-		HashValue(size_t size);
-		HashValue(size_t size, uint8_t* data);
-		HashValue(HashValue&& other) noexcept;
-		virtual ~HashValue();
-		
+		explicit HashValue(HashValue* copy);
+		explicit HashValue(size_t size);
+		HashValue(size_t size, const uint8_t* data);
+
+		/*
+		 * The vector owns the digest bytes and supplies copy, move and
+		 * destruction, so none of them has to be written out here.
+		 */
+		HashValue(const HashValue& copy) = default;
+		HashValue(HashValue&& other) noexcept = default;
+		HashValue& operator=(const HashValue& copy) = default;
+		HashValue& operator=(HashValue&& other) noexcept = default;
+		virtual ~HashValue() = default;
+
 		size_t size() const;
 		uint8_t* getData();
+		const uint8_t* getData() const;
+
+		/** Overwrites the existing bytes; the size is fixed at construction. */
 		void setData(const uint8_t*);
-		
+
 		/**
 		 * This will return a printable string of the hash.
 		 *
 		 * @return false if buf/buflen is not large enough to hold the string.
 		 */
-		bool getFormattedString(enum Format, char* buf, size_t buflen);
-		
-		
-		HashValue& operator=(const HashValue& copy);
-		HashValue& operator=(HashValue&& other) noexcept;
-		bool operator==(const HashValue&);
-		bool operator!=(const HashValue&);
-	
+		bool getFormattedString(enum Format, char* buf, size_t buflen) const;
+
+		bool operator==(const HashValue&) const;
+
 	protected:
 		HashValue();
-		
-		uint8_t* m_data;
-		size_t m_size;
-		
-		
+
+		std::vector<uint8_t> m_data;
+
 	friend class Hash;
 	friend class Tiger;
 };

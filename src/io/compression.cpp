@@ -11,6 +11,7 @@
 #include <zlib.h>
 
 #include <samurai/io/compression.h>
+#include <memory>
 #include <errno.h>
 
 class Bz2Private
@@ -31,9 +32,9 @@ class Bz2Private
 
 		bz_stream* stream;
 
-	private:
-		Bz2Private(const Bz2Private&);
-		Bz2Private& operator=(const Bz2Private&);
+		/* Owns a codec stream: copying would release it twice. */
+		Bz2Private(const Bz2Private&) = delete;
+		Bz2Private& operator=(const Bz2Private&) = delete;
 };
 
 class GzPrivate
@@ -54,9 +55,9 @@ class GzPrivate
 
 		z_stream* stream;
 
-	private:
-		GzPrivate(const GzPrivate&);
-		GzPrivate& operator=(const GzPrivate&);
+		/* Owns a codec stream: copying would release it twice. */
+		GzPrivate(const GzPrivate&) = delete;
+		GzPrivate& operator=(const GzPrivate&) = delete;
 };
 
 
@@ -90,11 +91,11 @@ static std::error_code gz_error(int status)
 Samurai::IO::BZip2Compressor::BZip2Compressor()
 {
 	m_last_status = 0;
-	d = new Bz2Private();
+	d = std::make_unique<Bz2Private>();
 	
 	if (BZ2_bzCompressInit(d->stream, 5, 0, 0) != BZ_OK)
 	{
-		delete d; d = nullptr;
+		d.reset();
 	}
 }
 
@@ -106,7 +107,6 @@ Samurai::IO::BZip2Compressor::~BZip2Compressor()
 #endif
 	if (d && d->stream)
 		BZ2_bzCompressEnd(d->stream);
-	delete d;
 }
 
 bool Samurai::IO::BZip2Compressor::exec(char* input, size_t& input_len, char* output, size_t& output_len)
@@ -135,11 +135,11 @@ bool Samurai::IO::BZip2Compressor::exec(char* input, size_t& input_len, char* ou
 Samurai::IO::BZip2Decompressor::BZip2Decompressor()
 {
 	m_last_status = 0;
-	d = new Bz2Private();
+	d = std::make_unique<Bz2Private>();
 	
 	if (BZ2_bzDecompressInit(d->stream, 0, 0) != BZ_OK)
 	{
-		delete d; d = nullptr;
+		d.reset();
 	}
 }
 		
@@ -151,7 +151,6 @@ Samurai::IO::BZip2Decompressor::~BZip2Decompressor()
 #endif
 	if (d && d->stream)
 		BZ2_bzDecompressEnd(d->stream);
-	delete d;
 }
 
 bool Samurai::IO::BZip2Decompressor::exec(char* input, size_t& input_len, char* output, size_t& output_len)
@@ -178,12 +177,12 @@ bool Samurai::IO::BZip2Decompressor::exec(char* input, size_t& input_len, char* 
 Samurai::IO::GzipCompressor::GzipCompressor()
 {
 	m_last_status = 0;
-	d = new GzPrivate();
+	d = std::make_unique<GzPrivate>();
 	
 	 // FIXME: Default compression level: 5
 	if (deflateInit(d->stream, 5) != Z_OK)
 	{
-		delete d; d = nullptr;
+		d.reset();
 	}
 }
 
@@ -191,7 +190,6 @@ Samurai::IO::GzipCompressor::~GzipCompressor()
 {
 	if (d && d->stream)
 		deflateEnd(d->stream);
-	delete d;
 }
 
 
@@ -222,10 +220,10 @@ bool Samurai::IO::GzipCompressor::exec(char* input, size_t& input_len, char* out
 Samurai::IO::GzipDecompressor::GzipDecompressor()
 {
 	m_last_status = 0;
-	d = new GzPrivate();
+	d = std::make_unique<GzPrivate>();
 	if (inflateInit(d->stream) != Z_OK)
 	{
-		delete d; d = nullptr;
+		d.reset();
 	}
 	
 }
@@ -234,7 +232,6 @@ Samurai::IO::GzipDecompressor::~GzipDecompressor()
 {
 	if (d && d->stream)
 		inflateEnd(d->stream);
-	delete d;
 }
 
 bool Samurai::IO::GzipDecompressor::exec(char* input, size_t& input_len, char* output, size_t& output_len)

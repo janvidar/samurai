@@ -5,6 +5,7 @@
 
 #include <errno.h>
 #include <samurai/io/unicode.h>
+#include <memory>
 #include <samurai/error.h>
 
 #ifdef HAVE_ICONV
@@ -65,12 +66,11 @@ class UnicodePrivate
 
 Samurai::IO::Unicode::Unicode(const char* to, const char* from)
 {
-	cvt = new UnicodePrivate(to, from);
+	cvt = std::make_unique<UnicodePrivate>(to, from);
 }
 
 Samurai::IO::Unicode::~Unicode()
 {
-	delete cvt;
 }
 
 bool Samurai::IO::Unicode::exec(char* in, size_t& inlen, char* out, size_t& outlen)

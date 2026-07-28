@@ -305,7 +305,7 @@ void Samurai::Crypto::Digest::MerkleTree::finalize()
 	// Hash any remaining incomplete blocks
 	if (m_current_block_index > 0 || m_count == 0)
 	{
-		hash(m_current_block, m_current_block_index);
+		hash(m_current_block.data(), m_current_block_index);
 	}
 	
 	// Promote all remaining nodes as a final leaf node.

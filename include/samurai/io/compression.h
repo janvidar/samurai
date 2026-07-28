@@ -7,6 +7,7 @@
 #define HAVE_SAMURAI_COMPRESSION_IO_H
 
 #include <samurai/io/codec.h>
+#include <memory>
 
 class Bz2Private;
 class GzPrivate;
@@ -26,7 +27,7 @@ class BZip2Compressor final : public Samurai::IO::Codec {
 		BZip2Compressor& operator=(const BZip2Compressor&) = delete;
 
 	protected:
-		Bz2Private* d;
+		std::unique_ptr<Bz2Private> d;
 		int m_last_status;
 
 };
@@ -43,7 +44,7 @@ class BZip2Decompressor final : public Samurai::IO::Codec {
 		BZip2Decompressor& operator=(const BZip2Decompressor&) = delete;
 
 	protected:
-		Bz2Private* d;
+		std::unique_ptr<Bz2Private> d;
 		int m_last_status;
 
 };
@@ -60,7 +61,7 @@ class GzipCompressor final : public Samurai::IO::Codec {
 		GzipCompressor& operator=(const GzipCompressor&) = delete;
 
 	protected:
-		GzPrivate* d;
+		std::unique_ptr<GzPrivate> d;
 		int m_last_status;
 
 };
@@ -77,7 +78,7 @@ class GzipDecompressor final : public Samurai::IO::Codec {
 		GzipDecompressor& operator=(const GzipDecompressor&) = delete;
 
 	protected:
-		GzPrivate* d;
+		std::unique_ptr<GzPrivate> d;
 		int m_last_status;
 
 };

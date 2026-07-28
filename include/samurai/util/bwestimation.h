@@ -7,9 +7,14 @@
 #define HAVE_SAMURAI_BANDWIDTH_ESTIMATION_H
 
 #include <time.h>
+#include <array>
+#include <cstddef>
 
 namespace Samurai {
 namespace Util {
+
+/* Bandwidth is averaged over this many seconds. Must be greater than 1. */
+inline constexpr size_t BANDWIDTH_ESTIMATION_TIMEOUT = 3;
 
 /**
  * This class will handle flow estimation of bytes transfered per second,
@@ -17,23 +22,20 @@ namespace Util {
  */
 class RateEstimator {
 	public:
-		RateEstimator();
-		~RateEstimator();
+		RateEstimator() = default;
 
-		/* Releases raw pointers in its destructor, so the implicit copy
-		 * operations would release them a second time. */
-		RateEstimator(const RateEstimator&) = delete;
-		RateEstimator& operator=(const RateEstimator&) = delete;
-		
 		void add(size_t bytesTransfered);
 		size_t getBps();
-		
+
 	private:
 		time_t current = 0;
 		/* Carries the previous second's total across a tick, so that getBps()
 		 * does not report a dip while the current second is still filling. */
 		size_t last = 0;
-		size_t* log;
+		/* One bucket per second of the averaging window. Held inline: the size
+		 * is a compile time constant, so there is nothing to allocate, and the
+		 * class stays copyable. */
+		std::array<size_t, BANDWIDTH_ESTIMATION_TIMEOUT> log = {};
 };
 
 }
