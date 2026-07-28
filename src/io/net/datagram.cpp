@@ -163,13 +163,13 @@ int Samurai::IO::Net::DatagramSocket::send(DatagramPacket* packet) {
 	struct sockaddr* sa = packet->addr->getSockAddr();
 	size_t sa_len = packet->addr->getSockAddrSize();
 
-	ssize_t ret = ::sendto(sd, SENDTO_CAST_PREFIX data, length, SAMURAI_SENDFLAGS, (sockaddr*) sa, sa_len);
+	ssize_t ret = ::sendto(sd, Samurai::IO::Net::sendto_arg(data), length, SAMURAI_SENDFLAGS, (sockaddr*) sa, sa_len);
 
 	if (ret == -1) {
-		if (NETERROR == EAGAIN || NETERROR == EWOULDBLOCK || NETERROR == EINTR) {
+		if (Samurai::IO::Net::net_error() == EAGAIN || Samurai::IO::Net::net_error() == EWOULDBLOCK || Samurai::IO::Net::net_error() == EINTR) {
 			return 0;
 		} else {
-			if (eventHandler) eventHandler->EventDatagramError(this, strerror(NETERROR));
+			if (eventHandler) eventHandler->EventDatagramError(this, strerror(Samurai::IO::Net::net_error()));
 			return -1;
 		}
 	}
@@ -194,7 +194,7 @@ int Samurai::IO::Net::DatagramSocket::read(DatagramPacket* packet) {
 	const ssize_t status = ::recvfrom(sd, (char*) data, length, 0, (sockaddr*) &sa, &sl);
 
 	if (status == -1) {
-		QERR("recvfrom err: %s", strerror(NETERROR));
+		QERR("recvfrom err: %s", strerror(Samurai::IO::Net::net_error()));
 		return -1;
 	}
 
@@ -241,7 +241,7 @@ void Samurai::IO::Net::DatagramSocket::internal_canRead() {
 	
 	switch (read(myPacket.get())) {
 		case -1:
-			if (eventHandler) eventHandler->EventDatagramError(this, strerror(NETERROR));
+			if (eventHandler) eventHandler->EventDatagramError(this, strerror(Samurai::IO::Net::net_error()));
 			break;
 		case 0:
 			break;
@@ -252,7 +252,7 @@ void Samurai::IO::Net::DatagramSocket::internal_canRead() {
 }
 
 void Samurai::IO::Net::DatagramSocket::internal_error() {
-	if (eventHandler) eventHandler->EventDatagramError(this, strerror(NETERROR));
+	if (eventHandler) eventHandler->EventDatagramError(this, strerror(Samurai::IO::Net::net_error()));
 	disableMonitor();
 }
 

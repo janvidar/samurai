@@ -103,8 +103,8 @@ bool Samurai::IO::Net::SocketBase::bind(Samurai::IO::Net::SocketAddress* sa, std
 			int ret = ::bind(sd, (sockaddr*) &localaddr, len);
 			if (ret == SOCKET_ERROR)
 			{
-				ec = Samurai::system_error(NETERROR);
-				QDBG("Bind on Version::IPv4 failed. Error %d: %s", NETERROR, strerror(NETERROR));
+				ec = Samurai::system_error(Samurai::IO::Net::net_error());
+				QDBG("Bind on Version::IPv4 failed. Error %d: %s", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
 				return false;
 			}
 			return true;
@@ -119,8 +119,8 @@ bool Samurai::IO::Net::SocketBase::bind(Samurai::IO::Net::SocketAddress* sa, std
 			int ret = ::bind(sd, (sockaddr*) &localaddr, len);
 			if (ret == SOCKET_ERROR)
 			{
-				ec = Samurai::system_error(NETERROR);
-				QDBG("Bind on Version::IPv6 failed. Error %d: %s", NETERROR, strerror(NETERROR));
+				ec = Samurai::system_error(Samurai::IO::Net::net_error());
+				QDBG("Bind on Version::IPv6 failed. Error %d: %s", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
 				return false;
 			}
 			return true;
@@ -176,8 +176,8 @@ bool Samurai::IO::Net::SocketBase::setKeepAlive(bool toggle) {
 bool Samurai::IO::Net::SocketBase::setKeepAlive(bool toggle, std::error_code& ec) {
 	ec.clear();
 	int value = (toggle) ? 1 : 0;
-	if (SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_KEEPALIVE, &value, sizeof(value)) == SOCKET_ERROR) {
-		ec = Samurai::system_error(NETERROR);
+	if (Samurai::IO::Net::set_sockopt(sd, SOL_SOCKET, SO_KEEPALIVE, &value, sizeof(value)) == SOCKET_ERROR) {
+		ec = Samurai::system_error(Samurai::IO::Net::net_error());
 		return false;
 	}
 	return true;
@@ -208,7 +208,7 @@ bool Samurai::IO::Net::SocketBase::setNonBlocking(bool toggle, std::error_code& 
 #else
 	int on = toggle ? 1 : 0;
 	ret = ioctl(sd, FIONBIO, &on);
-	if (ret == SOCKET_ERROR) { ec = Samurai::system_error(NETERROR); return false; }
+	if (ret == SOCKET_ERROR) { ec = Samurai::system_error(Samurai::IO::Net::net_error()); return false; }
 	return true;
 #endif
 #endif
@@ -217,7 +217,7 @@ bool Samurai::IO::Net::SocketBase::setNonBlocking(bool toggle, std::error_code& 
 	u_long on = toggle ? 1 : 0;
 	ret = ioctlsocket(sd, FIONBIO, &on);
 	if (ret == SOCKET_ERROR) {
-		ec = Samurai::system_error(NETERROR);
+		ec = Samurai::system_error(Samurai::IO::Net::net_error());
 		QERR("ERROR: Setting socket to %s mode failed ", toggle ? "non-blocking" : "blocking");
 		return false;
 	}
@@ -240,9 +240,9 @@ bool Samurai::IO::Net::SocketBase::setReuseAddress(bool toggle) {
 bool Samurai::IO::Net::SocketBase::setReuseAddress(bool toggle, std::error_code& ec) {
 	ec.clear();
 	int on = toggle ? 1 : 0;
-	if (SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == SOCKET_ERROR)
+	if (Samurai::IO::Net::set_sockopt(sd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == SOCKET_ERROR)
 	{
-		ec = Samurai::system_error(NETERROR);
+		ec = Samurai::system_error(Samurai::IO::Net::net_error());
 		QERR("ERROR: setReuseAddress to %s failed", toggle ? "ON" : "OFF");
 		return false;
 	}
@@ -262,9 +262,9 @@ bool Samurai::IO::Net::SocketBase::setReusePort(bool toggle, std::error_code& ec
 	return true;
 #else
         int on = toggle ? 1 : 0;
-        if (SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on)) == SOCKET_ERROR)
+        if (Samurai::IO::Net::set_sockopt(sd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on)) == SOCKET_ERROR)
         {
-                ec = Samurai::system_error(NETERROR);
+                ec = Samurai::system_error(Samurai::IO::Net::net_error());
                 QERR("ERROR: setReusePort to %s failed", toggle ? "ON" : "OFF");
                 return false;
         }
@@ -284,8 +284,8 @@ bool Samurai::IO::Net::SocketBase::setSendBufferSize(size_t size, std::error_cod
 
 	/* SO_SNDBUF is an int to the kernel, so 'size' cannot be passed by address. */
 	int value = (int) size;
-	if (SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_SNDBUF, &value, sizeof(value)) == SOCKET_ERROR) {
-		ec = Samurai::system_error(NETERROR);
+	if (Samurai::IO::Net::set_sockopt(sd, SOL_SOCKET, SO_SNDBUF, &value, sizeof(value)) == SOCKET_ERROR) {
+		ec = Samurai::system_error(Samurai::IO::Net::net_error());
 		return false;
 	}
 	return true;
@@ -294,7 +294,7 @@ bool Samurai::IO::Net::SocketBase::setSendBufferSize(size_t size, std::error_cod
 size_t Samurai::IO::Net::SocketBase::getSendBufferSize() const {
 	int value = 0;
 	socklen_t sz = sizeof(value);
-	if (SAMURAI_GETSOCKOPT(sd, SOL_SOCKET, SO_SNDBUF, &value, &sz) == SOCKET_ERROR) {
+	if (Samurai::IO::Net::get_sockopt(sd, SOL_SOCKET, SO_SNDBUF, &value, &sz) == SOCKET_ERROR) {
 		QERR("ERROR: getsockopt failed");
 		return 0;
 	}
@@ -312,8 +312,8 @@ bool Samurai::IO::Net::SocketBase::setReceiveBufferSize(size_t size, std::error_
 
 	/* SO_RCVBUF is an int to the kernel, so 'size' cannot be passed by address. */
 	int value = (int) size;
-	if (SAMURAI_SETSOCKOPT(sd, SOL_SOCKET, SO_RCVBUF, &value, sizeof(value)) == SOCKET_ERROR) {
-		ec = Samurai::system_error(NETERROR);
+	if (Samurai::IO::Net::set_sockopt(sd, SOL_SOCKET, SO_RCVBUF, &value, sizeof(value)) == SOCKET_ERROR) {
+		ec = Samurai::system_error(Samurai::IO::Net::net_error());
 		return false;
 	}
 	return true;
@@ -322,7 +322,7 @@ bool Samurai::IO::Net::SocketBase::setReceiveBufferSize(size_t size, std::error_
 size_t Samurai::IO::Net::SocketBase::getReceiveBufferSize() const {
 	int value = 0;
 	socklen_t sz = sizeof(value);
-	if (SAMURAI_GETSOCKOPT(sd, SOL_SOCKET, SO_RCVBUF, &value, &sz) == SOCKET_ERROR) {
+	if (Samurai::IO::Net::get_sockopt(sd, SOL_SOCKET, SO_RCVBUF, &value, &sz) == SOCKET_ERROR) {
 		QERR("ERROR: getsockopt failed");
 		return 0;
 	}
@@ -344,8 +344,8 @@ uint8_t Samurai::IO::Net::SocketBase::getTimeToLive() const
 	int value = 0;
 	socklen_t sz = sizeof(value);
 	int ret = isIPv6()
-		? SAMURAI_GETSOCKOPT(sd, IPPROTO_IPV6, IPV6_UNICAST_HOPS, &value, &sz)
-		: SAMURAI_GETSOCKOPT(sd, IPPROTO_IP, IP_TTL, &value, &sz);
+		? Samurai::IO::Net::get_sockopt(sd, IPPROTO_IPV6, IPV6_UNICAST_HOPS, &value, &sz)
+		: Samurai::IO::Net::get_sockopt(sd, IPPROTO_IP, IP_TTL, &value, &sz);
 	if (ret == SOCKET_ERROR) {
 		QERR("ERROR: getsockopt failed");
 	}
@@ -367,8 +367,8 @@ bool Samurai::IO::Net::SocketBase::setTimeToLive(uint8_t ttl, std::error_code& e
 	const int level  = isIPv6() ? IPPROTO_IPV6 : IPPROTO_IP;
 	const int option = isIPv6() ? IPV6_UNICAST_HOPS : IP_TTL;
 
-	if (SAMURAI_SETSOCKOPT(sd, level, option, &value, sizeof(value)) == SOCKET_ERROR) {
-		ec = Samurai::system_error(NETERROR);
+	if (Samurai::IO::Net::set_sockopt(sd, level, option, &value, sizeof(value)) == SOCKET_ERROR) {
+		ec = Samurai::system_error(Samurai::IO::Net::net_error());
 		return false;
 	}
 	return true;
@@ -386,7 +386,7 @@ void Samurai::IO::Net::SocketBase::close() {
 		shutdown(sd, SD_BOTH);
 #endif
 		
-		SOCKET_CLOSE(sd);
+		Samurai::IO::Net::socket_close(sd);
 		sd = INVALID_SOCKET;
 	}
 }
@@ -425,7 +425,7 @@ bool Samurai::IO::Net::SocketBase::createDescriptor(int af)
 	
 	if (sd == INVALID_SOCKET)
 	{
-		QERR("Unable to create socket: %s (%d)", strerror(NETERROR), NETERROR);
+		QERR("Unable to create socket: %s (%d)", strerror(Samurai::IO::Net::net_error()), Samurai::IO::Net::net_error());
 		return false;
 	}
 	return true;
@@ -450,9 +450,9 @@ bool Samurai::IO::Net::SocketBase::setIPv6Only(bool toggle, std::error_code& ec)
 
 #ifdef IPV6_V6ONLY
 	int on = toggle ? 1 : 0;
-	if (SAMURAI_SETSOCKOPT(sd, IPPROTO_IPV6, IPV6_V6ONLY, &on, sizeof(on)) == SOCKET_ERROR)
+	if (Samurai::IO::Net::set_sockopt(sd, IPPROTO_IPV6, IPV6_V6ONLY, &on, sizeof(on)) == SOCKET_ERROR)
 	{
-		ec = Samurai::system_error(NETERROR);
+		ec = Samurai::system_error(Samurai::IO::Net::net_error());
 		return false;
 	}
 	return true;

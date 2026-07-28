@@ -123,10 +123,10 @@ void Samurai::IO::Net::Socket::handleMonitorEvent(Samurai::IO::Net::SocketMonito
 				}
 				else if (x == -1)
 				{
-					if (NETERROR != EAGAIN && NETERROR != EINTR)
+					if (Samurai::IO::Net::net_error() != EAGAIN && Samurai::IO::Net::net_error() != EINTR)
 					{
-						QERR("Socket recv error: %d (%s) (x=%d)\n", NETERROR, strerror(NETERROR), x);
-						internal_error(NETERROR);
+						QERR("Socket recv error: %d (%s) (x=%d)\n", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()), x);
+						internal_error(Samurai::IO::Net::net_error());
 					}
 				}
 			}
@@ -187,7 +187,7 @@ void Samurai::IO::Net::Socket::handleMonitorEvent(Samurai::IO::Net::SocketMonito
 		{
 			int value = 0;
 			socklen_t valsize = sizeof(value);
-			if (SAMURAI_GETSOCKOPT(sd, SOL_SOCKET, SO_ERROR, &value, &valsize) != 0)
+			if (Samurai::IO::Net::get_sockopt(sd, SOL_SOCKET, SO_ERROR, &value, &valsize) != 0)
 				value = 0;
 			internal_error(value);
 		}
@@ -324,14 +324,14 @@ void Samurai::IO::Net::Socket::connect()
 	if (!createDescriptor(addr->getSockAddrFamily())) {
 		state = SocketState::Invalid;
 		disableMonitor();
-		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, strerror(NETERROR));
+		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, strerror(Samurai::IO::Net::net_error()));
 		return;
 	}
 
 	if (!setNonBlocking(true)) {
 		state = SocketState::Invalid;
 		disableMonitor();
-		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, strerror(NETERROR));
+		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, strerror(Samurai::IO::Net::net_error()));
 		return;
 	}
 
@@ -343,7 +343,7 @@ void Samurai::IO::Net::Socket::connect()
 	int ret = ::connect(sd, addr->getSockAddr(), addr->getSockAddrSize());
 	timer = std::make_unique<Samurai::Timer>(this, CONNECT_TIMEOUT, true);
 	if (ret == -1) {
-		if (NETERROR == EINPROGRESS) {
+		if (Samurai::IO::Net::net_error() == EINPROGRESS) {
 			state = SocketState::Connecting;
 			if (eventHandler) {
 				eventHandler->EventConnecting(this);
@@ -352,7 +352,7 @@ void Samurai::IO::Net::Socket::connect()
 		} else {
 			state = SocketState::Invalid;
 			disableMonitor();
-			if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, strerror(NETERROR));
+			if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, strerror(Samurai::IO::Net::net_error()));
 			return;
 		}
 	}
@@ -424,12 +424,12 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 	{
 		ret = ::send(sd, data, length, SAMURAI_SENDFLAGS);
 		if (ret == -1) {
-			if (NETERROR == EAGAIN || NETERROR == EWOULDBLOCK || NETERROR == EINTR) {
+			if (Samurai::IO::Net::net_error() == EAGAIN || Samurai::IO::Net::net_error() == EWOULDBLOCK || Samurai::IO::Net::net_error() == EINTR) {
 				return 0;
 			} else {
 				state = SocketState::Invalid;
 				disableMonitor();
-				if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketWrite, strerror(NETERROR));
+				if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketWrite, strerror(Samurai::IO::Net::net_error()));
 				return -1;
 			}
 		}
@@ -437,7 +437,7 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 		if (ret == 0) {
 			int error = 0;
 			socklen_t sz = sizeof(error);
-			SAMURAI_GETSOCKOPT(sd, SOL_SOCKET, SO_ERROR, &error, &sz);
+			Samurai::IO::Net::get_sockopt(sd, SOL_SOCKET, SO_ERROR, &error, &sz);
 		}
 	}
 
@@ -484,7 +484,7 @@ ssize_t Samurai::IO::Net::Socket::read(char* data, size_t length) {
 	{
 		ret = ::recv(sd, data, length, 0);
 		if (ret == -1) {
-			if (NETERROR == EAGAIN || NETERROR == EWOULDBLOCK || NETERROR == EINTR)
+			if (Samurai::IO::Net::net_error() == EAGAIN || Samurai::IO::Net::net_error() == EWOULDBLOCK || Samurai::IO::Net::net_error() == EINTR)
 			{
 				// try again later
 				return 0;
@@ -492,7 +492,7 @@ ssize_t Samurai::IO::Net::Socket::read(char* data, size_t length) {
 
 			state = SocketState::Invalid;
 			disableMonitor();
-			if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketRead, strerror(NETERROR));
+			if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketRead, strerror(Samurai::IO::Net::net_error()));
 			return 0; // nothing was read.
 		}
 	}
@@ -538,7 +538,7 @@ ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
 
 	ssize_t ret = ::recv(sd, data, length, MSG_PEEK);
 	if (ret == -1) {
-		if (NETERROR == EAGAIN || NETERROR == EWOULDBLOCK)
+		if (Samurai::IO::Net::net_error() == EAGAIN || Samurai::IO::Net::net_error() == EWOULDBLOCK)
 		{
 			// try again later
 			return 0;
@@ -546,7 +546,7 @@ ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
 
 		state = SocketState::Invalid;
 		disableMonitor();
-		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketRead, strerror(NETERROR));
+		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketRead, strerror(Samurai::IO::Net::net_error()));
 		return 0;
 	}
 	return ret;
@@ -756,10 +756,10 @@ Samurai::IO::ReadResult Samurai::IO::Net::Socket::read(char* data, size_t length
 	if (ret == 0)
 		return Samurai::IO::ReadResult::EndOfFile;
 
-	if (NETERROR == EAGAIN || NETERROR == EWOULDBLOCK || NETERROR == EINTR)
+	if (Samurai::IO::Net::net_error() == EAGAIN || Samurai::IO::Net::net_error() == EWOULDBLOCK || Samurai::IO::Net::net_error() == EINTR)
 		return Samurai::IO::ReadResult::WouldBlock;
 
-	ec = Samurai::system_error(NETERROR);
+	ec = Samurai::system_error(Samurai::IO::Net::net_error());
 	return Samurai::IO::ReadResult::Error;
 }
 
@@ -781,10 +781,10 @@ Samurai::IO::ReadResult Samurai::IO::Net::Socket::peek(char* data, size_t length
 	if (ret > 0) { transferred = (size_t) ret; return Samurai::IO::ReadResult::Ok; }
 	if (ret == 0) return Samurai::IO::ReadResult::EndOfFile;
 
-	if (NETERROR == EAGAIN || NETERROR == EWOULDBLOCK || NETERROR == EINTR)
+	if (Samurai::IO::Net::net_error() == EAGAIN || Samurai::IO::Net::net_error() == EWOULDBLOCK || Samurai::IO::Net::net_error() == EINTR)
 		return Samurai::IO::ReadResult::WouldBlock;
 
-	ec = Samurai::system_error(NETERROR);
+	ec = Samurai::system_error(Samurai::IO::Net::net_error());
 	return Samurai::IO::ReadResult::Error;
 }
 
@@ -809,10 +809,10 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length, std::er
 		return ret;
 	}
 
-	if (NETERROR == EAGAIN || NETERROR == EWOULDBLOCK || NETERROR == EINTR)
+	if (Samurai::IO::Net::net_error() == EAGAIN || Samurai::IO::Net::net_error() == EWOULDBLOCK || Samurai::IO::Net::net_error() == EINTR)
 		return 0;
 
-	ec = Samurai::system_error(NETERROR);
+	ec = Samurai::system_error(Samurai::IO::Net::net_error());
 	return -1;
 }
 
@@ -905,10 +905,10 @@ ssize_t Samurai::IO::Net::Socket::write(std::span<const std::string_view> buffer
 	}
 #endif
 
-	if (NETERROR == EAGAIN || NETERROR == EWOULDBLOCK || NETERROR == EINTR)
+	if (Samurai::IO::Net::net_error() == EAGAIN || Samurai::IO::Net::net_error() == EWOULDBLOCK || Samurai::IO::Net::net_error() == EINTR)
 		return 0;
 
-	ec = Samurai::system_error(NETERROR);
+	ec = Samurai::system_error(Samurai::IO::Net::net_error());
 	return -1;
 }
 

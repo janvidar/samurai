@@ -26,13 +26,8 @@
 #include <ifaddrs.h>
 #endif
 
-#define SOCKET_CLOSE(x) ::close(x)
-#define SENDTO_CAST_PREFIX (void*)
-#define NETERROR errno
 #define SOCKET_ERROR -1
 #define INVALID_SOCKET -1
-#define SAMURAI_GETSOCKOPT getsockopt
-#define SAMURAI_SETSOCKOPT setsockopt
 
 typedef int socket_t;
 typedef unsigned int interface_t;

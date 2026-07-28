@@ -24,12 +24,7 @@ typedef SOCKET socket_t;
 typedef int socklen_t;
 typedef int interface_t;
 
-#define SOCKET_CLOSE(x) closesocket(x)
-#define SENDTO_CAST_PREFIX (char*)
-#define NETERROR WSAGetLastError()
 
-#define SAMURAI_GETSOCKOPT(SD, LEV, OPT, VAL, LEN) getsockopt(SD, LEV, OPT, (char*) VAL, LEN)
-#define SAMURAI_SETSOCKOPT(SD, LEV, OPT, VAL, LEN) setsockopt(SD, LEV, OPT, (const char*) VAL, LEN)
 
 // #define EINTR           WSAEINTR
 // #define EACCES          WSAEACCES

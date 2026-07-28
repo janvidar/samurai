@@ -166,8 +166,8 @@ void Samurai::IO::Net::EPollSocketMonitor::internal_wait(int time_ms)
 	if (nfds == 0) return;
 	
 	if (nfds == -1) {
-		 if (NETERROR != EINTR) {
-			QERR("Epoll error: %i, %s", NETERROR, strerror(NETERROR));
+		 if (Samurai::IO::Net::net_error() != EINTR) {
+			QERR("Epoll error: %i, %s", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
 		}
 		return;
 	}

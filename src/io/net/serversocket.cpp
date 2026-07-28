@@ -54,15 +54,15 @@ bool Samurai::IO::Net::ServerSocket::listen(size_t backlog, std::error_code& ec)
 	ec.clear();
 
 	if (!addr) { ec = Samurai::system_error(EDESTADDRREQ); return false; }
-	if (!setReuseAddress(true)) { ec = Samurai::system_error(NETERROR); return false; }
+	if (!setReuseAddress(true)) { ec = Samurai::system_error(Samurai::IO::Net::net_error()); return false; }
 	if (!setNonBlocking(true, ec)) return false;
 	if (!bind(addr.get(), ec)) return false;
 
 	/* NOTE: backlog is a size_t here and an int in the syscall. */
 	if (::listen(sd, (int) backlog) == -1)
 	{
-		ec = Samurai::system_error(NETERROR);
-		QERR("Unable to listen to socket: %s (%d)", strerror(NETERROR), NETERROR);
+		ec = Samurai::system_error(Samurai::IO::Net::net_error());
+		QERR("Unable to listen to socket: %s (%d)", strerror(Samurai::IO::Net::net_error()), Samurai::IO::Net::net_error());
 		return false;
 	}
 
@@ -94,11 +94,11 @@ void Samurai::IO::Net::ServerSocket::internal_accept() {
 
 	if (new_sd == INVALID_SOCKET) {
 		// Transient: nothing to report to the event handler.
-		if (NETERROR == EAGAIN || NETERROR == EWOULDBLOCK ||
-		    NETERROR == EINTR  || NETERROR == ECONNABORTED)
+		if (Samurai::IO::Net::net_error() == EAGAIN || Samurai::IO::Net::net_error() == EWOULDBLOCK ||
+		    Samurai::IO::Net::net_error() == EINTR  || Samurai::IO::Net::net_error() == ECONNABORTED)
 			return;
 
-		if (eventHandler) eventHandler->EventAcceptError(this, strerror(NETERROR));
+		if (eventHandler) eventHandler->EventAcceptError(this, strerror(Samurai::IO::Net::net_error()));
 		return;
 	}
 
@@ -120,7 +120,7 @@ void Samurai::IO::Net::ServerSocket::internal_accept() {
 	// accept() does not inherit O_NONBLOCK from the listening socket.
 	if (!sock->setNonBlocking(true))
 	{
-		QERR("Unable to set accepted socket non-blocking: %s", strerror(NETERROR));
+		QERR("Unable to set accepted socket non-blocking: %s", strerror(Samurai::IO::Net::net_error()));
 	}
 
 	if (eventHandler)

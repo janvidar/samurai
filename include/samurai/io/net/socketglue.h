@@ -6,6 +6,7 @@
 #define HAVE_SAMURAI_SOCKET_PORTABLE_H
 
 #include <span>
+#include <errno.h>
 #include <stdint.h>
 
 #include <samurai/samurai.h>
@@ -48,6 +49,76 @@ inline constexpr int CONNECT_TIMEOUT = 30;
 #ifndef INET6_ADDRSTRLEN
 #define INET6_ADDRSTRLEN 46
 #endif
+
+namespace Samurai {
+namespace IO {
+namespace Net {
+
+/*
+ * The platform differences behind these were macros in the two glue headers.
+ * SAMURAI_GETSOCKOPT and SAMURAI_SETSOCKOPT were the worst of it: function-like
+ * on Windows, where they inserted the casts winsock wants, and object-like
+ * aliases on the BSDs - the same name meaning two different kinds of macro
+ * depending on the target, so a call site could not be read without knowing
+ * which.
+ */
+
+/** Close a socket descriptor. */
+inline int socket_close(socket_t sd)
+{
+#ifdef SAMURAI_WINSOCK
+	return ::closesocket(sd);
+#else
+	return ::close(sd);
+#endif
+}
+
+/** The last socket error, as the platform reports it. */
+inline int net_error()
+{
+#ifdef SAMURAI_WINSOCK
+	return ::WSAGetLastError();
+#else
+	return errno;
+#endif
+}
+
+inline int get_sockopt(socket_t sd, int level, int option, void* value, socklen_t* len)
+{
+#ifdef SAMURAI_WINSOCK
+	return ::getsockopt(sd, level, option, (char*) value, len);
+#else
+	return ::getsockopt(sd, level, option, value, len);
+#endif
+}
+
+inline int set_sockopt(socket_t sd, int level, int option, const void* value, socklen_t len)
+{
+#ifdef SAMURAI_WINSOCK
+	return ::setsockopt(sd, level, option, (const char*) value, len);
+#else
+	return ::setsockopt(sd, level, option, value, len);
+#endif
+}
+
+/**
+ * sendto() takes a 'const char*' on Windows and a 'const void*' elsewhere.
+ * This was a macro expanding to a bare cast operator, usable only as
+ * 'SENDTO_CAST_PREFIX buf' - which is not an expression any tool can parse.
+ */
+inline auto sendto_arg(const void* buf)
+{
+#ifdef SAMURAI_WINSOCK
+	return (const char*) buf;
+#else
+	return buf;
+#endif
+}
+
+}
+}
+}
+
 
 namespace Samurai {
 	namespace IO {

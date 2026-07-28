@@ -93,7 +93,7 @@ static bool fd_is_usable(socket_t fd)
 {
 	int type = 0;
 	socklen_t len = sizeof(type);
-	return SAMURAI_GETSOCKOPT(fd, SOL_SOCKET, SO_TYPE, &type, &len) == 0;
+	return Samurai::IO::Net::get_sockopt(fd, SOL_SOCKET, SO_TYPE, &type, &len) == 0;
 }
 
 
@@ -154,9 +154,9 @@ void Samurai::IO::Net::SelectSocketMonitor::internal_wait(int time_ms) {
 
 	if (ret == -1)
 	{
-		if (NETERROR == EINTR) return;
+		if (Samurai::IO::Net::net_error() == EINTR) return;
 
-		if (NETERROR == EBADF)
+		if (Samurai::IO::Net::net_error() == EBADF)
 		{
 			/* Report the unusable descriptors so their owners tear them down.
 			   Collected first, because dispatching can modify 'sockets'. */
@@ -176,7 +176,7 @@ void Samurai::IO::Net::SelectSocketMonitor::internal_wait(int time_ms) {
 			return;
 		}
 
-		QERR("Select error: %i, %s", NETERROR, strerror(NETERROR));
+		QERR("Select error: %i, %s", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
 		return;
 	}
 
