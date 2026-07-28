@@ -6,14 +6,14 @@
 #include <samurai/samurai.h>
 #include <samurai/io/net/bandwidth.h>
 
-Samurai::IO::Net::BandwidthManager* Samurai::IO::Net::BandwidthManager::instance = nullptr;
-
+/*
+ * A function-local static is initialised once, and without the check-then-assign
+ * race the raw pointer version had.
+ */
 Samurai::IO::Net::BandwidthManager* Samurai::IO::Net::BandwidthManager::getInstance()
 {
-	if (!instance)
-		instance =  new BandwidthManager();
-	
-	return instance;
+	static Samurai::IO::Net::BandwidthManager manager;
+	return &manager;
 }
 
 Samurai::IO::Net::BandwidthManager::BandwidthManager() {

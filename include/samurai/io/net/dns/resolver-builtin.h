@@ -6,8 +6,10 @@
 #ifndef HAVE_SAMURAI_DNSRESOLVER_BUILTIN_H
 #define HAVE_SAMURAI_DNSRESOLVER_BUILTIN_H
 
-#include <memory>
 #include <samurai/io/net/dns/resolver.h>
+#include <samurai/io/net/dns/dnsutil.h>
+#include <string>
+#include <memory>
 #include <samurai/io/net/socketevent.h>
 #include <samurai/timer.h>
 
@@ -21,7 +23,6 @@ class SocketBase;
 
 namespace DNS {
 
-class Name;
 
 class BuiltinResolver final :
 	public Samurai::IO::Net::DNS::Resolver,
@@ -57,12 +58,14 @@ class BuiltinResolver final :
 		void query();
 
 	protected:
-		uint16_t jobId;
+		uint16_t jobId = 0;
 		std::shared_ptr<SocketBase> sock;
-		char* hostname;
-		Samurai::IO::Net::DNS::Name* rrname;
-		int numTries;
-		Samurai::Timer* timer;
+		std::string hostname;
+		/* The name being resolved. Replaced outright when a CNAME redirects
+		   the lookup, which a value assignment does correctly. */
+		Samurai::IO::Net::DNS::Name rrname;
+		int numTries = 0;
+		std::unique_ptr<Samurai::Timer> timer;
 };
 
 }

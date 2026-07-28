@@ -16,32 +16,28 @@
 #include <samurai/io/buffer.h>
 #include <samurai/util/random.h>
 #include <stdlib.h>
+#include <memory>
 
-/* static: a name at global scope is not mangled, so external linkage would
-   export plain "g_dns_config" from the shared library. */
-static Samurai::IO::Net::DNS::ResolveConfiguration* g_dns_config = nullptr;
+/*
+ * Read once, on the first lookup. A function-local static is initialised
+ * without the check-then-assign race the file-scope pointer had, and keeps the
+ * symbol out of the shared library's exports.
+ */
+static Samurai::IO::Net::DNS::ResolveConfiguration* dnsConfiguration()
+{
+	static Samurai::IO::Net::DNS::ResolveConfiguration config;
+	return &config;
+}
 
 
 Samurai::IO::Net::DNS::BuiltinResolver::BuiltinResolver(Samurai::IO::Net::ResolveEventHandler* eh) : Samurai::IO::Net::DNS::Resolver(eh)
 {
-	/* Make sure we have read and parsed the DNS configuration */
-	if (!g_dns_config) {
-		g_dns_config = new Samurai::IO::Net::DNS::ResolveConfiguration();
-	}
 
-	jobId = 0;
-	numTries = 0;
-	hostname = nullptr;
-	rrname = nullptr;
-	timer = nullptr;
 }
 
 Samurai::IO::Net::DNS::BuiltinResolver::~BuiltinResolver()
 {
 	sock.reset();
-	delete rrname;
-	free(hostname);
-	delete timer;
 }
 
 
@@ -49,7 +45,7 @@ Samurai::IO::Net::DNS::BuiltinResolver::~BuiltinResolver()
 void Samurai::IO::Net::DNS::BuiltinResolver::lookup(const char* name)
 {
 	if (!name || !strlen(name) || strlen(name) > 255) return; // FIXME: call error.
-	hostname = strdup(name);
+	hostname = name;
 
 	query();
 }
@@ -58,26 +54,25 @@ void Samurai::IO::Net::DNS::BuiltinResolver::lookup(const char* name)
 void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 
 	enum Samurai::IO::Net::DNS::Type dns_type = Type_A;
-	if (g_dns_config->isIPv6()) dns_type = Type_AAAA;
+	if (dnsConfiguration()->isIPv6()) dns_type = Type_AAAA;
 
 	/*
 	 * NOTE: getNameServer() returns 0 when the configuration lists no usable
 	 * server, and the InetAddress copy below would dereference it.
 	 */
-	Samurai::IO::Net::InetAddress* server = g_dns_config->getNameServer(numTries++);
+	const Samurai::IO::Net::InetAddress* server = dnsConfiguration()->getNameServer(numTries++);
 	if (!server)
 	{
-		QERR("[DNS] No name server configured; cannot resolve '%s'", hostname ? hostname : "");
+		QERR("[DNS] No name server configured; cannot resolve '%s'", hostname.c_str());
 		if (eventHandler) eventHandler->EventHostError(ServerError);
 		return;
 	}
 
-	delete rrname;
-	rrname = new Samurai::IO::Net::DNS::Name(hostname);
-	if (!rrname->split()) return;
-	if (!rrname->countParts()) return;
+	rrname = Samurai::IO::Net::DNS::Name(hostname.c_str());
+	if (!rrname.split()) return;
+	if (!rrname.countParts()) return;
 
-	if ((size_t) rrname->countParts()-1 < g_dns_config->getNDots()) {
+	if ((size_t) rrname.countParts()-1 < dnsConfiguration()->getNDots()) {
 		/* TODO: Go through domain and search options */
 	}
 
@@ -94,11 +89,11 @@ void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 	buffer->appendBinary((uint16_t) 0x0000,    Samurai::IO::Buffer::BigEndian);
 	buffer->appendBinary((uint16_t) 0x0000,    Samurai::IO::Buffer::BigEndian);
 
-	printf("Adding request for: '%s'\n", rrname->toString().c_str());
+	QDBG("Adding request for: '%s'", rrname.toString().c_str());
 
 	// Write hostname.
-	for (size_t n = 0; n < rrname->countParts(); n++) {
-		const char* part = rrname->parts[n].getName();
+	for (size_t n = 0; n < rrname.countParts(); n++) {
+		const char* part = rrname.parts[n].getName();
 		size_t len = strlen(part);
 		buffer->append((char) len);
 		buffer->append(part);
@@ -125,8 +120,7 @@ void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 	delete packet;
 	delete buffer;
 
-	if (timer) delete timer;
-	timer = new Samurai::Timer(this, RES_TIMEOUT, true);
+	timer = std::make_unique<Samurai::Timer>(this, RES_TIMEOUT, true);
 }
 
 void Samurai::IO::Net::DNS::BuiltinResolver::EventGotDatagram(DatagramSocket*, DatagramPacket* packet)
@@ -148,12 +142,12 @@ void Samurai::IO::Net::DNS::BuiltinResolver::EventGotDatagram(DatagramSocket*, D
 		 * would leave the cache and the message both believing they own the
 		 * same records.
 		 */
-		Samurai::IO::Net::DNS::ResourceRecord* rr = msg.getRecord(rrname);
-		while (rrname && rr) {
+		Samurai::IO::Net::DNS::ResourceRecord* rr = msg.getRecord(&rrname);
+		while (rr) {
 			if (Samurai::IO::Net::DNS::RR_A* tmp =
 				dynamic_cast<Samurai::IO::Net::DNS::RR_A*>(rr->rr.get()))
 			{
-				QDBG("hostname='%s', resolved to '%s'", hostname, tmp->getAddress()->toString().c_str());
+				QDBG("hostname='%s', resolved to '%s'", hostname.c_str(), tmp->getAddress()->toString().c_str());
 				/* Borrowed for the duration of the call, as with the other
 				   resolver backends. */
 				eventHandler->EventHostFound(tmp->getAddress());
@@ -163,11 +157,10 @@ void Samurai::IO::Net::DNS::BuiltinResolver::EventGotDatagram(DatagramSocket*, D
 			} else if (Samurai::IO::Net::DNS::RR_CNAME* tmp =
 				dynamic_cast<Samurai::IO::Net::DNS::RR_CNAME*>(rr->rr.get()))
 			{
-				QDBG("rrname='%s' is a cname for '%s'", rrname->toString().c_str(), tmp->getName().toString().c_str());
+				QDBG("rrname='%s' is a cname for '%s'", rrname.toString().c_str(), tmp->getName().toString().c_str());
 
-				delete rrname;
-				rrname = new Samurai::IO::Net::DNS::Name(tmp->getName());
-				rr = msg.getRecord(rrname);
+				rrname = tmp->getName();
+				rr = msg.getRecord(&rrname);
 				numTries++;
 
 			} else {
@@ -181,7 +174,7 @@ void Samurai::IO::Net::DNS::BuiltinResolver::EventGotDatagram(DatagramSocket*, D
 			cache->add(record);
 
 		if (!found)
-			QDBG("No address for %s yet", rrname ? rrname->toString().c_str() : "");
+			QDBG("No address for %s yet", rrname.toString().c_str());
 
 	} else if (code == Samurai::IO::Net::DNS::DNS_STATUS_NAME_ERROR) {
 		QDBG("Host not found");

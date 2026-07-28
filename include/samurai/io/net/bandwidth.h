@@ -54,7 +54,6 @@ class BandwidthManager {
 		Samurai::Util::RateEstimator estimator_send;
 		Samurai::Util::RateEstimator estimator_recv;
 		
-		static BandwidthManager* instance;
 };
 
 } // NET

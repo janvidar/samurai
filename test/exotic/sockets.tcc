@@ -206,8 +206,11 @@ class SocketVariables
 		
 		~SocketVariables()
 		{
-			delete mh;
-			delete monitor;
+			/*
+			 * Only the listener is ours. The message handler and the socket
+			 * monitor are singletons owned by the library, and releasing them
+			 * here left its static pointer dangling.
+			 */
 			delete listener;
 		}
 		

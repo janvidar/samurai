@@ -55,7 +55,6 @@ class CacheStorage {
 	protected:
 		CacheStorage();
 
-		static CacheStorage* g_dns_cache;
 
 	private:
 		std::vector<ResourceRecord*> cache;
