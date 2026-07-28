@@ -5,6 +5,8 @@
 #include "samurai/util/base32.h"
 #include <vector>
 #include <array>
+#include <string>
+#include "samurai/io/buffer.h"
 
 /* Named here because a comma inside EXO_TEST's second argument would be
    read as an argument separator. */
@@ -242,4 +244,226 @@ EXO_TEST(hash_tth_stream_matches_reference_impl, {
 	Samurai::Util::base32_encode(std::span<const unsigned char>(raw.data(), raw.size()), std::span<char>(from_ref, sizeof(from_ref)));
 
 	return strcasecmp(from_tree, from_ref) == 0;
+});
+
+/* ------------------------------------------------------------------------- */
+/* TTHL leaf serialisation                                                    */
+/*                                                                            */
+/* copyLeaves*() writes the leaf digests out; setLeaves*() builds a tree from  */
+/* them without the original data. A tree restored from its own leaves must    */
+/* produce the root it started with - that is the whole point of shipping      */
+/* TTHL separately from the file.                                             */
+/* ------------------------------------------------------------------------- */
+
+static std::string merkle_root_base32(Samurai::Crypto::Digest::MerkleTree& tree)
+{
+	char buf[64];
+	tree.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::Format::Base32, buf, 64);
+	return std::string(buf);
+}
+
+/* Hash 'size' bytes and leave the tree finalized, so its leaves can be read. */
+static void merkle_hash_filler(Samurai::Crypto::Digest::MerkleTree& tree, size_t size)
+{
+	const std::vector<uint8_t> data(size, 'a');
+	tree.update(data.data(), data.size());
+	tree.finalize();
+}
+
+static const size_t leaf_test_size = 1000000;
+
+EXO_TEST(merkle_leaves_are_produced,
+{
+	Samurai::Crypto::Digest::Tiger tiger;
+	Samurai::Crypto::Digest::MerkleTree tree(&tiger, 0);
+	merkle_hash_filler(tree, leaf_test_size);
+
+	/* More than one, or the ordering tests below prove nothing. */
+	return tree.countLeaves() > 1 && tree.countLeaves() <= tree.maxLeaves();
+});
+
+EXO_TEST(merkle_copy_leaves_ltr_size_matches_count,
+{
+	Samurai::Crypto::Digest::Tiger tiger;
+	Samurai::Crypto::Digest::MerkleTree tree(&tiger, 0);
+	merkle_hash_filler(tree, leaf_test_size);
+
+	Samurai::IO::Buffer buffer;
+	tree.copyLeavesLTR(buffer);
+	return buffer.size() == tree.countLeaves() * tree.size();
+});
+
+EXO_TEST(merkle_leaf_round_trip_ltr,
+{
+	Samurai::Crypto::Digest::Tiger tiger;
+	Samurai::Crypto::Digest::MerkleTree tree(&tiger, 0);
+	merkle_hash_filler(tree, leaf_test_size);
+
+	const std::string expected = merkle_root_base32(tree);
+	const size_t leaves = tree.countLeaves();
+
+	Samurai::IO::Buffer buffer;
+	tree.copyLeavesLTR(buffer);
+
+	Samurai::Crypto::Digest::Tiger tiger2;
+	Samurai::Crypto::Digest::MerkleTree restored(&tiger2, 0);
+	restored.setLeavesLTR(buffer, leaves, leaf_test_size);
+
+	return merkle_root_base32(restored) == expected;
+});
+
+EXO_TEST(merkle_leaf_round_trip_rtl,
+{
+	Samurai::Crypto::Digest::Tiger tiger;
+	Samurai::Crypto::Digest::MerkleTree tree(&tiger, 0);
+	merkle_hash_filler(tree, leaf_test_size);
+
+	const std::string expected = merkle_root_base32(tree);
+	const size_t leaves = tree.countLeaves();
+
+	Samurai::IO::Buffer buffer;
+	tree.copyLeavesRTL(buffer);
+
+	Samurai::Crypto::Digest::Tiger tiger2;
+	Samurai::Crypto::Digest::MerkleTree restored(&tiger2, 0);
+	restored.setLeavesRTL(buffer, leaves, leaf_test_size);
+
+	return merkle_root_base32(restored) == expected;
+});
+
+/* The two directions must genuinely differ, or neither is reversing and both
+   round trips above would pass for the wrong reason. */
+EXO_TEST(merkle_copy_leaves_ltr_and_rtl_differ,
+{
+	Samurai::Crypto::Digest::Tiger tiger;
+	Samurai::Crypto::Digest::MerkleTree tree(&tiger, 0);
+	merkle_hash_filler(tree, leaf_test_size);
+
+	Samurai::IO::Buffer ltr;
+	Samurai::IO::Buffer rtl;
+	tree.copyLeavesLTR(ltr);
+	tree.copyLeavesRTL(rtl);
+
+	if (ltr.size() != rtl.size()) return false;
+
+	const size_t leaf_size = tree.size();
+	/* The last leaf out of RTL is the first leaf out of LTR. */
+	for (size_t n = 0; n < leaf_size; n++)
+		if (ltr.at(n) != rtl.at(rtl.size() - leaf_size + n)) return false;
+
+	return ltr.at(0) != rtl.at(0);
+});
+
+/* Feeding LTR bytes to the RTL setter reverses the leaves, which must change
+   the root. This is what proves the round trips are order sensitive. */
+EXO_TEST(merkle_leaf_order_changes_the_root,
+{
+	Samurai::Crypto::Digest::Tiger tiger;
+	Samurai::Crypto::Digest::MerkleTree tree(&tiger, 0);
+	merkle_hash_filler(tree, leaf_test_size);
+
+	const std::string expected = merkle_root_base32(tree);
+	const size_t leaves = tree.countLeaves();
+
+	Samurai::IO::Buffer buffer;
+	tree.copyLeavesLTR(buffer);
+
+	Samurai::Crypto::Digest::Tiger tiger2;
+	Samurai::Crypto::Digest::MerkleTree reversed(&tiger2, 0);
+	reversed.setLeavesRTL(buffer, leaves, leaf_test_size);
+
+	return merkle_root_base32(reversed) != expected;
+});
+
+/* setLeaves*() resets first, so a tree that already hashed something else must
+   end up with only the leaves it was given. */
+EXO_TEST(merkle_set_leaves_discards_previous_content,
+{
+	Samurai::Crypto::Digest::Tiger tiger;
+	Samurai::Crypto::Digest::MerkleTree tree(&tiger, 0);
+	merkle_hash_filler(tree, leaf_test_size);
+
+	const std::string expected = merkle_root_base32(tree);
+	const size_t leaves = tree.countLeaves();
+
+	Samurai::IO::Buffer buffer;
+	tree.copyLeavesLTR(buffer);
+
+	Samurai::Crypto::Digest::Tiger tiger2;
+	Samurai::Crypto::Digest::MerkleTree dirty(&tiger2, 0);
+	const std::vector<uint8_t> other(50000, 'z');
+	dirty.update(other.data(), other.size());
+
+	dirty.setLeavesLTR(buffer, leaves, leaf_test_size);
+	return merkle_root_base32(dirty) == expected && dirty.countLeaves() == leaves;
+});
+
+/* A tree restored from leaves can hand the same leaves back out again. */
+EXO_TEST(merkle_leaves_survive_a_second_round_trip,
+{
+	Samurai::Crypto::Digest::Tiger tiger;
+	Samurai::Crypto::Digest::MerkleTree tree(&tiger, 0);
+	merkle_hash_filler(tree, leaf_test_size);
+
+	const size_t leaves = tree.countLeaves();
+	Samurai::IO::Buffer first;
+	tree.copyLeavesLTR(first);
+
+	Samurai::Crypto::Digest::Tiger tiger2;
+	Samurai::Crypto::Digest::MerkleTree restored(&tiger2, 0);
+	restored.setLeavesLTR(first, leaves, leaf_test_size);
+	restored.finalize();
+
+	Samurai::IO::Buffer second;
+	restored.copyLeavesLTR(second);
+
+	if (first.size() != second.size()) return false;
+	for (size_t n = 0; n < first.size(); n++)
+		if (first.at(n) != second.at(n)) return false;
+
+	return true;
+});
+
+/*
+ * reset() has to clear the inherited accumulator as well as the tree's own
+ * state. Hash::reset() is pure virtual, so nothing else does it: a partial
+ * block left over from earlier input used to survive into the next use and
+ * finalize() hashed it as an extra leaf.
+ */
+EXO_TEST(merkle_reset_discards_a_partial_block,
+{
+	Samurai::Crypto::Digest::Tiger reference_hasher;
+	Samurai::Crypto::Digest::MerkleTree reference(&reference_hasher, 0);
+	merkle_hash_filler(reference, leaf_test_size);
+	const std::string expected = merkle_root_base32(reference);
+
+	/* Not a whole number of blocks, so an accumulator is left behind. */
+	Samurai::Crypto::Digest::Tiger tiger;
+	Samurai::Crypto::Digest::MerkleTree tree(&tiger, 0);
+	const std::vector<uint8_t> junk(50123, 'z');
+	tree.update(junk.data(), junk.size());
+
+	tree.reset();
+	merkle_hash_filler(tree, leaf_test_size);
+
+	return merkle_root_base32(tree) == expected;
+});
+
+EXO_TEST(merkle_reset_after_finalize_allows_reuse,
+{
+	Samurai::Crypto::Digest::Tiger reference_hasher;
+	Samurai::Crypto::Digest::MerkleTree reference(&reference_hasher, 0);
+	merkle_hash_filler(reference, leaf_test_size);
+	const std::string expected = merkle_root_base32(reference);
+
+	Samurai::Crypto::Digest::Tiger tiger;
+	Samurai::Crypto::Digest::MerkleTree tree(&tiger, 0);
+	const std::vector<uint8_t> junk(50123, 'z');
+	tree.update(junk.data(), junk.size());
+	tree.finalize();
+
+	tree.reset();
+	merkle_hash_filler(tree, leaf_test_size);
+
+	return merkle_root_base32(tree) == expected;
 });
