@@ -1,6 +1,9 @@
 #include "samurai/crypto/digest/hash.h"
 #include "samurai/crypto/digest/tiger.h"
 #include "samurai/crypto/digest/merkletree.h"
+#include "samurai/crypto/digest/tigertree.h"
+#include "samurai/util/base32.h"
+#include <vector>
 
 bool testTiger(const char* input, const char* expected) {
 	char buf[64];
@@ -153,116 +156,85 @@ EXO_TEST(hash_tth_7, {
 });
 
 
-// EXO_TEST(hash_tth_8, {
-// 	char buf[64];
-// 	Samurai::Crypto::Digest::Tiger tiger;
-// 	Samurai::Crypto::Digest::MerkleTree merkle(&tiger, 0);
-// 	
-// 	uint8_t* temp = new uint8_t[100000];
-// 	memset(temp, 'a', 100000);
-// 	for (uint n = 0; n < 10; n++)
-// 		merkle.update(temp, 100000);
-// 	
-// 	Samurai::Crypto::Digest::HashValue* value = merkle.digest();
-// 	value->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, buf, 64);
-// 	return strcasecmp(buf, "KEPTIGT4CQKF7S5EUVNJZSXXIPNMB3XSOAAQS4Y") == 0;
-// 	return 0;
-// });
-// 
-// EXO_TEST(hash_tth_9, {
-// 	char buf[64];
-// 	Samurai::Crypto::Digest::Tiger tiger;
-// 	Samurai::Crypto::Digest::MerkleTree merkle(&tiger, 0);
-// 	for (size_t n = 0; n < 2000000; n++)
-// 		merkle.update((uint8_t*) "a", 1);
-// 	
-// 	Samurai::Crypto::Digest::HashValue* value = merkle.digest();
-// 	value->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, buf, 64);
-// 	return strcasecmp(buf, "XD2AKUE5DFPBXNGML5P3QSOO7LOV2EKOICJWX3A") == 0;
-// 	
-// });
-// 
-// EXO_TEST(hash_tth_10, {
-// 	char buf[64];
-// 	Samurai::Crypto::Digest::Tiger tiger;
-// 	Samurai::Crypto::Digest::MerkleTree merkle(&tiger, 0);
-// 	for (size_t n = 0; n < 4000000; n++)
-// 		merkle.update((uint8_t*) "a", 1);
-// 	
-// 	Samurai::Crypto::Digest::HashValue* value = merkle.digest();
-// 	value->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, buf, 64);
-// 	return strcasecmp(buf, "4WDBG7VHOVUQ23TIDFPZCFJ3PGXUXVGJINVU4PI") == 0;
-// 	
-// });
-// 
-// EXO_TEST(hash_tth_11, {
-// 	char buf[64];
-// 	Samurai::Crypto::Digest::Tiger tiger;
-// 	Samurai::Crypto::Digest::MerkleTree merkle(&tiger, 0);
-// 	for (size_t n = 0; n < 8000000; n++)
-// 		merkle.update((uint8_t*) "a", 1);
-// 	
-// 	Samurai::Crypto::Digest::HashValue* value = merkle.digest();
-// 	value->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, buf, 64);
-// 	return strcasecmp(buf, "6L6GMENTBLX2UE5JIVSCPX4P5PQYB7YUIY6PJ6I") == 0;
-// 	
-// });
-// 
-// EXO_TEST(hash_tth_12, {
-// 	char buf[64];
-// 	Samurai::Crypto::Digest::Tiger tiger;
-// 	Samurai::Crypto::Digest::MerkleTree merkle(&tiger, 0);
-// 	for (size_t n = 0; n < 12957194; n++)
-// 		merkle.update((uint8_t*) "a", 1);
-// 	
-// 	Samurai::Crypto::Digest::HashValue* value = merkle.digest();
-// 	value->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, buf, 64);
-// 	return strcasecmp(buf, "T5E2GQZNS2YZCHOA2MLG6SL4C3P3ORSQZUZMGXI") == 0;
-// 	
-// });
+/* ------------------------------------------------------------------------- */
+/* Streaming tiger tree hashes                                                */
+/*                                                                            */
+/* These pass 0 as the block size, which selects the default. That used to     */
+/* reach Hash with a zero-sized block, where update() could not advance and    */
+/* spun forever, which is why they were disabled.                             */
+/* ------------------------------------------------------------------------- */
 
+EXO_TEST(hash_tth_stream_1mb, {
+	char buf[64];
+	Samurai::Crypto::Digest::Tiger tiger;
+	Samurai::Crypto::Digest::MerkleTree merkle(&tiger, 0);
 
-// struct LeaveStore
-// {
-// 	uint64_t filesize;
-// 	size_t leaves;
-// 	Samurai::IO::Buffer data;
-// };
-// 
-// static LeaveStore leaveStore;
-// 
-// EXO_TEST(hash_leaf_data_1,
-// {
-// 	char buf[64];
-// 	Samurai::Crypto::Digest::Tiger tiger;
-// 	Samurai::Crypto::Digest::MerkleTree merkle(&tiger, 0);
-// 
-// 	uint8_t* temp = new uint8_t[80];
-// 	memset(temp, 'a', 80);
-// 	merkle.update(temp, 80);
-// 
-// 	Samurai::Crypto::Digest::HashValue* value = merkle.digest();
-// 	value->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, buf, 64);
-// 	
-// 	leaveStore.filesize = merkle.getFileSize();
-// 	leaveStore.leaves   = merkle.countLeaves();
-// 	merkle.copyLeaves(leaveStore.data);
-// 	
-// 	delete[] temp;
-// 	return strcasecmp(buf, "KEPTIGT4CQKF7S5EUVNJZSXXIPNMB3XSOAAQS4Y") == 0;
-// });
-// 
-// EXO_TEST(hash_leaf_data_2,
-// {
-// 	char buf[64];
-// 	Samurai::Crypto::Digest::Tiger tiger;
-// 	Samurai::Crypto::Digest::MerkleTree merkle(&tiger, 0);
-// 
-// 	merkle.setLeaves(leaveStore.data, leaveStore.leaves, leaveStore.filesize);
-// 	
-// 	Samurai::Crypto::Digest::HashValue* value = merkle.digest();
-// 	value->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, buf, 64);
-// 	
-// 	return strcasecmp(buf, "KEPTIGT4CQKF7S5EUVNJZSXXIPNMB3XSOAAQS4Y") == 0;
-// });
-// 
+	std::vector<uint8_t> temp(100000, 'a');
+	for (unsigned n = 0; n < 10; n++)
+		merkle.update(temp.data(), temp.size());
+
+	merkle.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, buf, 64);
+	return strcasecmp(buf, "KEPTIGT4CQKF7S5EUVNJZSXXIPNMB3XSOAAQS4Y") == 0;
+});
+
+/* One byte at a time, so every block boundary is crossed mid-update. */
+EXO_TEST(hash_tth_stream_2m_bytewise, {
+	char buf[64];
+	Samurai::Crypto::Digest::Tiger tiger;
+	Samurai::Crypto::Digest::MerkleTree merkle(&tiger, 0);
+	for (size_t n = 0; n < 2000000; n++)
+		merkle.update((const uint8_t*) "a", 1);
+
+	merkle.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, buf, 64);
+	return strcasecmp(buf, "XD2AKUE5DFPBXNGML5P3QSOO7LOV2EKOICJWX3A") == 0;
+});
+
+EXO_TEST(hash_tth_stream_4m_bytewise, {
+	char buf[64];
+	Samurai::Crypto::Digest::Tiger tiger;
+	Samurai::Crypto::Digest::MerkleTree merkle(&tiger, 0);
+	for (size_t n = 0; n < 4000000; n++)
+		merkle.update((const uint8_t*) "a", 1);
+
+	merkle.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, buf, 64);
+	return strcasecmp(buf, "4WDBG7VHOVUQ23TIDFPZCFJ3PGXUXVGJINVU4PI") == 0;
+});
+
+EXO_TEST(hash_tth_stream_8m_bytewise, {
+	char buf[64];
+	Samurai::Crypto::Digest::Tiger tiger;
+	Samurai::Crypto::Digest::MerkleTree merkle(&tiger, 0);
+	for (size_t n = 0; n < 8000000; n++)
+		merkle.update((const uint8_t*) "a", 1);
+
+	merkle.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, buf, 64);
+	return strcasecmp(buf, "6L6GMENTBLX2UE5JIVSCPX4P5PQYB7YUIY6PJ6I") == 0;
+});
+
+/*
+ * A size that is not a whole number of leaves, checked against the other
+ * tiger-tree implementation in the tree rather than against a recorded digest:
+ * the two are independent, so agreeing on an awkward length is the property
+ * worth asserting.
+ */
+EXO_TEST(hash_tth_stream_matches_reference_impl, {
+	const size_t N = 12957194;
+	std::vector<uint8_t> data(N, 'a');
+
+	char from_tree[64];
+	Samurai::Crypto::Digest::Tiger tiger;
+	Samurai::Crypto::Digest::MerkleTree merkle(&tiger, 0);
+	merkle.update(data.data(), N);
+	merkle.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::FormatBase32, from_tree, 64);
+
+	Samurai::Crypto::Digest::TT_CONTEXT ctx;
+	Samurai::Crypto::Digest::tt_init(&ctx);
+	Samurai::Crypto::Digest::tt_update(&ctx, data.data(), N);
+	uint8_t raw[Samurai::Crypto::Digest::TIGERSIZE];
+	Samurai::Crypto::Digest::tt_digest(&ctx, raw);
+
+	char from_ref[64];
+	base32_encode(raw, Samurai::Crypto::Digest::TIGERSIZE, from_ref, sizeof(from_ref));
+
+	return strcasecmp(from_tree, from_ref) == 0;
+});

@@ -30,6 +30,13 @@ void Samurai::Crypto::Digest::Hash::update(const void* data_, size_t length)
 {
 	if (!data_ || !length || m_finalized) return;
 
+	/*
+	 * With no room to accumulate into there is nothing to copy, so the loop
+	 * below would compute a zero length, never advance and spin forever. The
+	 * subtraction would also wrap if the index ever passed the block size.
+	 */
+	if (m_current_block_index >= m_block_size) return;
+
 	const uint8_t* data = (const uint8_t*) data_;
 	size_t offset = 0;
 	while (offset < length)
