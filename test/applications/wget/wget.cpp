@@ -59,11 +59,11 @@ class Connection : public Samurai::IO::Net::SocketEventHandler {
 		}
 		
 		void EventConnecting(const Samurai::IO::Net::Socket*) {
-			status("Connecting ...");
+			status("SocketState::Connecting ...");
 		}
 		
 		void EventConnected(const Samurai::IO::Net::Socket*) {
-			status("Connected.");
+			status("SocketState::Connected.");
 			if (socket->TLSInitialize(false)) {
 				socket->TLSsendHandshake();
 			} else {
@@ -73,7 +73,7 @@ class Connection : public Samurai::IO::Net::SocketEventHandler {
 		}
 		
 		void EventTLSConnected(const Samurai::IO::Net::Socket*) {
-			status("TLS Connected -- Secure connection established.");
+			status("TLS SocketState::Connected -- Secure connection established.");
 			socket->write("HEAD / HTTP/1.0\r\n\r\n", 20);
 		}
 	
@@ -88,7 +88,7 @@ class Connection : public Samurai::IO::Net::SocketEventHandler {
 		}
 		
 		void EventDisconnected(const Samurai::IO::Net::Socket*) {
-			status("Disconnected...");
+			status("SocketState::Disconnected...");
 			running = false;
 		}
 		

@@ -33,7 +33,7 @@ void Samurai::IO::Net::DNS::BlockingResolver::lookup(const char* address) {
 	if (!eventHandler) return;
 
 	if (!address || !*address) {
-		eventHandler->EventHostError(NotFound);
+		eventHandler->EventHostError(Samurai::IO::Net::DNS::Resolver::Error::NotFound);
 		return;
 	}
 
@@ -47,14 +47,14 @@ void Samurai::IO::Net::DNS::BlockingResolver::lookup(const char* address) {
 
 	if (rc != 0) {
 		switch (rc) {
-			case EAI_NONAME:  eventHandler->EventHostError(NotFound);    break;
-			case EAI_AGAIN:   eventHandler->EventHostError(TryAgain);    break;
-			case EAI_FAIL:    eventHandler->EventHostError(ServerError); break;
+			case EAI_NONAME:  eventHandler->EventHostError(Samurai::IO::Net::DNS::Resolver::Error::NotFound);    break;
+			case EAI_AGAIN:   eventHandler->EventHostError(Samurai::IO::Net::DNS::Resolver::Error::TryAgain);    break;
+			case EAI_FAIL:    eventHandler->EventHostError(Samurai::IO::Net::DNS::Resolver::Error::ServerError); break;
 #if defined(EAI_NODATA) && EAI_NODATA != EAI_NONAME
-			case EAI_NODATA:  eventHandler->EventHostError(NoAddress);   break;
+			case EAI_NODATA:  eventHandler->EventHostError(Samurai::IO::Net::DNS::Resolver::Error::NoAddress);   break;
 #endif
-			case EAI_MEMORY:  eventHandler->EventHostError(ServerError); break;
-			default:          eventHandler->EventHostError(Unknown);
+			case EAI_MEMORY:  eventHandler->EventHostError(Samurai::IO::Net::DNS::Resolver::Error::ServerError); break;
+			default:          eventHandler->EventHostError(Samurai::IO::Net::DNS::Resolver::Error::Unknown);
 		}
 		return;
 	}
@@ -82,5 +82,5 @@ void Samurai::IO::Net::DNS::BlockingResolver::lookup(const char* address) {
 	if (found)
 		eventHandler->EventHostFound(&inet_addr);
 	else
-		eventHandler->EventHostError(NoAddress);
+		eventHandler->EventHostError(Samurai::IO::Net::DNS::Resolver::Error::NoAddress);
 }

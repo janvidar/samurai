@@ -53,8 +53,8 @@ void Samurai::IO::Net::DNS::BuiltinResolver::lookup(const char* name)
 
 void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 
-	enum Samurai::IO::Net::DNS::Type dns_type = Type_A;
-	if (dnsConfiguration()->isIPv6()) dns_type = Type_AAAA;
+	enum Samurai::IO::Net::DNS::Type dns_type = Type::A;
+	if (dnsConfiguration()->isIPv6()) dns_type = Type::AAAA;
 
 	/*
 	 * NOTE: getNameServer() returns 0 when the configuration lists no usable
@@ -64,7 +64,7 @@ void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 	if (!server)
 	{
 		QERR("[DNS] No name server configured; cannot resolve '%s'", hostname.c_str());
-		if (eventHandler) eventHandler->EventHostError(ServerError);
+		if (eventHandler) eventHandler->EventHostError(Samurai::IO::Net::DNS::Resolver::Error::ServerError);
 		return;
 	}
 
@@ -100,7 +100,7 @@ void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 	}
 	buffer->append((char) 0x00);
 	buffer->appendBinary((uint16_t) dns_type, Samurai::IO::Buffer::BigEndian);
-	buffer->appendBinary((uint16_t) Class_IN, Samurai::IO::Buffer::BigEndian);
+	buffer->appendBinary((uint16_t) Class::IN, Samurai::IO::Buffer::BigEndian);
 
 	auto packet = std::make_unique<DatagramPacket>(buffer.get());
 
@@ -129,7 +129,7 @@ void Samurai::IO::Net::DNS::BuiltinResolver::EventGotDatagram(DatagramSocket*, D
 
 	Samurai::IO::Net::DNS::CacheStorage* cache = Samurai::IO::Net::DNS::CacheStorage::getInstance();
 
-	if (code == Samurai::IO::Net::DNS::DNS_STATUS_OK) {
+	if (code == Samurai::IO::Net::DNS::ResponseCode::Ok) {
 		bool found = false;
 
 		/*
@@ -172,12 +172,12 @@ void Samurai::IO::Net::DNS::BuiltinResolver::EventGotDatagram(DatagramSocket*, D
 		if (!found)
 			QDBG("No address for %s yet", rrname.toString().c_str());
 
-	} else if (code == Samurai::IO::Net::DNS::DNS_STATUS_NAME_ERROR) {
+	} else if (code == Samurai::IO::Net::DNS::ResponseCode::NameError) {
 		QDBG("Host not found");
-		eventHandler->EventHostError(NotFound);
+		eventHandler->EventHostError(Samurai::IO::Net::DNS::Resolver::Error::NotFound);
 	} else {
 		QDBG("Resolve failed, response code %d", (int) code);
-		eventHandler->EventHostError(Unknown);
+		eventHandler->EventHostError(Samurai::IO::Net::DNS::Resolver::Error::Unknown);
 	}
 }
 

@@ -22,7 +22,7 @@ namespace DNS {
 
 class Resolver {
 	public:
-		enum Error
+		enum class Error
 		{
 			NotFound,       //< "Host not found"
 			NoAddress,      //< "Hostname exists, but has no address"

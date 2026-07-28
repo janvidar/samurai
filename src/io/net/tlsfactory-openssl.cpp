@@ -143,8 +143,8 @@ Samurai::IO::Net::OpenSSL::~OpenSSL()
 	deinitialize();
 }
 
-enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initialize(
-		enum Samurai::IO::Net::TlsFactory::TlsOperation mode_,
+Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initialize(
+		Samurai::IO::Net::TlsFactory::TlsOperation mode_,
 		socket_t sd_)
 {
 	sd = sd_;
@@ -155,7 +155,7 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 	/* The method accessors return a const pointer. */
 	const SSL_METHOD* method;
 
-	if (mode == Samurai::IO::Net::TlsFactory::TLS_OPERATE_CLIENT)
+	if (mode == Samurai::IO::Net::TlsFactory::TlsOperation::Client)
 		method = TLS_client_method();
 	else
 		method = TLS_server_method();
@@ -168,7 +168,7 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 		ssl_error_string(msg, sizeof(msg));
 		QERR("SSL error: %s", msg);
 
-		return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
+		return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 	}
 
 	/*
@@ -192,7 +192,7 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 			char msg[SSL_ERRBUF_SIZE];
 			ssl_error_string(msg, sizeof(msg));
 			QERR("Unable to load the system certificate store: %s", msg);
-			return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
+			return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 		}
 	}
 	else
@@ -208,7 +208,7 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 			char msg[SSL_ERRBUF_SIZE];
 			ssl_error_string(msg, sizeof(msg));
 			QERR("Unable to load certificate: %s", msg);
-			return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
+			return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 		}
 	}
 
@@ -220,7 +220,7 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 			char msg[SSL_ERRBUF_SIZE];
 			ssl_error_string(msg, sizeof(msg));
 			QERR("Unable to load private key: %s", msg);
-			return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
+			return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 		}
 	}
 
@@ -230,7 +230,7 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 		char msg[SSL_ERRBUF_SIZE];
 		ssl_error_string(msg, sizeof(msg));
 		QERR("Unable to create SSL session: %s", msg);
-		return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
+		return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 	}
 
 	/*
@@ -238,7 +238,7 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 	 * certificate was issued for the host we asked for. Without this, any
 	 * peer holding any CA-signed certificate can impersonate any server.
 	 */
-	if (mode == Samurai::IO::Net::TlsFactory::TLS_OPERATE_CLIENT && !peer_name.empty())
+	if (mode == Samurai::IO::Net::TlsFactory::TlsOperation::Client && !peer_name.empty())
 	{
 		X509_VERIFY_PARAM* param = SSL_get0_param(ssl);
 
@@ -253,7 +253,7 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 			if (X509_VERIFY_PARAM_set1_host(param, peer_name.c_str(), 0) != 1)
 			{
 				QERR("Unable to set expected peer name '%s'", peer_name.c_str());
-				return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
+				return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 			}
 
 			/* Server Name Indication - required by most virtual hosts.
@@ -261,35 +261,35 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initiali
 			SSL_set_tlsext_host_name(ssl, peer_name.c_str());
 		}
 	}
-	else if (mode == Samurai::IO::Net::TlsFactory::TLS_OPERATE_CLIENT && verify)
+	else if (mode == Samurai::IO::Net::TlsFactory::TlsOperation::Client && verify)
 	{
 		QERR("No peer name set - the certificate name cannot be verified. "
 		     "Call TlsFactory::setPeerName() before initialize().");
-		return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
+		return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 	}
 
 	SSL_set_fd(ssl, sd);
-	return Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
+	return Samurai::IO::Net::TlsFactory::TlsStatus::Ok;
 }
 
-enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::deinitialize()
+Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::deinitialize()
 {
 	if (ssl) SSL_free(ssl);
 	if (ctx) SSL_CTX_free(ctx);
 	ssl = nullptr;
 	ctx = nullptr;
-	return Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
+	return Samurai::IO::Net::TlsFactory::TlsStatus::Ok;
 }
 
 
-enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendHandshake()
+Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendHandshake()
 {
-	if (!ssl) return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
+	if (!ssl) return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 
 	ERR_clear_error();
 
 	int ret;
-	if (mode == Samurai::IO::Net::TlsFactory::TLS_OPERATE_CLIENT)
+	if (mode == Samurai::IO::Net::TlsFactory::TlsOperation::Client)
 		ret = SSL_connect(ssl);
 	else
 		ret = SSL_accept(ssl);
@@ -306,22 +306,22 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendHand
 		switch (error)
 		{
 			case SSL_ERROR_WANT_READ:
-				return Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_READ;
+				return Samurai::IO::Net::TlsFactory::TlsStatus::WantRead;
 
 			case SSL_ERROR_WANT_WRITE:
 			case SSL_ERROR_WANT_CONNECT:
 			case SSL_ERROR_WANT_ACCEPT:
-				return Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE;
+				return Samurai::IO::Net::TlsFactory::TlsStatus::WantWrite;
 
 			case SSL_ERROR_ZERO_RETURN:
-				return Samurai::IO::Net::TlsFactory::TLS_STATUS_CLOSED;
+				return Samurai::IO::Net::TlsFactory::TlsStatus::Closed;
 
 			default:
 			{
 				char msg[SSL_ERRBUF_SIZE];
 				ssl_error_string(msg, sizeof(msg));
 				QERR("SSL handshake failed (%d): %s", error, msg);
-				return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
+				return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 			}
 		}
 	}
@@ -342,7 +342,7 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendHand
 		{
 			QERR("Certificate verification failed: %s",
 				X509_verify_cert_error_string(status));
-			return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
+			return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 		}
 		QDBG("Certificate not verified (%s), continuing untrusted",
 			X509_verify_cert_error_string(status));
@@ -356,10 +356,10 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendHand
 	else if (verify)
 	{
 		QERR("Peer presented no certificate");
-		return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
+		return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 	}
 
-	return Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
+	return Samurai::IO::Net::TlsFactory::TlsStatus::Ok;
 }
 
 bool Samurai::IO::Net::OpenSSL::getPeerCertificateSHA256(uint8_t* digest, size_t length)
@@ -378,9 +378,9 @@ bool Samurai::IO::Net::OpenSSL::getPeerCertificateSHA256(uint8_t* digest, size_t
 	return found;
 }
 
-enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendGoodbye() {
+Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendGoodbye() {
 
-	if (!ssl) return Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
+	if (!ssl) return Samurai::IO::Net::TlsFactory::TlsStatus::Ok;
 
 	ERR_clear_error();
 
@@ -389,22 +389,22 @@ enum Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendGood
 	/* 1 = peer replied, 0 = our notify is sent but the peer has not replied;
 	   both mean we are done writing. */
 	if (ret >= 0)
-		return Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
+		return Samurai::IO::Net::TlsFactory::TlsStatus::Ok;
 
 	int error = SSL_get_error(ssl, ret);
 	switch (error) {
 		case SSL_ERROR_NONE:
-			return Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
+			return Samurai::IO::Net::TlsFactory::TlsStatus::Ok;
 		case SSL_ERROR_WANT_READ:
-			return Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_READ;
+			return Samurai::IO::Net::TlsFactory::TlsStatus::WantRead;
 		case SSL_ERROR_WANT_WRITE:
 		case SSL_ERROR_WANT_CONNECT:
 		case SSL_ERROR_WANT_ACCEPT:
-			return Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE;
+			return Samurai::IO::Net::TlsFactory::TlsStatus::WantWrite;
 		case SSL_ERROR_ZERO_RETURN:
-			return Samurai::IO::Net::TlsFactory::TLS_STATUS_CLOSED;
+			return Samurai::IO::Net::TlsFactory::TlsStatus::Closed;
 		default:
-			return Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
+			return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 	}
 
 }
@@ -420,11 +420,11 @@ static int ssl_clamp_length(size_t length)
 	return (int) length;
 }
 
-ssize_t Samurai::IO::Net::OpenSSL::read(char* data, size_t length, enum Samurai::IO::Net::TlsFactory::TlsStatus& status)
+ssize_t Samurai::IO::Net::OpenSSL::read(char* data, size_t length, Samurai::IO::Net::TlsFactory::TlsStatus& status)
 {
 	if (!ssl)
 	{
-		status = Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
+		status = Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 		return -1;
 	}
 
@@ -434,26 +434,26 @@ ssize_t Samurai::IO::Net::OpenSSL::read(char* data, size_t length, enum Samurai:
 
 	if (ret > 0)
 	{
-		status = Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
+		status = Samurai::IO::Net::TlsFactory::TlsStatus::Ok;
 		return ret;
 	}
 
 	int error = SSL_get_error(ssl, ret);
 	switch (error) {
 		case SSL_ERROR_NONE:
-			status = Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
+			status = Samurai::IO::Net::TlsFactory::TlsStatus::Ok;
 			return 0;
 
 		case SSL_ERROR_WANT_READ:
-			status = Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_READ;
+			status = Samurai::IO::Net::TlsFactory::TlsStatus::WantRead;
 			return 0;
 
 		case SSL_ERROR_WANT_WRITE:
-			status = Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE;
+			status = Samurai::IO::Net::TlsFactory::TlsStatus::WantWrite;
 			return 0;
 
 		case SSL_ERROR_ZERO_RETURN:
-			status = Samurai::IO::Net::TlsFactory::TLS_STATUS_CLOSED;
+			status = Samurai::IO::Net::TlsFactory::TlsStatus::Closed;
 			return 0;
 
 		default:
@@ -461,17 +461,17 @@ ssize_t Samurai::IO::Net::OpenSSL::read(char* data, size_t length, enum Samurai:
 			char msg[SSL_ERRBUF_SIZE];
 			ssl_error_string(msg, sizeof(msg));
 			QERR("SSL read error (%d): %s", error, msg);
-			status = Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
+			status = Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 			return -1;
 		}
 	}
 }
 
-ssize_t Samurai::IO::Net::OpenSSL::peek(char* data, size_t length, enum Samurai::IO::Net::TlsFactory::TlsStatus& status)
+ssize_t Samurai::IO::Net::OpenSSL::peek(char* data, size_t length, Samurai::IO::Net::TlsFactory::TlsStatus& status)
 {
 	if (!ssl)
 	{
-		status = Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
+		status = Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 		return -1;
 	}
 
@@ -481,26 +481,26 @@ ssize_t Samurai::IO::Net::OpenSSL::peek(char* data, size_t length, enum Samurai:
 
 	if (ret > 0)
 	{
-		status = Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
+		status = Samurai::IO::Net::TlsFactory::TlsStatus::Ok;
 		return ret;
 	}
 
 	int error = SSL_get_error(ssl, ret);
 	switch (error) {
 		case SSL_ERROR_NONE:
-			status = Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
+			status = Samurai::IO::Net::TlsFactory::TlsStatus::Ok;
 			return 0;
 
 		case SSL_ERROR_WANT_READ:
-			status = Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_READ;
+			status = Samurai::IO::Net::TlsFactory::TlsStatus::WantRead;
 			return 0;
 
 		case SSL_ERROR_WANT_WRITE:
-			status = Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE;
+			status = Samurai::IO::Net::TlsFactory::TlsStatus::WantWrite;
 			return 0;
 
 		case SSL_ERROR_ZERO_RETURN:
-			status = Samurai::IO::Net::TlsFactory::TLS_STATUS_CLOSED;
+			status = Samurai::IO::Net::TlsFactory::TlsStatus::Closed;
 			return 0;
 
 		default:
@@ -508,7 +508,7 @@ ssize_t Samurai::IO::Net::OpenSSL::peek(char* data, size_t length, enum Samurai:
 			char msg[SSL_ERRBUF_SIZE];
 			ssl_error_string(msg, sizeof(msg));
 			QERR("SSL peek error (%d): %s", error, msg);
-			status = Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
+			status = Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 			return -1;
 		}
 	}
@@ -522,11 +522,11 @@ size_t Samurai::IO::Net::OpenSSL::pending() const
 	return (ret > 0) ? (size_t) ret : 0;
 }
 
-ssize_t Samurai::IO::Net::OpenSSL::write(const char* data, size_t length, enum Samurai::IO::Net::TlsFactory::TlsStatus& status)
+ssize_t Samurai::IO::Net::OpenSSL::write(const char* data, size_t length, Samurai::IO::Net::TlsFactory::TlsStatus& status)
 {
 	if (!ssl)
 	{
-		status = Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
+		status = Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 		return -1;
 	}
 
@@ -536,26 +536,26 @@ ssize_t Samurai::IO::Net::OpenSSL::write(const char* data, size_t length, enum S
 
 	if (ret > 0)
 	{
-		status = Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
+		status = Samurai::IO::Net::TlsFactory::TlsStatus::Ok;
 		return ret;
 	}
 
 	int error = SSL_get_error(ssl, ret);
 	switch (error) {
 		case SSL_ERROR_NONE:
-			status = Samurai::IO::Net::TlsFactory::TLS_STATUS_OK;
+			status = Samurai::IO::Net::TlsFactory::TlsStatus::Ok;
 			return 0;
 
 		case SSL_ERROR_WANT_READ:
-			status = Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_READ;
+			status = Samurai::IO::Net::TlsFactory::TlsStatus::WantRead;
 			return 0;
 
 		case SSL_ERROR_WANT_WRITE:
-			status = Samurai::IO::Net::TlsFactory::TLS_STATUS_WANT_WRITE;
+			status = Samurai::IO::Net::TlsFactory::TlsStatus::WantWrite;
 			return 0;
 
 		case SSL_ERROR_ZERO_RETURN:
-			status = Samurai::IO::Net::TlsFactory::TLS_STATUS_CLOSED;
+			status = Samurai::IO::Net::TlsFactory::TlsStatus::Closed;
 			return 0;
 
 		default:
@@ -563,7 +563,7 @@ ssize_t Samurai::IO::Net::OpenSSL::write(const char* data, size_t length, enum S
 			char msg[SSL_ERRBUF_SIZE];
 			ssl_error_string(msg, sizeof(msg));
 			QERR("SSL write error (%d): %s", error, msg);
-			status = Samurai::IO::Net::TlsFactory::TLS_STATUS_ERROR;
+			status = Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 			return -1;
 		}
 	}

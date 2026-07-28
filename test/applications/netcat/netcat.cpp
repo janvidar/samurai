@@ -172,12 +172,12 @@ class Connection :
 
 		void EventConnecting(const Samurai::IO::Net::Socket*)
 		{
-			if (arg_verbose) status("Connecting ...");
+			if (arg_verbose) status("SocketState::Connecting ...");
 		}
 
 		void EventConnected(const Samurai::IO::Net::Socket*)
 		{
-			if (arg_verbose) status("Connected.");
+			if (arg_verbose) status("SocketState::Connected.");
 
 			if (arg_ssl)
 			{
@@ -206,7 +206,7 @@ class Connection :
 			}
 			else
 			{
-				if (arg_verbose) status("TLS Connected -- Secure connection established.");
+				if (arg_verbose) status("TLS SocketState::Connected -- Secure connection established.");
 				do_connected();
 			}
 		}
@@ -224,7 +224,7 @@ class Connection :
 
 		void EventDisconnected(const Samurai::IO::Net::Socket*)
 		{
-			if (arg_verbose) status("Disconnected...");
+			if (arg_verbose) status("SocketState::Disconnected...");
 			running = false;
 		}
 

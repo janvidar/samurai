@@ -94,19 +94,19 @@ static int net_string_to_address(int af, const char* src, void* dst)
 }
 
 
-Samurai::IO::Net::InetAddress::InetAddress() : version(Unspecified), data(nullptr), resolver(nullptr), resolveState(Unresolved), dnsevent(nullptr)
+Samurai::IO::Net::InetAddress::InetAddress() : version(Unspecified), data(nullptr), resolver(nullptr), resolveState(ResolveState::Unresolved), dnsevent(nullptr)
 {
 	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
 	memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
 }
 
-Samurai::IO::Net::InetAddress::InetAddress(enum Version ip_version) : version(ip_version), data(nullptr), resolver(nullptr), resolveState(Unresolved), dnsevent(nullptr)
+Samurai::IO::Net::InetAddress::InetAddress(enum Version ip_version) : version(ip_version), data(nullptr), resolver(nullptr), resolveState(ResolveState::Unresolved), dnsevent(nullptr)
 {
 	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
 	memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
 }
 
-Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Version ip_version) : version(Unspecified), data(nullptr), resolver(nullptr), resolveState(Unresolved), dnsevent(nullptr)
+Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Version ip_version) : version(Unspecified), data(nullptr), resolver(nullptr), resolveState(ResolveState::Unresolved), dnsevent(nullptr)
 {
 	version = ip_version;
 	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
@@ -174,13 +174,13 @@ Samurai::IO::Net::InetAddress::InetAddress(const std::string& address, enum Vers
 	else
 	{
 		// printf("OK!\n\n\n");
-		resolveState = Resolved;
+		resolveState = ResolveState::Resolved;
 	}
 	
 }
 
 
-Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress& address) : ResolveEventHandler(), version(Unspecified), data(nullptr), resolver(nullptr), resolveState(Unresolved), dnsevent(nullptr)
+Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress& address) : ResolveEventHandler(), version(Unspecified), data(nullptr), resolver(nullptr), resolveState(ResolveState::Unresolved), dnsevent(nullptr)
 {
 	version = address.version;
 	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
@@ -190,7 +190,7 @@ Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress& 
 }
 
 
-Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress* address) : version(Unspecified), data(nullptr), resolver(nullptr), resolveState(Unresolved), dnsevent(nullptr)
+Samurai::IO::Net::InetAddress::InetAddress(const Samurai::IO::Net::InetAddress* address) : version(Unspecified), data(nullptr), resolver(nullptr), resolveState(ResolveState::Unresolved), dnsevent(nullptr)
 {
 	version = address->version;
 	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
@@ -221,7 +221,7 @@ bool Samurai::IO::Net::InetAddress::setRawAddress(void* data_, size_t length, en
  	version = ip_version;
 	memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
 	memcpy(data.get(), data_, length);
-	resolveState = Resolved;
+	resolveState = ResolveState::Resolved;
 	return true;
 }
 
@@ -327,7 +327,7 @@ bool Samurai::IO::Net::InetAddress::isLoopback() const
    stale when the address changed and dangle once the object died. */
 std::string Samurai::IO::Net::InetAddress::getAddress() const
 {
-	if (resolveState != Resolved)
+	if (resolveState != ResolveState::Resolved)
 		return hostname;
 
 	char buf[INET6_ADDRSTRLEN+1] = { 0, };
@@ -413,7 +413,7 @@ Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const st
 		memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
 		version = Unspecified;
 	} else {
-		resolveState = Resolved;
+		resolveState = ResolveState::Resolved;
 	}
 	
 	return *this;
@@ -437,7 +437,7 @@ Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const Sa
 
 bool Samurai::IO::Net::InetAddress::isResolved() const
 {
-	if (isValid() && resolveState == Resolved) return true;
+	if (isValid() && resolveState == ResolveState::Resolved) return true;
 	return false;
 }
 
@@ -450,7 +450,7 @@ void Samurai::IO::Net::InetAddress::EventHostFound(const Samurai::IO::Net::InetA
 	   into. */
 	version = address->version;
 	memcpy(data.get(), address->data.get(), sizeof(struct Samurai::IO::Net::__InternalAddress));
-	resolveState = Resolved;
+	resolveState = ResolveState::Resolved;
 
 	/* Cleared before the callback, not after: the handler is free to destroy
 	   this object, and coming back to touch a member afterwards would be a
@@ -464,7 +464,7 @@ void Samurai::IO::Net::InetAddress::EventHostFound(const Samurai::IO::Net::InetA
 
 void Samurai::IO::Net::InetAddress::EventHostError(enum Samurai::IO::Net::DNS::Resolver::Error error)
 {
-	resolveState = ResolveError;
+	resolveState = ResolveState::ResolveError;
 	if (dnsevent) {
 		dnsevent->EventHostError(error);
 	}
@@ -476,7 +476,7 @@ void Samurai::IO::Net::InetAddress::lookup(ResolveEventHandler* eventHandler)
 {
 	if (eventHandler) dnsevent = eventHandler;
 
-	if (resolveState == Resolved)
+	if (resolveState == ResolveState::Resolved)
 	{
 		Samurai::IO::Net::ResolveEventHandler* handler = dnsevent;
 		dnsevent = nullptr;

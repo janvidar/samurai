@@ -78,7 +78,7 @@ class DatagramSocket : public SocketBase {
 		DatagramSocket(DatagramEventHandler* eh, const SocketAddress& bindAddr);
 	
 		/**
-		 * Set up a Datagram Socket to bind on the local address and port.
+		 * Set up a SocketType::Datagram Socket to bind on the local address and port.
 		 */
 		DatagramSocket(DatagramEventHandler* eh, const InetAddress& addr, uint16_t port);
 		
@@ -88,7 +88,7 @@ class DatagramSocket : public SocketBase {
 		DatagramSocket(DatagramEventHandler* eh, uint16_t port);
 
 		/**
-		 * Set up a Datagram Socket to bind on any address (0.0.0.0), and
+		 * Set up a SocketType::Datagram Socket to bind on any address (0.0.0.0), and
 		 * any available OS-assigned port.
 		 */
 		DatagramSocket(DatagramEventHandler* eh, enum Samurai::IO::Net::InetAddress::Version version);
