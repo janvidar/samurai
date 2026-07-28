@@ -37,6 +37,10 @@
 #endif
 
 
+namespace Samurai {
+namespace Crypto {
+namespace Digest {
+
 /*
  * NOTE: this took uint64_t* and every caller cast a uint8_t array to it. The
  * scratch areas are not 8-byte aligned - tt_init() deliberately sets
@@ -172,4 +176,8 @@ void tt_copy(TT_CONTEXT *dest, TT_CONTEXT *src)
 
   dest->block = dest->leaf + 1;
   dest->top   = dest->nodes + (src->top - src->nodes);
+}
+
+}
+}
 }

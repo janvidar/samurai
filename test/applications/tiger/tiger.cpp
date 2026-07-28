@@ -21,10 +21,10 @@ void hash_tiger(uint8_t* buffer, size_t length, uint8_t* hash) {
 }
 
 void hash_tth_old(uint8_t* buffer, size_t length, uint8_t* hash) {
-	TT_CONTEXT tigerCtx;
-	tt_init(&tigerCtx);
-	tt_update(&tigerCtx, buffer, length);
-	tt_digest(&tigerCtx, hash);
+	Samurai::Crypto::Digest::TT_CONTEXT tigerCtx;
+	Samurai::Crypto::Digest::tt_init(&tigerCtx);
+	Samurai::Crypto::Digest::tt_update(&tigerCtx, buffer, length);
+	Samurai::Crypto::Digest::tt_digest(&tigerCtx, hash);
 }
 
 void hash_tth_new(uint8_t* buffer, size_t length, uint8_t* hash, bool tthl)
@@ -85,7 +85,7 @@ int main(int argc, char* argv[]) {
 	}
 	
 	for (int i = n; i < argc; i++) {
-		uint8_t hash[TIGERSIZE];
+		uint8_t hash[Samurai::Crypto::Digest::TIGERSIZE];
 		char* digest = new char[HASH];
 
 		Samurai::IO::File file(argv[i]);
@@ -120,7 +120,7 @@ int main(int argc, char* argv[]) {
 		
 		delete[] buffer;
 
-		base32_encode(hash, TIGERSIZE, digest, sizeof(digest));
+		base32_encode(hash, Samurai::Crypto::Digest::TIGERSIZE, digest, sizeof(digest));
 		printf("%s  %s\n", digest, argv[i]);
 	}
 	

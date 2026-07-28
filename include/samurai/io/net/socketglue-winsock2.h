@@ -9,12 +9,17 @@
 /*
  * See Microsoft's reference on Winsock2:
  * http://msdn.microsoft.com/library/en-us/winsock/winsock/windows_sockets_start_page_2.asp
+ *
+ * NOTE: these two used to be included inside an extern "C" block. Both already
+ * guard their own declarations with __cplusplus, so the block added nothing
+ * where it was wanted, and forced C linkage on everything in the SDK include
+ * chain that is not inside those guards - which is ill-formed for anything
+ * that is a template, an overload or a class member. socketglue-bsd.h includes
+ * the same class of headers without one.
  */
 
-extern "C" {
 #include <winsock2.h>
 #include <ws2tcpip.h>
-}
 
 typedef SOCKET socket_t;
 typedef int socklen_t;
