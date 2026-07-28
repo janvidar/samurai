@@ -34,7 +34,7 @@ class CacheStorage {
 		 * Takes ownership of 'e' and starts its lifetime. Passing null does
 		 * nothing. The oldest entry is dropped once the cache is full.
 		 */
-		void add(ResourceRecord* e);
+		void add(std::unique_ptr<ResourceRecord> e);
 
 		/** Drop and destroy every record whose time to live has run out. */
 		void expire();
@@ -48,7 +48,7 @@ class CacheStorage {
 
 		size_t size() const { return cache.size(); }
 
-		/* Owns raw pointers, so a copy would release them twice. */
+		/* Owns its records, so a copy would release them twice. */
 		CacheStorage(const CacheStorage&) = delete;
 		CacheStorage& operator=(const CacheStorage&) = delete;
 
@@ -57,7 +57,7 @@ class CacheStorage {
 
 
 	private:
-		std::vector<ResourceRecord*> cache;
+		std::vector<std::unique_ptr<ResourceRecord>> cache;
 };
 
 

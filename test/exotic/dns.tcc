@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <memory>
 #include <samurai/io/net/dns/common.h>
 #include <samurai/io/net/dns/dnsmessage.h>
 #include <samurai/io/net/dns/dnsrrs.h>
@@ -416,10 +417,9 @@ EXO_TEST(dns_record_live_ttl_does_not_expire,
 /* assuming an empty cache.                                                  */
 /* ------------------------------------------------------------------------- */
 
-static Samurai::IO::Net::DNS::ResourceRecord* dns_make_record(const char* host, int32_t ttl)
+static std::unique_ptr<Samurai::IO::Net::DNS::ResourceRecord> dns_make_record(const char* host, int32_t ttl)
 {
-	Samurai::IO::Net::DNS::ResourceRecord* rec =
-		new Samurai::IO::Net::DNS::ResourceRecord();
+	auto rec = std::make_unique<Samurai::IO::Net::DNS::ResourceRecord>();
 	Samurai::IO::Net::DNS::Name want(host);
 	want.split();
 	rec->name = want;
@@ -499,6 +499,6 @@ EXO_TEST(dns_cache_add_null_is_harmless,
 	Samurai::IO::Net::DNS::CacheStorage* cache =
 		Samurai::IO::Net::DNS::CacheStorage::getInstance();
 	const size_t before = cache->size();
-	cache->add(0);
+	cache->add(nullptr);
 	return cache->size() == before;
 });

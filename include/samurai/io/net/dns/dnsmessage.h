@@ -171,7 +171,7 @@ class Message {
 		 * responsible for destroying them. The message keeps none of them, so
 		 * getRecord() finds nothing afterwards.
 		 */
-		std::vector<ResourceRecord*> releaseRecords();
+		std::vector<std::unique_ptr<ResourceRecord>> releaseRecords();
 
 		/* Owns its decoded records, so a copy would release them twice. */
 		Message(const Message&) = delete;
@@ -205,10 +205,10 @@ class Message {
 	
 	protected:
 		MessageHeader header;
-		std::vector<Question*> questions;
-		std::vector<ResourceRecord*> records;
-		std::vector<ResourceRecord*> nameservers;
-		std::vector<ResourceRecord*> additional;
+		std::vector<std::unique_ptr<Question>> questions;
+		std::vector<std::unique_ptr<ResourceRecord>> records;
+		std::vector<std::unique_ptr<ResourceRecord>> nameservers;
+		std::vector<std::unique_ptr<ResourceRecord>> additional;
 
 	private:
 		std::vector<uint8_t> compTbl;

@@ -166,8 +166,8 @@ void Samurai::IO::Net::DNS::BuiltinResolver::EventGotDatagram(DatagramSocket*, D
 		}
 
 		/* Ownership moves to the cache, which stamps and expires them. */
-		for (Samurai::IO::Net::DNS::ResourceRecord* record : msg.releaseRecords())
-			cache->add(record);
+		for (std::unique_ptr<Samurai::IO::Net::DNS::ResourceRecord>& record : msg.releaseRecords())
+			cache->add(std::move(record));
 
 		if (!found)
 			QDBG("No address for %s yet", rrname.toString().c_str());
