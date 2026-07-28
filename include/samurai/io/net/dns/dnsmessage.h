@@ -149,7 +149,12 @@ class Question {
 
 
 /**
- * This represents a DNS message, and is used encode and decode DNS messages.
+ * A DNS message decoded from the wire.
+ *
+ * Decode only. There is no way to populate a Message programmatically - no
+ * question or record can be added - so there is nothing to serialise; the one
+ * place that writes the wire format, BuiltinResolver::query(), builds its query
+ * into a Buffer directly.
  */
 class Message {
 	public:
@@ -158,8 +163,7 @@ class Message {
 		~Message();
 
 		Samurai::IO::Net::DNS::ResponseCode decode();
-		bool encode();
-	
+
 		bool isResponse();
 
 		/* The returned records stay owned by this message. */

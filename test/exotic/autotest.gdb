@@ -1,4 +1,0 @@
-run
-backtrace
-quit
-

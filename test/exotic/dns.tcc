@@ -12,6 +12,9 @@
 #include <samurai/io/net/inetaddress.h>
 #include <samurai/io/buffer.h>
 #include <samurai/io/net/dns/cache.h>
+#include <string.h>
+#include <samurai/io/file.h>
+#include <samurai/io/net/dns/dnsconfig.h>
 
 /*
  * Wire fixtures. These live at file scope because EXO_TEST takes two macro
@@ -760,4 +763,200 @@ EXO_TEST(dns_compression_forward_pointer_is_refused,
 	wire.rdata_a();
 
 	return dns_decode_fails(wire);
+});
+
+/* ------------------------------------------------------------------------- */
+/* ResolveConfiguration                                                      */
+/*                                                                           */
+/* The constructor takes the path, defaulting to /etc/resolv.conf, so the     */
+/* parser can be pointed at a fixture instead of at the host's real one -     */
+/* which would make the result depend on the machine.                        */
+/* ------------------------------------------------------------------------- */
+
+namespace {
+
+/* Writes a resolv.conf, parses it, and removes it. */
+class ResolvFixture
+{
+	public:
+		explicit ResolvFixture(const char* body)
+		{
+			static int counter = 0;
+			path = "samurai-resolv-test-" + std::to_string(counter++);
+
+			Samurai::IO::File f(path);
+			if (f.open(Samurai::IO::File::Mode::Write | Samurai::IO::File::Mode::Truncate))
+			{
+				f.write(body, strlen(body));
+				f.close();
+				ok = true;
+			}
+		}
+
+		~ResolvFixture() { Samurai::IO::File::remove(path.c_str()); }
+
+		const char* name() const { return path.c_str(); }
+		bool valid() const { return ok; }
+
+		ResolvFixture(const ResolvFixture&) = delete;
+		ResolvFixture& operator=(const ResolvFixture&) = delete;
+
+	private:
+		std::string path;
+		bool ok = false;
+};
+
+}
+
+EXO_TEST(resolvconf_reads_a_nameserver,
+{
+	ResolvFixture fixture("nameserver 192.0.2.1\n");
+	if (!fixture.valid()) return false;
+
+	Samurai::IO::Net::DNS::ResolveConfiguration config(fixture.name());
+	const Samurai::IO::Net::InetAddress* server = config.getNameServer(0);
+
+	return config.getNameServerCount() == 1
+		&& server && server->toString() == "192.0.2.1";
+});
+
+EXO_TEST(resolvconf_reads_several_nameservers,
+{
+	ResolvFixture fixture("nameserver 192.0.2.1\nnameserver 192.0.2.2\nnameserver 192.0.2.3\n");
+	if (!fixture.valid()) return false;
+
+	Samurai::IO::Net::DNS::ResolveConfiguration config(fixture.name());
+	return config.getNameServerCount() == 3;
+});
+
+/* Tabs and runs of spaces after the keyword are as legal as one space. */
+EXO_TEST(resolvconf_tolerates_whitespace,
+{
+	ResolvFixture fixture("nameserver\t\t 192.0.2.9\n");
+	if (!fixture.valid()) return false;
+
+	Samurai::IO::Net::DNS::ResolveConfiguration config(fixture.name());
+	const Samurai::IO::Net::InetAddress* server = config.getNameServer(0);
+	return server && server->toString() == "192.0.2.9";
+});
+
+EXO_TEST(resolvconf_ignores_comments_and_blank_lines,
+{
+	ResolvFixture fixture("# a comment\n\n; another\nnameserver 192.0.2.4\n\n");
+	if (!fixture.valid()) return false;
+
+	Samurai::IO::Net::DNS::ResolveConfiguration config(fixture.name());
+	return config.getNameServerCount() == 1;
+});
+
+/* A line that is not an address must not become a name server. */
+EXO_TEST(resolvconf_rejects_a_malformed_address,
+{
+	ResolvFixture fixture("nameserver not-an-address\nnameserver 192.0.2.5\n");
+	if (!fixture.valid()) return false;
+
+	Samurai::IO::Net::DNS::ResolveConfiguration config(fixture.name());
+	return config.getNameServerCount() == 1;
+});
+
+EXO_TEST(resolvconf_accepts_an_ipv6_nameserver,
+{
+	ResolvFixture fixture("nameserver 2001:db8::1\n");
+	if (!fixture.valid()) return false;
+
+	Samurai::IO::Net::DNS::ResolveConfiguration config(fixture.name());
+	const Samurai::IO::Net::InetAddress* server = config.getNameServer(0);
+	return config.getNameServerCount() == 1 && server && server->isValid();
+});
+
+/* ------------------------------------------------------------------------- */
+/* options                                                                   */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(resolvconf_option_defaults,
+{
+	ResolvFixture fixture("nameserver 192.0.2.1\n");
+	if (!fixture.valid()) return false;
+
+	Samurai::IO::Net::DNS::ResolveConfiguration config(fixture.name());
+	return config.getTimeout() == 5
+		&& config.getAttempts() == 2
+		&& config.getNDots() == 1
+		&& !config.isRotate() && !config.isIPv6() && !config.isDebug();
+});
+
+EXO_TEST(resolvconf_option_flags,
+{
+	ResolvFixture fixture("nameserver 192.0.2.1\noptions rotate inet6 debug\n");
+	if (!fixture.valid()) return false;
+
+	Samurai::IO::Net::DNS::ResolveConfiguration config(fixture.name());
+	return config.isRotate() && config.isIPv6() && config.isDebug();
+});
+
+EXO_TEST(resolvconf_option_numbers,
+{
+	ResolvFixture fixture("nameserver 192.0.2.1\noptions timeout:3 attempts:5 ndots:4\n");
+	if (!fixture.valid()) return false;
+
+	Samurai::IO::Net::DNS::ResolveConfiguration config(fixture.name());
+	return config.getTimeout() == 3
+		&& config.getAttempts() == 5
+		&& config.getNDots() == 4;
+});
+
+/* A zero or negative value is refused rather than accepted as a timeout. */
+EXO_TEST(resolvconf_option_zero_is_refused,
+{
+	ResolvFixture fixture("nameserver 192.0.2.1\noptions timeout:0 attempts:0\n");
+	if (!fixture.valid()) return false;
+
+	Samurai::IO::Net::DNS::ResolveConfiguration config(fixture.name());
+	return config.getTimeout() == 5 && config.getAttempts() == 2;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Nothing to resolve with                                                   */
+/* ------------------------------------------------------------------------- */
+
+/* The header says callers must check for null; a file with no usable server is
+   exactly the case that produces it. */
+EXO_TEST(resolvconf_no_nameserver_yields_null,
+{
+	ResolvFixture fixture("# nothing useful here\noptions rotate\n");
+	if (!fixture.valid()) return false;
+
+	Samurai::IO::Net::DNS::ResolveConfiguration config(fixture.name());
+	return config.getNameServerCount() == 0 && config.getNameServer(0) == nullptr;
+});
+
+EXO_TEST(resolvconf_missing_file_yields_null,
+{
+	Samurai::IO::Net::DNS::ResolveConfiguration config("samurai-resolv-does-not-exist");
+	return config.getNameServerCount() == 0 && config.getNameServer(0) == nullptr;
+});
+
+EXO_TEST(resolvconf_empty_file_yields_null,
+{
+	ResolvFixture fixture("");
+	if (!fixture.valid()) return false;
+
+	Samurai::IO::Net::DNS::ResolveConfiguration config(fixture.name());
+	return config.getNameServer(0) == nullptr;
+});
+
+/* getNameServer() takes the attempt number, and must stay in range however
+   many times it is asked. */
+EXO_TEST(resolvconf_nameserver_selection_stays_in_range,
+{
+	ResolvFixture fixture("nameserver 192.0.2.1\nnameserver 192.0.2.2\n");
+	if (!fixture.valid()) return false;
+
+	Samurai::IO::Net::DNS::ResolveConfiguration config(fixture.name());
+	for (size_t attempt = 0; attempt < 16; attempt++)
+	{
+		const Samurai::IO::Net::InetAddress* server = config.getNameServer(attempt);
+		if (!server || !server->isValid()) return false;
+	}
+	return true;
 });
