@@ -7,8 +7,7 @@
 #include <samurai/io/net/datagram.h>
 #include <samurai/io/net/inetaddress.h>
 #include <samurai/io/buffer.h>
-
-#define DATADUMP
+#include <memory>
 
 Samurai::IO::Net::DNS::Message::Message() {
 	buffer = 0;
@@ -20,6 +19,11 @@ Samurai::IO::Net::DNS::Message::Message(Samurai::IO::Buffer* buffer_) {
 
 Samurai::IO::Net::DNS::Message::~Message() {
 	// free buffer?
+}
+
+bool Samurai::IO::Net::DNS::Message::isResponse()
+{
+	return header.isResponse();
 }
 
 
@@ -38,26 +42,36 @@ void Samurai::IO::Net::DNS::Message::addOffset(size_t offset) {
 }
 
 
+/*
+ * DNS puts these on the wire in network order. Buffer::popBinary() does the
+ * byte order conversion and the bounds check, and reads through memcpy() from
+ * an unsigned byte.
+ *
+ * Assembling the value here from Buffer::at() instead would not work: at()
+ * returns a (signed) char, so any byte with the high bit set becomes negative
+ * and sign-extends across the bytes already shifted into place - "\x00\xff"
+ * decoded as 0xffff rather than 0x00ff.
+ */
+
 bool Samurai::IO::Net::DNS::Message::decode16Bits(size_t& offset, uint16_t& data) {
-	if (offset+2 > buffer->size()) return false;
-	data = ((buffer->at(offset) << 8) | (buffer->at(offset+1)));
-	offset += 2;
+	if (!buffer->popBinary(offset, data, Samurai::IO::Buffer::BigEndian)) return false;
+	offset += sizeof(data);
 	return true;
 }
 
 bool Samurai::IO::Net::DNS::Message::decode32Bits(size_t& offset, uint32_t& data) {
-	if (offset+4 > buffer->size()) return false;
-	data = ((buffer->at(offset) << 24) | (buffer->at(offset+1) << 16) | (buffer->at(offset+2) << 8) | (buffer->at(offset+3)));
-	offset += 4;
+	if (!buffer->popBinary(offset, data, Samurai::IO::Buffer::BigEndian)) return false;
+	offset += sizeof(data);
 	return true;
 }
 
 bool Samurai::IO::Net::DNS::Message::decodeS32Bits(size_t& offset, int32_t& data_) {
-	if (offset+4 > buffer->size()) return false;
-	
-	uint32_t data = ((buffer->at(offset) << 24) | (buffer->at(offset+1) << 16) | (buffer->at(offset+2) << 8) | (buffer->at(offset+3)));
-	data_ = (int32_t) (data & 0x1fffffff);
-	offset += 4;
+	uint32_t data = 0;
+	if (!buffer->popBinary(offset, data, Samurai::IO::Buffer::BigEndian)) return false;
+
+	/* A TTL is a 31 bit value; the top bit is reserved and treated as zero. */
+	data_ = (int32_t) (data & 0x7fffffff);
+	offset += sizeof(data);
 	return true;
 }
 
@@ -167,10 +181,8 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 			!decode16Bits(offset, header.arcount))
 		return DNS_STATUS_FORMAT_ERROR;
 
-#ifdef DATADUMP
-	printf("DNS Response: id=%d, flags=%x, qd=%d, an=%d, ns=%d, ar=%d\n", header.id, header.flags_u16, header.qdcount, header.ancount, header.nscount, header.arcount);
-	
-	printf("* flags: { message type=%s, query type=%s, authorative=%s, truncated=%s, recursion desired=%s, recursion available=%s, response_code=%s }\n", 
+	QDBG("DNS Response: id=%d, flags=%x, qd=%d, an=%d, ns=%d, ar=%d", header.id, header.flags_u16, header.qdcount, header.ancount, header.nscount, header.arcount);
+	QDBG("* flags: { message type=%s, query type=%s, authorative=%s, truncated=%s, recursion desired=%s, recursion available=%s, response_code=%s }",
 		(header.isQuery() ? "query" : "response"),
 		 header.getQueryTypeStr(),
 		(header.isAuthorative()        ? "yes" : "no"),
@@ -178,7 +190,6 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 		(header.isRecursionDesired()   ? "yes" : "no"),
 		(header.isRecursionAvailable() ? "yes" : "no"),
 		header.getResponseCodeStr());
-#endif
 
 	if (!header.isValid()) return DNS_STATUS_FORMAT_ERROR;
 	
@@ -190,9 +201,7 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 			!decode16Bits(offset, question.type_class.rr_class))
 		 return DNS_STATUS_FORMAT_ERROR;
 
-#ifdef DATADUMP
-		printf("name='%s', type=%d, class=%d\n", question.name.toString().c_str(), (int) (uint16_t) question.type_class.rr_type, (int) (uint16_t) question.type_class.rr_class);
-#endif
+		QDBG("name='%s', type=%d, class=%d", question.name.toString().c_str(), (int) question.type_class.rr_type, (int) question.type_class.rr_class);
 	}
 	
 	int rrcount = header.ancount;
@@ -200,73 +209,80 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 
 	for (int q = 0; q < rrcount; q++) {
 		if (buffer->size() - offset < 12) {
-			printf("Truncated record\n");
+			QDBG("Truncated record");
 			break;
 		}
-	
-		ResourceRecord* record = new ResourceRecord();
-		
+
+		/*
+		 * Held by unique_ptr because the decode below gives up through a dozen
+		 * different paths, and the record is only handed to 'records' once it
+		 * has been decoded in full.
+		 */
+		std::unique_ptr<ResourceRecord> record(new ResourceRecord());
+
 		if (!decodeName(offset, *record->name, 0, 0) ||
 			!decode16Bits(offset, record->type_class.rr_type) ||
 			!decode16Bits(offset, record->type_class.rr_class) ||
 			!decodeS32Bits(offset, record->ttl) ||
 			!decode16Bits(offset, record->rdLength))
 		{
-			delete record;
-			printf("WTF 1?\n");
+			QDBG("Malformed resource record header");
 			return DNS_STATUS_FORMAT_ERROR;
 		}
 
 		if (buffer->size() - offset < record->rdLength) {
-			printf("Truncated sub record\n");
-			delete record;
+			QDBG("Truncated sub record");
 			break;
 		}
 
 		size_t maxRdOffset = (size_t) offset + record->rdLength;
-		if (maxRdOffset > buffer->size()) { printf("WTF 2?\n"); return DNS_STATUS_FORMAT_ERROR; }
+		if (maxRdOffset > buffer->size()) { QDBG("Record data runs past the message"); return DNS_STATUS_FORMAT_ERROR; }
 
 		if (record->type_class.rr_type == Type_CNAME) {
 			Name name;
-			if (!decodeName(offset, name, 0, maxRdOffset)) { printf("WTF 3?\n"); return DNS_STATUS_FORMAT_ERROR; }
+			if (!decodeName(offset, name, 0, maxRdOffset)) { QDBG("Malformed CNAME"); return DNS_STATUS_FORMAT_ERROR; }
 			record->rr = new RR_CNAME(name);
-		
+
 		} else if (record->type_class.rr_type == Type_PTR) {
 			Name name;
-			if (!decodeName(offset, name, 0, maxRdOffset)) { printf("WTF 4?\n"); return DNS_STATUS_FORMAT_ERROR; }
+			if (!decodeName(offset, name, 0, maxRdOffset)) { QDBG("Malformed PTR"); return DNS_STATUS_FORMAT_ERROR; }
 			record->rr = new RR_PTR(name);
 
 		} else if (record->type_class.rr_type == Type_NS) {
 			Name name;
-			if (!decodeName(offset, name, 0, maxRdOffset)) { printf("WTF 5?\n"); return DNS_STATUS_FORMAT_ERROR; }
+			if (!decodeName(offset, name, 0, maxRdOffset)) { QDBG("Malformed NS"); return DNS_STATUS_FORMAT_ERROR; }
 			record->rr = new RR_NS(name);
 
 		} else if (record->type_class.rr_type == Type_A) {
-			if (record->rdLength > 4) { printf("WTF 6?\n"); return DNS_STATUS_FORMAT_ERROR; }
-			static char A[4];
-			buffer->pop((char*) &A, (size_t) offset, (size_t) 4);
+			/* An A record is exactly four bytes. A shorter one would leave the
+			 * remaining bytes of the address undefined. */
+			if (record->rdLength != 4) { QDBG("A record is not 4 bytes"); return DNS_STATUS_FORMAT_ERROR; }
+			char addr_bytes[4];
+			if (buffer->pop(addr_bytes, offset, sizeof(addr_bytes)) != sizeof(addr_bytes))
+				{ QDBG("Truncated A record"); return DNS_STATUS_FORMAT_ERROR; }
 			offset += record->rdLength;
 			Samurai::IO::Net::InetAddress inet_addr;
-			inet_addr.setRawAddress(A, 4, Samurai::IO::Net::InetAddress::IPv4);
+			inet_addr.setRawAddress(addr_bytes, sizeof(addr_bytes), Samurai::IO::Net::InetAddress::IPv4);
 			record->rr = new RR_A(inet_addr);
 
 		} else if (record->type_class.rr_type == Type_AAAA) {
-			if (record->rdLength > 16) { printf("WTF 7?\n"); return DNS_STATUS_FORMAT_ERROR; }
-			static char A[16];
-			buffer->pop((char*) &A, (size_t) offset, (size_t) record->rdLength);
+			if (record->rdLength != 16) { QDBG("AAAA record is not 16 bytes"); return DNS_STATUS_FORMAT_ERROR; }
+			char addr_bytes[16];
+			if (buffer->pop(addr_bytes, offset, sizeof(addr_bytes)) != sizeof(addr_bytes))
+				{ QDBG("Truncated AAAA record"); return DNS_STATUS_FORMAT_ERROR; }
 			offset += record->rdLength;
 			Samurai::IO::Net::InetAddress inet_addr;
-			inet_addr.setRawAddress(A, record->rdLength, Samurai::IO::Net::InetAddress::IPv6);
+			inet_addr.setRawAddress(addr_bytes, sizeof(addr_bytes), Samurai::IO::Net::InetAddress::IPv6);
 			record->rr = new RR_AAAA(inet_addr);
-		
+
 		} else if (record->type_class.rr_type == Type_SOA) {
 			Name primary;
 			Name email;
-			uint32_t serial;
-			uint32_t refresh;
-			uint32_t retry;
-			uint32_t expire;
-			int32_t ttl;
+			uint32_t serial = 0;
+			uint32_t refresh = 0;
+			uint32_t retry = 0;
+			uint32_t expire = 0;
+			int32_t ttl = 0;
 			if (!decodeName(offset, primary, 0, 0) ||
 					!decodeName(offset, email, 0, 0) ||
 					!decode32Bits(offset, serial) ||
@@ -274,21 +290,19 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 					!decode32Bits(offset, retry) ||
 					!decode32Bits(offset, expire) ||
 					!decodeS32Bits(offset, ttl))
-				{ printf("WTF 8?\n"); return DNS_STATUS_FORMAT_ERROR; }
-			
+				{ QDBG("Malformed SOA"); return DNS_STATUS_FORMAT_ERROR; }
+
 			record->rr = new RR_SOA(primary, email, serial, refresh, retry, expire, ttl);
 
 		} else {
 			// Ignore unknown data type
-			printf("Unknown RR type: %d\n", (int) record->type_class.rr_type);
+			QDBG("Unknown RR type: %d", (int) record->type_class.rr_type);
 			offset += record->rdLength;
 		}
-	
-		// printf("Adding RR type: %d\n", (int) record->type_class.rr_type);
-		records.push_back(record);
-		
+
+		records.push_back(record.release());
 	}
-	
+
 	return DNS_STATUS_OK;
 }
 
