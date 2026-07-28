@@ -166,7 +166,6 @@ set(SAMURAI_SOURCES
     src/util/bwestimation.cpp
     src/util/format.cpp
     src/util/random.cpp
-    src/util/refcount.cpp
     src/crypto/digest/hash.cpp
     src/crypto/digest/hashvalue.cpp
     src/crypto/digest/merkletree.cpp
