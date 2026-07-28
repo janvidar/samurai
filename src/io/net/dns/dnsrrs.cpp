@@ -7,15 +7,8 @@
 #include <samurai/io/net/dns/dnsrrs.h>
 #include <samurai/io/net/inetaddress.h>
 
-Samurai::IO::Net::DNS::ResourceRecord::ResourceRecord() {
-	name = new Name();
-}
-
-
-Samurai::IO::Net::DNS::ResourceRecord::~ResourceRecord() {
-	delete name;
-	delete rr;
-}
+Samurai::IO::Net::DNS::ResourceRecord::ResourceRecord() = default;
+Samurai::IO::Net::DNS::ResourceRecord::~ResourceRecord() = default;
 
 void Samurai::IO::Net::DNS::ResourceRecord::stampExpiry() {
 	/* A negative TTL would put the expiry in the past, which is the same as
@@ -41,8 +34,8 @@ Samurai::IO::Net::DNS::RR::~RR() {
 
 Samurai::IO::Net::DNS::RR_SOA::RR_SOA(const Samurai::IO::Net::DNS::Name& sone_, const Samurai::IO::Net::DNS::Name& email_, uint32_t serial_, uint32_t refresh_, uint32_t retry_, uint32_t expire_, int32_t ttl_)
 {
-	primary = new Samurai::IO::Net::DNS::Name(sone_);
-	email = new Samurai::IO::Net::DNS::Name(email_);
+	primary = sone_;
+	email = email_;
 	serial = serial_;
 	refresh = refresh_;
 	retry = retry_;
@@ -51,70 +44,51 @@ Samurai::IO::Net::DNS::RR_SOA::RR_SOA(const Samurai::IO::Net::DNS::Name& sone_, 
 	
 }
 
-Samurai::IO::Net::DNS::RR_SOA::~RR_SOA()
-{
-	delete primary;
-	delete email;
-	
-}
+Samurai::IO::Net::DNS::RR_SOA::~RR_SOA() = default;
 
 Samurai::IO::Net::DNS::RR_CNAME::RR_CNAME(const Samurai::IO::Net::DNS::Name& name_)
+	: name(name_)
 {
-	name = new Samurai::IO::Net::DNS::Name(name_);
 }
 
-Samurai::IO::Net::DNS::RR_CNAME::~RR_CNAME() {
-	delete name;
-}
+Samurai::IO::Net::DNS::RR_CNAME::~RR_CNAME() = default;
 
 Samurai::IO::Net::DNS::RR_PTR::RR_PTR(const Samurai::IO::Net::DNS::Name& name_)
+	: name(name_)
 {
-	name = new Samurai::IO::Net::DNS::Name(name_);
 }
 
-Samurai::IO::Net::DNS::RR_PTR::~RR_PTR()
-{
-	delete name;
-}
+Samurai::IO::Net::DNS::RR_PTR::~RR_PTR() = default;
 
 Samurai::IO::Net::DNS::RR_NS::RR_NS(const Samurai::IO::Net::DNS::Name& name_)
+	: name(name_)
 {
-	name = new Samurai::IO::Net::DNS::Name(name_);
 }
 
-Samurai::IO::Net::DNS::RR_NS::~RR_NS()
-{
-	delete name;
-}
+Samurai::IO::Net::DNS::RR_NS::~RR_NS() = default;
 
 Samurai::IO::Net::DNS::RR_A::RR_A(const Samurai::IO::Net::InetAddress& addr_)
+	: addr(addr_)
 {
-	addr = new Samurai::IO::Net::InetAddress(addr_);
 }
 
-Samurai::IO::Net::DNS::RR_A::~RR_A()
-{
-	delete addr;
-}
+Samurai::IO::Net::DNS::RR_A::~RR_A() = default;
 
-Samurai::IO::Net::InetAddress* Samurai::IO::Net::DNS::RR_A::getAddress()
+const Samurai::IO::Net::InetAddress* Samurai::IO::Net::DNS::RR_A::getAddress() const
 {
-	return addr;
+	return &addr;
 }
 
 Samurai::IO::Net::DNS::RR_AAAA::RR_AAAA(const Samurai::IO::Net::InetAddress& addr_)
+	: addr(addr_)
 {
-	addr = new Samurai::IO::Net::InetAddress(addr_);
 }
 
-Samurai::IO::Net::DNS::RR_AAAA::~RR_AAAA()
-{
-	delete addr;
-}
+Samurai::IO::Net::DNS::RR_AAAA::~RR_AAAA() = default;
 
-Samurai::IO::Net::InetAddress* Samurai::IO::Net::DNS::RR_AAAA::getAddress()
+const Samurai::IO::Net::InetAddress* Samurai::IO::Net::DNS::RR_AAAA::getAddress() const
 {
-	return addr;
+	return &addr;
 }
 
 

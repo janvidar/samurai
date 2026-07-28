@@ -8,6 +8,7 @@
 #include <samurai/io/net/inetaddress.h>
 #include <samurai/io/buffer.h>
 #include <memory>
+#include <vector>
 
 Samurai::IO::Net::DNS::Message::Message() {
 	buffer = nullptr;
@@ -168,14 +169,13 @@ bool Samurai::IO::Net::DNS::Message::decodeName(size_t& offset, Name& name, size
 
 		uint8_t len = section;
 		if (buffer->size() < offset + len || len > DNS_LABEL_SIZE) return false;
-		char* tmp = new char[len];
-		buffer->pop(tmp, offset, (size_t) len);
-		Label* label = new Label(tmp, len);
+		std::vector<char> tmp(len);
+		buffer->pop(tmp.data(), offset, (size_t) len);
+		Label label(tmp.data(), len);
 		addOffset(offset-1);
 		offset += (len);
 		name.addPart(label);
-		delete[] tmp;
-		if (!label->isValid()) {
+		if (!label.isValid()) {
 			QDBG("decodeName: Label is not valid\n");
 			return false;
 		}
@@ -241,7 +241,7 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 		 */
 		std::unique_ptr<ResourceRecord> record(new ResourceRecord());
 
-		if (!decodeName(offset, *record->name, 0, 0) ||
+		if (!decodeName(offset, record->name, 0, 0) ||
 			!decode16Bits(offset, record->type_class.rr_type) ||
 			!decode16Bits(offset, record->type_class.rr_class) ||
 			!decodeS32Bits(offset, record->ttl) ||
@@ -262,17 +262,17 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 		if (record->type_class.rr_type == Type_CNAME) {
 			Name name;
 			if (!decodeName(offset, name, 0, maxRdOffset)) { QDBG("Malformed CNAME"); return DNS_STATUS_FORMAT_ERROR; }
-			record->rr = new RR_CNAME(name);
+			record->rr = std::make_unique<RR_CNAME>(name);
 
 		} else if (record->type_class.rr_type == Type_PTR) {
 			Name name;
 			if (!decodeName(offset, name, 0, maxRdOffset)) { QDBG("Malformed PTR"); return DNS_STATUS_FORMAT_ERROR; }
-			record->rr = new RR_PTR(name);
+			record->rr = std::make_unique<RR_PTR>(name);
 
 		} else if (record->type_class.rr_type == Type_NS) {
 			Name name;
 			if (!decodeName(offset, name, 0, maxRdOffset)) { QDBG("Malformed NS"); return DNS_STATUS_FORMAT_ERROR; }
-			record->rr = new RR_NS(name);
+			record->rr = std::make_unique<RR_NS>(name);
 
 		} else if (record->type_class.rr_type == Type_A) {
 			/* An A record is exactly four bytes. A shorter one would leave the
@@ -284,7 +284,7 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 			offset += record->rdLength;
 			Samurai::IO::Net::InetAddress inet_addr;
 			inet_addr.setRawAddress(addr_bytes, sizeof(addr_bytes), Samurai::IO::Net::InetAddress::IPv4);
-			record->rr = new RR_A(inet_addr);
+			record->rr = std::make_unique<RR_A>(inet_addr);
 
 		} else if (record->type_class.rr_type == Type_AAAA) {
 			if (record->rdLength != 16) { QDBG("AAAA record is not 16 bytes"); return DNS_STATUS_FORMAT_ERROR; }
@@ -294,7 +294,7 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 			offset += record->rdLength;
 			Samurai::IO::Net::InetAddress inet_addr;
 			inet_addr.setRawAddress(addr_bytes, sizeof(addr_bytes), Samurai::IO::Net::InetAddress::IPv6);
-			record->rr = new RR_AAAA(inet_addr);
+			record->rr = std::make_unique<RR_AAAA>(inet_addr);
 
 		} else if (record->type_class.rr_type == Type_SOA) {
 			Name primary;
@@ -313,7 +313,7 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 					!decodeS32Bits(offset, ttl))
 				{ QDBG("Malformed SOA"); return DNS_STATUS_FORMAT_ERROR; }
 
-			record->rr = new RR_SOA(primary, email, serial, refresh, retry, expire, ttl);
+			record->rr = std::make_unique<RR_SOA>(primary, email, serial, refresh, retry, expire, ttl);
 
 		} else {
 			// Ignore unknown data type
@@ -337,8 +337,8 @@ Samurai::IO::Net::DNS::ResourceRecord* Samurai::IO::Net::DNS::Message::getRecord
 	QDBG("Records: %d\n", (int) records.size());
 	for (std::vector<Samurai::IO::Net::DNS::ResourceRecord*>::iterator it = records.begin(); it != records.end(); it++) {
 		Samurai::IO::Net::DNS::ResourceRecord* record = (*it);
-		QDBG("Record: '%s' == '%s', %d\n", record->name->toString().c_str(), name->toString().c_str(), (int) (uint16_t) record->type_class.rr_type);
-		if ((*record->name) == *name /*&& record->type_class.rr_type == (uint16_t) Type_A*/)
+		QDBG("Record: '%s' == '%s', %d\n", record->name.toString().c_str(), name->toString().c_str(), (int) record->type_class.rr_type);
+		if (record->name == *name /*&& record->type_class.rr_type == (uint16_t) Type_A*/)
 		{
 			QDBG("Match!\n");
 			return record;

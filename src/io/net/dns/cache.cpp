@@ -75,7 +75,7 @@ Samurai::IO::Net::DNS::ResourceRecord* Samurai::IO::Net::DNS::CacheStorage::look
 	expire();
 
 	for (ResourceRecord* record : cache) {
-		if (record->name && *record->name == name)
+		if (record->name == name)
 			return record;
 	}
 

@@ -123,32 +123,8 @@ Samurai::IO::Net::DNS::Name::Name(const char* hostname)
 	}
 }
 
-Samurai::IO::Net::DNS::Name::~Name()
-{
-	clear();
-}
 
-Samurai::IO::Net::DNS::Name& Samurai::IO::Net::DNS::Name::operator=(const Name& copy) {
-	if (this == &copy) return *this;
 
-	clear();
-	memcpy(name, copy.name, sizeof(name));
-	size = copy.size;
-	offset = copy.offset;
-	for (std::vector<Label*>::const_iterator it = copy.parts.begin(); it != copy.parts.end(); it++)
-		parts.push_back(new Label(*it));
-
-	return *this;
-}
-
-Samurai::IO::Net::DNS::Name::Name(const Name& copy) {
-	memcpy(name, copy.name, sizeof(name));
-	size = copy.size;
-	offset = copy.offset;
-	for (std::vector<Label*>::iterator it = copy.parts.begin(); it != copy.parts.end(); it++) {
-		parts.push_back(new Label((*it)));
-	}
-}
 
 
 int Samurai::IO::Net::DNS::Name::split() {
@@ -157,13 +133,13 @@ int Samurai::IO::Net::DNS::Name::split() {
 	for (size_t n = 0; n < len; n++) {
 		if (name[n] == '.') {
 			name[n] = 0;
-			addPart(new Label((const char*) last, (uint8_t) strlen(last)));
+			addPart(Label((const char*) last, (uint8_t) strlen(last)));
 			last = &name[n+1];
 		}
 	}
 
 	if (strlen(last))
-		addPart(new Label((const char*) last, (uint8_t) strlen(last)));
+		addPart(Label((const char*) last, (uint8_t) strlen(last)));
 
 	return countParts();
 }
@@ -185,7 +161,7 @@ uint8_t Samurai::IO::Net::DNS::Name::countParts() const {
 	return parts.size();
 }
 
-void Samurai::IO::Net::DNS::Name::addPart(Label* label) {
+void Samurai::IO::Net::DNS::Name::addPart(const Label& label) {
 	// printf("Adding part: '%s'\n", label->getName());
 	parts.push_back(label);
 }
@@ -194,10 +170,8 @@ void Samurai::IO::Net::DNS::Name::addPart(Label* label) {
 std::string Samurai::IO::Net::DNS::Name::toString() const {
 	std::string out;
 
-	for (std::vector<Label*>::const_iterator it = parts.begin(); it != parts.end(); it++) {
-		const char* part = (*it)->getName();
-		if (!part) continue;
-		out += part;
+	for (const Label& part : parts) {
+		out += part.getName();
 		out += '.';
 	}
 
@@ -205,11 +179,7 @@ std::string Samurai::IO::Net::DNS::Name::toString() const {
 }
 
 void Samurai::IO::Net::DNS::Name::clear() {
-	while (parts.size()) {
-		Label* label = (*parts.begin());
-		parts.erase(parts.begin());
-		delete label;
-	}
+	parts.clear();
 
 	size = 0;
 	offset = 0;
@@ -222,7 +192,7 @@ bool Samurai::IO::Net::DNS::Name::operator==(const Samurai::IO::Net::DNS::Name& 
 	if (name.parts.size() != parts.size()) return false;
 
 	for (size_t n = 0; n < parts.size(); n++) {
-		if (*parts[n] != *name.parts[n]) return false;
+		if (parts[n] != name.parts[n]) return false;
 	}
 	return true;
 }

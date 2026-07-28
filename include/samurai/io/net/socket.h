@@ -191,7 +191,7 @@ class Socket :
 
 		bool checkConnectTimeout();
 
-		void EventHostFound(InetAddress* addr) override;
+		void EventHostFound(const InetAddress* addr) override;
 		void EventHostError(enum Samurai::IO::Net::DNS::Resolver::Error error) override;
 		void EventTimeout(Samurai::Timer* timer) override;
 		

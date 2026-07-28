@@ -6,6 +6,7 @@
 #include <samurai/samurai.h>
 #include <samurai/io/net/socketmonitor.h>
 #include <samurai/io/net/interface.h>
+#include <memory>
 #include <samurai/io/net/inetaddress.h>
 #include <samurai/io/net/hardwareaddress.h>
 #include <vector>
@@ -30,7 +31,7 @@ int main(int argc, char** argv)
 	}
 #endif
 
-	std::vector<Samurai::IO::Net::NetworkInterface*> interfaces;
+	std::vector<std::unique_ptr<Samurai::IO::Net::NetworkInterface>> interfaces;
 	bool ok = Samurai::IO::Net::NetworkInterface::getInterfaces(interfaces);
 	if (!ok)
 	{
@@ -39,10 +40,9 @@ int main(int argc, char** argv)
 	}
 	
 	
-	std::vector<Samurai::IO::Net::NetworkInterface*>::iterator it = interfaces.begin();
-	for (; it != interfaces.end(); it++)
+	for (const auto& entry : interfaces)
 	{
-		Samurai::IO::Net::NetworkInterface* iface = (*it);
+		Samurai::IO::Net::NetworkInterface* iface = entry.get();
 		Samurai::IO::Net::HardwareAddress* hwaddr = iface->getHWAddress();
 		
 		if (iface->isEnabled() || arg_show_all)

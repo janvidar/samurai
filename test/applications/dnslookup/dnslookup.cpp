@@ -23,7 +23,7 @@ class DNSResolver : public ResolveEventHandler {
 			Samurai::IO::Net::DNS::Resolver::getHostByName(this, host);
 		}
 	
-		void EventHostFound(InetAddress* addr) {
+		void EventHostFound(const InetAddress* addr) {
 			const std::string str = addr->toString();
 			if (!str.empty()) {
 				printf("%s\n", str.c_str());

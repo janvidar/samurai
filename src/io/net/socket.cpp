@@ -554,7 +554,7 @@ ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
 }
 
 
-void Samurai::IO::Net::Socket::EventHostFound(Samurai::IO::Net::InetAddress* resolved_addr) {
+void Samurai::IO::Net::Socket::EventHostFound(const Samurai::IO::Net::InetAddress* resolved_addr) {
 	if (addr) delete addr;
 	addr = new InetSocketAddress(*resolved_addr, port);
 

@@ -22,6 +22,7 @@
 
 #include "upnp.h"
 #include "upnpworker.h"
+#include <memory>
 
 class UPnPHandler
 	: public Samurai::IO::Net::ServerSocketEventHandler
@@ -71,7 +72,7 @@ class UPnPHandler
 	private:
 		void setupWorkers()
 		{
-			std::vector<Samurai::IO::Net::NetworkInterface*> interfaces;
+			std::vector<std::unique_ptr<Samurai::IO::Net::NetworkInterface>> interfaces;
 			bool ok = Samurai::IO::Net::NetworkInterface::getInterfaces(interfaces);
 			if (!ok)
 			{
@@ -79,9 +80,11 @@ class UPnPHandler
 				return;
 			}
 			
-			for (std::vector<Samurai::IO::Net::NetworkInterface*>::iterator it = interfaces.begin(); it != interfaces.end(); it++)
+			/* Worker only reads the interface in its constructor, so the
+			   entries may be released when this vector goes out of scope. */
+			for (const auto& entry : interfaces)
 			{
-				Samurai::IO::Net::NetworkInterface* iface = *it;
+				Samurai::IO::Net::NetworkInterface* iface = entry.get();
 				if (iface->isEnabled() && iface->isMulticast())
 				{
 					// FIXME: API - No pointers should be needed!

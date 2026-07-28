@@ -8,6 +8,7 @@
 
 #include <samurai/samurai.h>
 #include <samurai/io/net/dns/common.h>
+#include <vector>
 
 namespace Samurai {
 namespace IO {
@@ -60,16 +61,16 @@ class Label {
 class Name {
 	public:
 		Name();
-		Name(const Name& copy);
-		Name& operator=(const Name& copy);
+		Name(const Name& copy) = default;
+		Name& operator=(const Name& copy) = default;
 		Name(const char* hostname);
-		~Name();
+		~Name() = default;
 
 		int split();
 		bool isValid();
 		bool join();
 		uint8_t countParts() const;
-		void addPart(Label* label);
+		void addPart(const Label& label);
 		std::string toString() const;
 		void clear();
 		
@@ -80,7 +81,10 @@ class Name {
 		char name[DNS_NAME_SIZE+1];
 		size_t size;
 		size_t offset;
-		mutable std::vector<Label*> parts;
+		/* Held by value: a Label is a fixed char array and a length, with no
+		   pointers of its own, so there is nothing to allocate and Name gets
+		   correct copying for free. */
+		std::vector<Label> parts;
 		
 };
 
