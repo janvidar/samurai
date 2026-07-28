@@ -238,9 +238,7 @@ void Samurai::IO::Net::KQueueSocketMonitor::internal_wait(int time_ms)
 	for (int n = 0; n < ret; n++)
 	{
 		struct kevent* ev = &events[n];
-		SocketBase* sock = (SocketBase*) ev->udata;
 		print_kevent(ev);
-		if (!sock) continue;
 
 		/* EV_ERROR in the event list reports a rejected *change*, with errno in
 		   ev->data - not a condition on the socket. Dispatching it as readiness
@@ -253,8 +251,19 @@ void Samurai::IO::Net::KQueueSocketMonitor::internal_wait(int time_ms)
 		}
 
 		int trig = get_poll_events(ev);
-		QDBG("kqueue - SIG (ptr=%p, sd=%d) trigger=%x (%d/%d) ev={%d, %d, %d, %p}", sock, sock ? sock->getFD() : -1, trig, n+1, ret, ev->ident, ev->filter, ev->fflags, ev->udata);
-		handleSocketEvent(sock, trig);
+		QDBG("kqueue - SIG (sd=%d) trigger=%x (%d/%d) ev={%d, %d, %d, %p}",
+			(int) ev->ident, trig, n+1, ret, (int) ev->ident, (int) ev->filter,
+			(unsigned int) ev->fflags, (void*) ev->udata);
+
+		/* Keyed by the descriptor rather than by the SocketBase* parked in
+		   ev->udata, and dispatched through dispatch() as the other backends
+		   do: a handler run earlier in this batch is free to release a socket
+		   that a later event in the same batch still points at, so a pointer
+		   collected from udata may already be dangling by the time its turn
+		   comes. Looking the descriptor up instead skips a socket that has
+		   gone away, and holds the one that has not for the duration of the
+		   callback. */
+		dispatch((socket_t) ev->ident, trig);
 	}
 
 }
