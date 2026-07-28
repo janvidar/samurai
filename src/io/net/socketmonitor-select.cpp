@@ -23,7 +23,7 @@
 Samurai::IO::Net::SelectSocketMonitor::SelectSocketMonitor() : Samurai::IO::Net::SocketMonitor("select")
 {
 	max = MIN(Samurai::OS::getMaxOpenSockets(), MAXSOCK);
-	act = new struct poll_act[max];
+	act.resize(max);
 	for (size_t n = 0; n < max; n++)
 	{
 		act[n].fd = INVALID_SOCKET;
@@ -32,10 +32,7 @@ Samurai::IO::Net::SelectSocketMonitor::SelectSocketMonitor() : Samurai::IO::Net:
 }
 
 
-Samurai::IO::Net::SelectSocketMonitor::~SelectSocketMonitor()
-{
-	delete[] act;
-}
+Samurai::IO::Net::SelectSocketMonitor::~SelectSocketMonitor() = default;
 
 bool Samurai::IO::Net::SelectSocketMonitor::isValid()
 {

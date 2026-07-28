@@ -6,6 +6,8 @@
 #ifndef HAVE_SAMURAI_SOCKETMONITOR_BACKEND_H
 #define HAVE_SAMURAI_SOCKETMONITOR_BACKEND_H
 
+#include <vector>
+
 #include <samurai/io/net/socketmonitor.h>
 
 #if defined(SAMURAI_OS_LINUX)
@@ -56,9 +58,10 @@ class PollSocketMonitor final : public SocketMonitor
 		bool isValid() override;
 		
 	private:
-		struct pollfd* list;
-		struct poll_act* act;
-		SocketBase** sockets;
+		std::vector<struct pollfd> list;
+		std::vector<struct poll_act> act;
+		/* Non-owning: the monitor holds weak references to the sockets. */
+		std::vector<SocketBase*> sockets;
 		size_t num;
 		size_t max;
 };
@@ -82,7 +85,7 @@ class EPollSocketMonitor final : public SocketMonitor
 		
 	private:
 		void debug();
-		struct epoll_event* act;
+		std::vector<struct epoll_event> act;
 		int epfd;
 		size_t num;
 		size_t max;
@@ -110,8 +113,8 @@ class KQueueSocketMonitor final : public SocketMonitor
 
 	private:
 		std::vector<SocketBase*> sockets;
-		struct kevent* events;
-		struct kevent* change;
+		std::vector<struct kevent> events;
+		std::vector<struct kevent> change;
 		int kfd;
 		size_t num;
 		size_t max;
@@ -137,7 +140,7 @@ class SelectSocketMonitor final : public SocketMonitor
 		
 	private:
 		std::vector<SocketBase*> sockets;
-		struct poll_act* act;
+		std::vector<struct poll_act> act;
 		size_t max;
 };
 #endif // SOCKET_NOTIFY_SELECT

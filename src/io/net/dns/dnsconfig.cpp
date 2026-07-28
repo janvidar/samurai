@@ -139,24 +139,16 @@ void Samurai::IO::Net::DNS::ResolveConfiguration::parse(const char* resolv_conf)
 		size_t last = 0;
 		size_t offset = buffer.find("\n", last);
 		while (offset != Samurai::IO::Buffer::npos) {
-			char* line = buffer.memdup(last, offset);
-			if (line)
-			{
-				parseLine(line);
-				free(line);
-			}
+			std::string line = buffer.copyRange(last, offset);
+			parseLine(line.data());
 
 			last = offset + 1;
 			offset = buffer.find("\n", last);
 		}
 
 		if (last < buffer.size()) {
-			char* line = buffer.memdup(last, buffer.size());
-			if (line)
-			{
-				parseLine(line);
-				free(line);
-			}
+			std::string line = buffer.copyRange(last, buffer.size());
+			parseLine(line.data());
 		}
 
 		conf.close();

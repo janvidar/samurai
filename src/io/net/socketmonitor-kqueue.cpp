@@ -31,11 +31,11 @@ Samurai::IO::Net::KQueueSocketMonitor::KQueueSocketMonitor() : Samurai::IO::Net:
 	numChanges = 0;
 	max = MIN(Samurai::OS::getMaxOpenSockets(), MAXSOCK);
 	num = 0;
-	events = new struct kevent[KQUEUE_BATCH];
-	change = new struct kevent[MAXCHANGES];
+	events.resize(KQUEUE_BATCH);
+	change.resize(MAXCHANGES);
 
-	memset(events, 0, sizeof(struct kevent) * KQUEUE_BATCH);
-	memset(change, 0, sizeof(struct kevent) * MAXCHANGES);
+	memset(events.data(), 0, sizeof(struct kevent) * events.size());
+	memset(change.data(), 0, sizeof(struct kevent) * change.size());
 
 	kfd = kqueue();
 	if (kfd == -1)
@@ -46,9 +46,7 @@ Samurai::IO::Net::KQueueSocketMonitor::KQueueSocketMonitor() : Samurai::IO::Net:
 
 Samurai::IO::Net::KQueueSocketMonitor::~KQueueSocketMonitor()
 {
-	close(kfd);
-	delete[] events;
-	delete[] change;
+	if (kfd != -1) close(kfd);
 }
 
 bool Samurai::IO::Net::KQueueSocketMonitor::isValid()
@@ -99,7 +97,7 @@ struct kevent* Samurai::IO::Net::KQueueSocketMonitor::getChangeEventSlot()
 		struct timespec timeout;
 		timeout.tv_sec  = 0;
 		timeout.tv_nsec = 0;
-		kevent(kfd, change, numChanges, events, 0, &timeout);
+		kevent(kfd, change.data(), numChanges, events.data(), 0, &timeout);
 		numChanges = 0;
 	}
 
@@ -222,7 +220,7 @@ void Samurai::IO::Net::KQueueSocketMonitor::internal_wait(int time_ms)
 	timeout.tv_sec  = time_ms / 1000;
 	timeout.tv_nsec = (time_ms % 1000) * 1000000;
 
-	int ret = kevent(kfd, change, numChanges, events, KQUEUE_BATCH, &timeout);
+	int ret = kevent(kfd, change.data(), numChanges, events.data(), (int) events.size(), &timeout);
 	QDBG("kqueue - run changes=%d, max=%d, ret=%d", numChanges, max, ret);
 	numChanges = 0;
 

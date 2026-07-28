@@ -8,6 +8,7 @@
 
 #include <samurai/samurai.h>
 #include <samurai/io/buffer.h>
+#include <vector>
 #include <samurai/crypto/digest/tigertree.h>
 
 namespace Samurai {
@@ -126,7 +127,7 @@ class MerkleWorkStack
 
 		uint64_t getSize()   { return size; }
 		size_t getPosition() { return pos; }
-		size_t getCapacity() { return capacity; }
+		size_t getCapacity() { return nodes.size(); }
 		bool isFull() const;
 
 		void clear();
@@ -145,10 +146,14 @@ class MerkleWorkStack
 		void grow();
 
 	private:
-		MerkleNode** nodes;
+		/*
+		 * Non-owning: the nodes belong to the MerkleTree, which moves them
+		 * between its two stacks and releases them in deleteNodes(). The
+		 * vector replaces a hand-grown array, not the ownership model.
+		 */
+		std::vector<MerkleNode*> nodes;
 		uint64_t size;
 		size_t pos;
-		size_t capacity;
 
 };
 
