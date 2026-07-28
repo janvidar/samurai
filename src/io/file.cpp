@@ -371,14 +371,14 @@ mode_t Samurai::IO::File::getPermissions() const
 }
 
 // This is Unix-specific
-gid_t Samurai::IO::File::getOwner() const
+uid_t Samurai::IO::File::getOwner() const
 {
 	if (!info_valid) getInfo();
 	if (!info_valid) return 0;
 	return info.st_uid;
 }
 
-uid_t Samurai::IO::File::getGroup() const
+gid_t Samurai::IO::File::getGroup() const
 {
 	if (!info_valid) getInfo();
 	if (!info_valid) return 0;
