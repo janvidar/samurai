@@ -148,13 +148,10 @@ bool Samurai::IO::Net::SocketMonitor::setSocketMonitor(Samurai::IO::Net::SocketM
 
 
 
-Samurai::IO::Net::SocketMonitor* Samurai::IO::Net::SocketMonitor::getInstance()
+static Samurai::IO::Net::SocketMonitor* createDefaultMonitor()
 {
-	if (socket_monitor)
-		return socket_monitor;
-	
 	Samurai::IO::Net::SocketMonitor* monitor = 0;
-	
+
 #ifdef SOCKET_NOTIFY_EPOLL
 	if (!monitor)
 	{
@@ -203,15 +200,27 @@ Samurai::IO::Net::SocketMonitor* Samurai::IO::Net::SocketMonitor::getInstance()
 		}
 	}
 #endif // SOCKET_NOTIFY_SELECT
-	
-	setSocketMonitor(monitor);
-// 	canDelete = true;
-	
+
+	return monitor;
+}
+
+
+Samurai::IO::Net::SocketMonitor* Samurai::IO::Net::SocketMonitor::getInstance()
+{
+	if (socket_monitor)
+		return socket_monitor;
+
+	/* Chosen once, and deliberately never destroyed: a socket outliving it
+	   calls disableMonitor() from its destructor, which comes back here. */
+	static Samurai::IO::Net::SocketMonitor* fallback = createDefaultMonitor();
+
+	setSocketMonitor(fallback);
+
 	if (!socket_monitor)
 	{
 		QERR("Unable to find a suitable socket monitor.");
 	}
-	
+
 	return socket_monitor;
 }
 

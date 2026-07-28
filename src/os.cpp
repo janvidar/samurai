@@ -211,22 +211,17 @@ const char* Samurai::OSWindows::getVersion()
 #endif
 
 
-Samurai::OSBase* Samurai::OS::instance = 0;
-
 Samurai::OSBase* Samurai::OS::getInstance()
 {
-	if (instance)
-		return instance;
-		
 #ifdef SAMURAI_POSIX
-	instance = new OSUnix();
+	static OSUnix os;
 #endif
 
 #ifdef SAMURAI_OS_WINDOWS
-	instance = new OSWindows();
+	static OSWindows os;
 #endif
 
-	return instance;
+	return &os;
 }
 
 

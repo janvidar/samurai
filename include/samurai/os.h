@@ -34,7 +34,6 @@ class OS {
 		static const char* getVersion();
 		
 	private:
-		static OSBase* instance;
 		static OSBase* getInstance();
 };
 
