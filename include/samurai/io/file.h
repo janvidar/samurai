@@ -10,6 +10,7 @@
 #include <samurai/timestamp.h>
 #include <samurai/error.h>
 #include <sys/stat.h>
+#include <optional>
 #include <span>
 #include <string>
 
@@ -191,10 +192,8 @@ class File {
 		
 	protected:
 		/* NOTE: was a mutable struct stat* with no assignment operator, so
-		   assigning one File to another double freed it. Held by value with a
-		   validity flag instead. */
-		mutable bool info_valid;
-		mutable struct stat info;
+		   assigning one File to another double freed it. */
+		mutable std::optional<struct stat> info;
 		std::string filename;
 		mutable std::string baseName;
 		mutable std::string temp;
