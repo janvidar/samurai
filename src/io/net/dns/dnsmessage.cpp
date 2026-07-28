@@ -239,7 +239,7 @@ enum Samurai::IO::Net::DNS::ResponseCode Samurai::IO::Net::DNS::Message::decode(
 		 * different paths, and the record is only handed to 'records' once it
 		 * has been decoded in full.
 		 */
-		std::unique_ptr<ResourceRecord> record(new ResourceRecord());
+		auto record = std::make_unique<ResourceRecord>();
 
 		if (!decodeName(offset, record->name, 0, 0) ||
 			!decode16Bits(offset, record->type_class.rr_type) ||
