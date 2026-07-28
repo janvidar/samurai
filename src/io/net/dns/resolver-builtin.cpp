@@ -98,7 +98,7 @@ void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 
 	// Write hostname.
 	for (size_t n = 0; n < rrname->countParts(); n++) {
-		char* part = const_cast<char*>(rrname->parts[n]->getName());
+		const char* part = rrname->parts[n].getName();
 		size_t len = strlen(part);
 		buffer->append((char) len);
 		buffer->append(part);
@@ -151,7 +151,7 @@ void Samurai::IO::Net::DNS::BuiltinResolver::EventGotDatagram(DatagramSocket*, D
 		Samurai::IO::Net::DNS::ResourceRecord* rr = msg.getRecord(rrname);
 		while (rrname && rr) {
 			if (Samurai::IO::Net::DNS::RR_A* tmp =
-				dynamic_cast<Samurai::IO::Net::DNS::RR_A*>(rr->rr))
+				dynamic_cast<Samurai::IO::Net::DNS::RR_A*>(rr->rr.get()))
 			{
 				QDBG("hostname='%s', resolved to '%s'", hostname, tmp->getAddress()->toString().c_str());
 				/* Borrowed for the duration of the call, as with the other
@@ -161,12 +161,12 @@ void Samurai::IO::Net::DNS::BuiltinResolver::EventGotDatagram(DatagramSocket*, D
 				break;
 
 			} else if (Samurai::IO::Net::DNS::RR_CNAME* tmp =
-				dynamic_cast<Samurai::IO::Net::DNS::RR_CNAME*>(rr->rr))
+				dynamic_cast<Samurai::IO::Net::DNS::RR_CNAME*>(rr->rr.get()))
 			{
-				QDBG("rrname='%s' is a cname for '%s'", rrname->toString().c_str(), tmp->getName()->toString().c_str());
+				QDBG("rrname='%s' is a cname for '%s'", rrname->toString().c_str(), tmp->getName().toString().c_str());
 
 				delete rrname;
-				rrname = new Samurai::IO::Net::DNS::Name(*tmp->getName());
+				rrname = new Samurai::IO::Net::DNS::Name(tmp->getName());
 				rr = msg.getRecord(rrname);
 				numTries++;
 

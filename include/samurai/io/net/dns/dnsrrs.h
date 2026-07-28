@@ -8,13 +8,14 @@
 
 #include <samurai/io/net/dns/dnsutil.h>
 #include <samurai/io/net/dns/common.h>
+#include <samurai/io/net/inetaddress.h>
 #include <string>
 #include <time.h>
+#include <memory>
 
 namespace Samurai {
 namespace IO {
 namespace Net {
-class InetAddress;
 namespace DNS {
 
 class RR {
@@ -56,11 +57,13 @@ class ResourceRecord {
 		time_t getExpiryTime() const { return expireTime; }
 
 	public:
-		Name* name = nullptr;
+		/* Held by value now that Name owns its labels; only the polymorphic
+		   record body still needs an owning pointer. */
+		Name name;
 		TypeClass type_class;
 		int32_t ttl = 0;
 		uint16_t rdLength = 0;
-		RR* rr = nullptr;
+		std::unique_ptr<RR> rr;
 
 		/* Absolute time this record stops being usable; 0 until stamped. */
 		time_t expireTime = 0;
@@ -74,8 +77,8 @@ class RR_SOA final : public RR {
 		~RR_SOA() override;
 		
 	protected:
-		Name* primary;
-		Name* email;
+		Name primary;
+		Name email;
 		uint32_t serial;
 		uint32_t refresh;
 		uint32_t retry;
@@ -89,10 +92,10 @@ class RR_CNAME final : public RR {
 		RR_CNAME(const Name& name);
 		~RR_CNAME() override;
 		
-		Name* getName() { return name; }
-		
+		const Name& getName() const { return name; }
+
 	protected:
-		Name* name;
+		Name name;
 };
 
 
@@ -101,10 +104,10 @@ class RR_PTR final : public RR {
 		RR_PTR(const Name& name);
 		~RR_PTR() override;
 		
-		Name* getName() { return name; }
-		
+		const Name& getName() const { return name; }
+
 	protected:
-		Name* name;
+		Name name;
 };
 
 
@@ -113,10 +116,10 @@ class RR_NS final : public RR {
 		RR_NS(const Name& name);
 		~RR_NS() override;
 		
-		Name* getName() { return name; }
-		
+		const Name& getName() const { return name; }
+
 	protected:
-		Name* name;
+		Name name;
 };
 
 
@@ -125,10 +128,10 @@ class RR_A final : public RR {
 		RR_A(const InetAddress& addr);
 		~RR_A() override;
 		
-		InetAddress* getAddress();
-		
+		const InetAddress* getAddress() const;
+
 	protected:
-		InetAddress* addr;
+		InetAddress addr;
 };
 
 
@@ -137,10 +140,10 @@ class RR_AAAA final : public RR {
 		RR_AAAA(const InetAddress& addr);
 		~RR_AAAA() override;
 		
-		InetAddress* getAddress();
-		
+		const InetAddress* getAddress() const;
+
 	protected:
-		InetAddress* addr;
+		InetAddress addr;
 };
 
 

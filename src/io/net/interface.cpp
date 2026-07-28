@@ -159,24 +159,24 @@ void Samurai::IO::Net::NetworkInterfaceUnix::extractHardwareAddress()
 #endif // SIOCGIFHWADDR
 
 	if (hwaddr_bytes[0] || hwaddr_bytes[1] || hwaddr_bytes[2] || hwaddr_bytes[3] || hwaddr_bytes[4] || hwaddr_bytes[5])
-		m_hwaddr = new Samurai::IO::Net::HardwareAddress(hwaddr_bytes);
+		m_hwaddr = std::make_unique<Samurai::IO::Net::HardwareAddress>(hwaddr_bytes);
 }
 
 // FIXME: very IPv4 centric!
 void Samurai::IO::Net::NetworkInterfaceUnix::extractAddresses()
 {
 	if (getInfo(SIOCGIFADDR))
-		m_address = new Samurai::IO::Net::InetAddress(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_addr)->sin_addr));
+		m_address = std::make_unique<Samurai::IO::Net::InetAddress>(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_addr)->sin_addr));
 
 	if (getInfo(SIOCGIFNETMASK))
-		m_netmask = new Samurai::IO::Net::InetAddress(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_addr)->sin_addr));
+		m_netmask = std::make_unique<Samurai::IO::Net::InetAddress>(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_addr)->sin_addr));
 
 	if ((m_flags & InterfaceBroadcast) && getInfo(SIOCGIFBRDADDR))
-		m_broadcast = new Samurai::IO::Net::InetAddress(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_broadaddr)->sin_addr));
+		m_broadcast = std::make_unique<Samurai::IO::Net::InetAddress>(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_broadaddr)->sin_addr));
 
 #ifdef SIOCGIFDSTADDR
 	if ((m_flags & InterfacePointToPoint) && getInfo(SIOCGIFDSTADDR))
-		m_destination = new Samurai::IO::Net::InetAddress(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_dstaddr)->sin_addr));
+		m_destination = std::make_unique<Samurai::IO::Net::InetAddress>(inet_ntoa(((struct sockaddr_in *)&m_ifr.ifr_dstaddr)->sin_addr));
 #endif
 }
 
@@ -260,7 +260,7 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_I
 		uint8_t hwaddr_bytes[6];
 		memcpy(hwaddr_bytes, info->Address, 6);
 		if (hwaddr_bytes[0] || hwaddr_bytes[1] || hwaddr_bytes[2] || hwaddr_bytes[3] || hwaddr_bytes[4] || hwaddr_bytes[5])
-			m_hwaddr = new Samurai::IO::Net::HardwareAddress(hwaddr_bytes);
+			m_hwaddr = std::make_unique<Samurai::IO::Net::HardwareAddress>(hwaddr_bytes);
 	}
 
 	m_flags |= InterfaceEnabled;
@@ -273,10 +273,10 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_I
 	PIP_ADDR_STRING ipstr = &info->IpAddressList;
 	if (ipstr)
 	{
-		m_address = new Samurai::IO::Net::InetAddress(ipstr->IpAddress.String,
-			Samurai::IO::Net::InetAddress::IPv4);
-		m_netmask = new Samurai::IO::Net::InetAddress(ipstr->IpMask.String,
-			Samurai::IO::Net::InetAddress::IPv4);
+		m_address = std::make_unique<Samurai::IO::Net::InetAddress>(
+			ipstr->IpAddress.String, Samurai::IO::Net::InetAddress::IPv4);
+		m_netmask = std::make_unique<Samurai::IO::Net::InetAddress>(
+			ipstr->IpMask.String, Samurai::IO::Net::InetAddress::IPv4);
 	}
 }
 
@@ -294,7 +294,7 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_A
 		uint8_t hwaddr_bytes[6];
 		memcpy(hwaddr_bytes, info->PhysicalAddress, 6);
 		if (hwaddr_bytes[0] || hwaddr_bytes[1] || hwaddr_bytes[2] || hwaddr_bytes[3] || hwaddr_bytes[4] || hwaddr_bytes[5])
-			m_hwaddr = new Samurai::IO::Net::HardwareAddress(hwaddr_bytes);
+			m_hwaddr = std::make_unique<Samurai::IO::Net::HardwareAddress>(hwaddr_bytes);
 	}
 
 	if (info->OperStatus == IfOperStatusUp)
@@ -324,14 +324,14 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_A
 	if (sa && sa->sa_family == AF_INET)
 	{
 		struct sockaddr_in* addr4 = (struct sockaddr_in*) sa;
-		m_address = new Samurai::IO::Net::InetAddress();
+		m_address = std::make_unique<Samurai::IO::Net::InetAddress>();
 		m_address->setRawAddress(&addr4->sin_addr, sizeof(addr4->sin_addr),
 			Samurai::IO::Net::InetAddress::IPv4);
 	}
 	else if (sa && sa->sa_family == AF_INET6)
 	{
 		struct sockaddr_in6* addr6 = (struct sockaddr_in6*) sa;
-		m_address = new Samurai::IO::Net::InetAddress();
+		m_address = std::make_unique<Samurai::IO::Net::InetAddress>();
 		m_address->setRawAddress(&addr6->sin6_addr, sizeof(addr6->sin6_addr),
 			Samurai::IO::Net::InetAddress::IPv6);
 	}
@@ -352,11 +352,8 @@ Samurai::IO::Net::NetworkInterface* Samurai::IO::Net::NetworkInterface::getInter
 	return nullptr;
 }
 
-bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<NetworkInterface*>& interfaces)
+bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<std::unique_ptr<NetworkInterface>>& interfaces)
 {
-	(void) interfaces;
-
-	Samurai::IO::Net::NetworkInterface* iface = 0;
 
 #ifdef SAMURAI_UNIX
 	struct if_nameindex* ifaces = if_nameindex();
@@ -364,8 +361,7 @@ bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<NetworkInterf
 	for (size_t i = 0; ifaces[i].if_index; i++)
 	{
 
-		iface = new Samurai::IO::Net::NetworkInterfaceUnix(ifaces[i].if_name);
-		interfaces.push_back(iface);
+		interfaces.push_back(std::make_unique<Samurai::IO::Net::NetworkInterfaceUnix>(ifaces[i].if_name));
 	}
 	if_freenameindex(ifaces);
 	return true;
@@ -392,8 +388,7 @@ bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<NetworkInterf
 		adapter = adapterInfo;
 		while (adapter)
 		{
-			iface = new Samurai::IO::Net::NetworkInterfaceWindows(adapter);
-			interfaces.push_back(iface);
+			interfaces.push_back(std::make_unique<Samurai::IO::Net::NetworkInterfaceWindows>(adapter));
 			adapter = adapter->Next;
 		}
 	}
@@ -430,8 +425,7 @@ bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<NetworkInterf
 		ptr = adr;
 		while (ptr)
 		{
-			iface = new Samurai::IO::Net::NetworkInterfaceWindows(ptr);
-			interfaces.push_back(iface);
+			interfaces.push_back(std::make_unique<Samurai::IO::Net::NetworkInterfaceWindows>(ptr));
 			ptr = ptr->Next;
 		}
 		free(adr);
@@ -456,14 +450,7 @@ Samurai::IO::Net::NetworkInterface::NetworkInterface()
 
 }
 
-Samurai::IO::Net::NetworkInterface::~NetworkInterface()
-{
-	delete m_hwaddr;
-	delete m_address;
-	delete m_netmask;
-	delete m_broadcast;
-	delete m_destination;
-}
+Samurai::IO::Net::NetworkInterface::~NetworkInterface() = default;
 
 const char* Samurai::IO::Net::NetworkInterface::getName() const
 {
@@ -485,27 +472,27 @@ interface_t Samurai::IO::Net::NetworkInterface::getHandle() const
 
 Samurai::IO::Net::InetAddress* Samurai::IO::Net::NetworkInterface::getAddress() const
 {
-	return m_address;
+	return m_address.get();
 }
 
 Samurai::IO::Net::InetAddress* Samurai::IO::Net::NetworkInterface::getBroadcastAddress() const
 {
-	return m_broadcast;
+	return m_broadcast.get();
 }
 
 Samurai::IO::Net::InetAddress* Samurai::IO::Net::NetworkInterface::getNetmask() const
 {
-	return m_netmask;
+	return m_netmask.get();
 }
 
 Samurai::IO::Net::InetAddress* Samurai::IO::Net::NetworkInterface::getDestinationAddress() const
 {
-	return m_destination;
+	return m_destination.get();
 }
 
 Samurai::IO::Net::HardwareAddress* Samurai::IO::Net::NetworkInterface::getHWAddress() const
 {
-	return m_hwaddr;
+	return m_hwaddr.get();
 }
 
 bool Samurai::IO::Net::NetworkInterface::isEnabled() const

@@ -106,7 +106,7 @@ namespace Samurai {
 					
 					
 				protected:
-					void EventHostFound(InetAddress* addr) override;
+					void EventHostFound(const InetAddress* addr) override;
 					void EventHostError(enum Samurai::IO::Net::DNS::Resolver::Error error) override;
 					
 				protected:

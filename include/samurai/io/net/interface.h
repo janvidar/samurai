@@ -8,6 +8,8 @@
 
 #include <vector>
 #include <samurai/io/net/socketglue.h>
+#include <memory>
+#include <vector>
 
 namespace Samurai {
 namespace IO {
@@ -27,7 +29,14 @@ class NetworkInterface
 	public:
 		static NetworkInterface* getInterface(const InetAddress& addr);
 		static NetworkInterface* getInterface(const char* name);
-		static bool getInterfaces(std::vector<NetworkInterface*>& interfaces);
+		/**
+		 * Enumerate the local interfaces.
+		 *
+		 * The caller owns what is appended; the vector holds unique_ptr because
+		 * the raw-pointer form said nothing about who released them, and both
+		 * in-tree callers leaked every entry.
+		 */
+		static bool getInterfaces(std::vector<std::unique_ptr<NetworkInterface>>& interfaces);
 	
 	public:
 		virtual ~NetworkInterface();
@@ -100,11 +109,11 @@ class NetworkInterface
 		NetworkInterface();
 		
 	protected:
-		HardwareAddress* m_hwaddr;
-		InetAddress* m_address;
-		InetAddress* m_netmask;
-		InetAddress* m_broadcast;
-		InetAddress* m_destination;
+		std::unique_ptr<HardwareAddress> m_hwaddr;
+		std::unique_ptr<InetAddress> m_address;
+		std::unique_ptr<InetAddress> m_netmask;
+		std::unique_ptr<InetAddress> m_broadcast;
+		std::unique_ptr<InetAddress> m_destination;
 		int m_flags;
 };
 

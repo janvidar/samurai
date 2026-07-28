@@ -443,7 +443,7 @@ bool Samurai::IO::Net::InetAddress::isResolved() const
 }
 
 
-void Samurai::IO::Net::InetAddress::EventHostFound(Samurai::IO::Net::InetAddress* address)
+void Samurai::IO::Net::InetAddress::EventHostFound(const Samurai::IO::Net::InetAddress* address)
 {
 	if (!address || !address->data) return;
 

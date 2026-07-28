@@ -91,7 +91,7 @@ EXO_TEST(dns_resourcerecord_defaults,
 {
 	Samurai::IO::Net::DNS::ResourceRecord rec;
 	return rec.ttl == 0 && rec.rdLength == 0 && rec.rr == nullptr
-		&& rec.name != nullptr;
+		&& rec.name.countParts() == 0;
 });
 
 /* ------------------------------------------------------------------------- */
@@ -301,7 +301,7 @@ EXO_TEST(dns_decode_answer_a_address,
 	Samurai::IO::Net::DNS::ResourceRecord* rec = msg.getRecord((size_t) 0);
 	if (!rec) return false;
 	Samurai::IO::Net::DNS::RR_A* a =
-		dynamic_cast<Samurai::IO::Net::DNS::RR_A*>(rec->rr);
+		dynamic_cast<Samurai::IO::Net::DNS::RR_A*>(rec->rr.get());
 	if (!a || !a->getAddress()) return false;
 	return a->getAddress()->toString() == "127.0.0.1";
 });
@@ -422,7 +422,7 @@ static Samurai::IO::Net::DNS::ResourceRecord* dns_make_record(const char* host, 
 		new Samurai::IO::Net::DNS::ResourceRecord();
 	Samurai::IO::Net::DNS::Name want(host);
 	want.split();
-	*rec->name = want;
+	rec->name = want;
 	rec->ttl = ttl;
 	return rec;
 }
