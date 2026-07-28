@@ -270,6 +270,14 @@ void Samurai::Crypto::Digest::MerkleTree::reset()
 	m_hasher->reset();
 	m_blocks_per_leaf = 1;
 	m_count = 0;
+
+	/* Hash::reset() is pure virtual, so this is the only place the inherited
+	   accumulator gets cleared. Leaving m_current_block_index set would make
+	   finalize() hash a partial block left over from the previous use and add
+	   it as an extra leaf. */
+	m_current_block_index = 0;
+	m_file_size = 0;
+
 	/* The stacks do not own their nodes, so release those before discarding
 	   the stacks themselves. */
 	deleteNodes(m_nodes.get());
