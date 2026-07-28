@@ -55,10 +55,26 @@ void Samurai::IO::Net::DNS::BuiltinResolver::lookup(const char* name)
 
 
 void Samurai::IO::Net::DNS::BuiltinResolver::query() {
-	
+
 	enum Samurai::IO::Net::DNS::Type dns_type = Type_A;
 	if (g_dns_config->isIPv6()) dns_type = Type_AAAA;
-	
+
+	/*
+	 * NOTE: this check is the whole reason the BUILTIN provider could not be
+	 * selected at all. getNameServer() returns 0 when the configuration lists
+	 * no usable server, and the InetAddress copy constructor below
+	 * dereferenced it without looking - so the first Socket::connect() in a
+	 * process built with -DSAMURAI_DNS_PROVIDER=BUILTIN segfaulted.
+	 */
+	Samurai::IO::Net::InetAddress* server = g_dns_config->getNameServer(numTries++);
+	if (!server)
+	{
+		QERR("[DNS] No name server configured; cannot resolve '%s'", hostname ? hostname : "");
+		if (eventHandler) eventHandler->EventHostError(ServerError);
+		return;
+	}
+
+	delete rrname;
 	rrname = new Samurai::IO::Net::DNS::Name(hostname);
 	if (!rrname->split()) return;
 	if (!rrname->countParts()) return;
@@ -95,7 +111,6 @@ void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 
 	DatagramPacket* packet = new DatagramPacket(buffer);
 
-	Samurai::IO::Net::InetAddress* server = g_dns_config->getNameServer(numTries++);
 	InetSocketAddress addr(server, DNS_SERVER_PORT);
 	packet->setAddress(&addr);
 
@@ -106,7 +121,12 @@ void Samurai::IO::Net::DNS::BuiltinResolver::query() {
 #endif
 	sock = Samurai::IO::Net::DatagramSocket::create(this, server->getType());
 	std::dynamic_pointer_cast<Samurai::IO::Net::DatagramSocket>(sock)->send(packet);
-	
+
+	/* DatagramPacket copies the buffer it is handed, and send() copies out of
+	   the packet; neither was freed here. */
+	delete packet;
+	delete buffer;
+
 	if (timer) delete timer;
 	timer = new Samurai::Timer(this, RES_TIMEOUT, true);
 }
