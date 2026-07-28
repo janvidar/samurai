@@ -181,10 +181,9 @@ void Samurai::IO::Net::DNS::BuiltinResolver::EventGotDatagram(DatagramSocket*, D
 	}
 }
 
-void Samurai::IO::Net::DNS::BuiltinResolver::EventDatagramError(const DatagramSocket*, const char*)
+void Samurai::IO::Net::DNS::BuiltinResolver::EventDatagramError(const DatagramSocket*, const char* msg)
 {
-	/* Error using datagram */
-	puts("got dns datagram error\n");
+	QERR("DNS datagram error: %s", msg ? msg : "(no detail)");
 }
 
 void Samurai::IO::Net::DNS::BuiltinResolver::EventConnected(const Samurai::IO::Net::Socket*)
@@ -216,7 +215,7 @@ void Samurai::IO::Net::DNS::BuiltinResolver::EventCanWrite(const Samurai::IO::Ne
 void Samurai::IO::Net::DNS::BuiltinResolver::EventTimeout(Samurai::Timer* timer)
 {
 	(void) timer;
-	puts("DNS timeout\n");
+	QERR("DNS query timed out");
 }
 
 void Samurai::IO::Net::DNS::BuiltinResolver::EventError(const Socket*, SocketError error, const char* msg)
