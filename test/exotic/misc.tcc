@@ -8,6 +8,9 @@
 #include <samurai/util/bwestimation.h>
 #include <samurai/io/file.h>
 #include <samurai/io/net/socketmonitor.h>
+#include <samurai/util/format.h>
+#include <samurai/timestamp.h>
+#include <string>
 #include <algorithm>
 #include <span>
 #include <string.h>
@@ -177,4 +180,107 @@ EXO_TEST(bitmask_is_constexpr,
 	static_assert(any(Mode::Write | Mode::Read), "operators must be constexpr");
 	static_assert(!any(Mode::Write & Mode::Read), "distinct flags must not overlap");
 	return true;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Byte count formatting                                                     */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(formatsize_bytes,
+{
+	return Samurai::Util::formatSize(512) == " 512  B";
+});
+
+EXO_TEST(formatsize_exact_kilobyte,
+{
+	return Samurai::Util::formatSize(1024) == "   1 KB";
+});
+
+EXO_TEST(formatsize_exact_megabyte,
+{
+	return Samurai::Util::formatSize(1024ULL * 1024) == "   1 MB";
+});
+
+EXO_TEST(formatsize_fractional,
+{
+	return Samurai::Util::formatSize(1536) == "1.50 KB";
+});
+
+EXO_TEST(formatsize_zero,
+{
+	return Samurai::Util::formatSize(0) == "   0  B";
+});
+
+/*
+ * The unit has to advance at the threshold, not one step past it. Selecting on
+ * "size > next_base" while dividing by "next_base / 1024" left the result one
+ * unit low, so a megabyte read as "1024 KB".
+ */
+EXO_TEST(formatsize_megabyte_is_not_reported_in_kilobytes,
+{
+	const std::string s = Samurai::Util::formatSize(1024ULL * 1024);
+	return s.find("KB") == std::string::npos && s.find("MB") != std::string::npos;
+});
+
+EXO_TEST(formatsize_gigabyte,
+{
+	return Samurai::Util::formatSize(1024ULL * 1024 * 1024) == "   1 GB";
+});
+
+EXO_TEST(formatsize_just_below_a_kilobyte,
+{
+	return Samurai::Util::formatSize(1023) == "1023  B";
+});
+
+EXO_TEST(formatsize_two_kilobytes_is_exact,
+{
+	return Samurai::Util::formatSize(2048) == "   2 KB";
+});
+
+/*
+ * Past the last unit the multiplier must stop. Continuing would overflow the
+ * divisor to zero, which never terminates and reads off the end of the table.
+ */
+EXO_TEST(formatsize_max_terminates_in_exabytes,
+{
+	const std::string s = Samurai::Util::formatSize(UINT64_MAX);
+	return s.find("EB") != std::string::npos;
+});
+
+/*
+ * Two calls in one expression must not interfere. The previous form returned a
+ * pointer into a single function-local static, so both read back the same text.
+ */
+EXO_TEST(formatsize_two_calls_are_independent,
+{
+	const std::string a = Samurai::Util::formatSize(1024);
+	const std::string b = Samurai::Util::formatSize(1024ULL * 1024);
+	return a != b && a == "   1 KB" && b == "   1 MB";
+});
+
+/* ------------------------------------------------------------------------- */
+/* TimeStamp                                                                 */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(timestamp_format_is_applied,
+{
+	Samurai::TimeStamp ts((time_t) 0);
+	/* %s is seconds since the epoch, so this is independent of the time zone. */
+	return ts.getTime("%s") == "0";
+});
+
+EXO_TEST(timestamp_default_format_is_not_empty,
+{
+	Samurai::TimeStamp ts;
+	return !ts.getTime().empty();
+});
+
+/* The same static-buffer hazard as above. */
+EXO_TEST(timestamp_two_calls_are_independent,
+{
+	Samurai::TimeStamp early((time_t) 0);
+	Samurai::TimeStamp later((time_t) 1000000);
+	const std::string a = early.getTime("%s");
+	const std::string b = later.getTime("%s");
+	return a == "0" && b == "1000000";
 });

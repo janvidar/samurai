@@ -32,14 +32,16 @@ void Samurai::TimeStamp::reset() {
 	data = time(nullptr);
 }
 
-const char* Samurai::TimeStamp::getTime(const char* format) {
-	if (!format) {
-		return ctime(&data);
-	} else {
-		static char timestamp_buf[64] = { 0, };
-		strftime(timestamp_buf, 64, format, localtime(&data));
-		return timestamp_buf;
-	}
+std::string Samurai::TimeStamp::getTime(const char* format) const {
+	char buf[64] = { 0, };
+
+	/* strftime() needs a terminated format string, so this one stays a
+	   const char* rather than becoming a string_view. */
+	if (!format)
+		format = "%a %b %e %H:%M:%S %Y";
+
+	const size_t written = strftime(buf, sizeof(buf), format, localtime(&data));
+	return std::string(buf, written);
 }
 
 time_t Samurai::TimeStamp::getInternalData() const {
