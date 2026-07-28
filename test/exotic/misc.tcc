@@ -10,6 +10,7 @@
 #include <samurai/io/net/socketmonitor.h>
 #include <samurai/util/format.h>
 #include <samurai/timestamp.h>
+#include <samurai/stdc.h>
 #include <string>
 #include <algorithm>
 #include <span>
@@ -283,4 +284,110 @@ EXO_TEST(timestamp_two_calls_are_independent,
 	const std::string a = early.getTime("%s");
 	const std::string b = later.getTime("%s");
 	return a == "0" && b == "1000000";
+});
+
+/* ------------------------------------------------------------------------- */
+/* Convert                                                                   */
+/*                                                                           */
+/* Only to_uint16 was reached before, and only indirectly through URL port    */
+/* parsing. The saturation arithmetic was never executed by any test.        */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(convert_to_int64_plain,
+{
+	return Samurai::Util::Convert::to_int64("12345") == 12345;
+});
+
+EXO_TEST(convert_to_int64_negative,
+{
+	return Samurai::Util::Convert::to_int64("-12345") == -12345;
+});
+
+EXO_TEST(convert_to_int64_explicit_plus,
+{
+	return Samurai::Util::Convert::to_int64("+42") == 42;
+});
+
+EXO_TEST(convert_to_int64_stops_at_first_non_digit,
+{
+	return Samurai::Util::Convert::to_int64("123abc") == 123
+		&& Samurai::Util::Convert::to_int64("7.5") == 7;
+});
+
+EXO_TEST(convert_to_int64_empty_and_garbage,
+{
+	return Samurai::Util::Convert::to_int64("") == 0
+		&& Samurai::Util::Convert::to_int64("abc") == 0
+		&& Samurai::Util::Convert::to_int64("-") == 0;
+});
+
+EXO_TEST(convert_to_int64_limits,
+{
+	return Samurai::Util::Convert::to_int64("9223372036854775807") == INT64_MAX
+		&& Samurai::Util::Convert::to_int64("-9223372036854775808") == INT64_MIN;
+});
+
+/* Past the limit it saturates rather than wrapping. */
+EXO_TEST(convert_to_int64_saturates_positive,
+{
+	return Samurai::Util::Convert::to_int64("9223372036854775808") == INT64_MAX
+		&& Samurai::Util::Convert::to_int64("99999999999999999999999") == INT64_MAX;
+});
+
+EXO_TEST(convert_to_int64_saturates_negative,
+{
+	return Samurai::Util::Convert::to_int64("-9223372036854775809") == INT64_MIN
+		&& Samurai::Util::Convert::to_int64("-99999999999999999999999") == INT64_MIN;
+});
+
+EXO_TEST(convert_to_uint64_plain,
+{
+	return Samurai::Util::Convert::to_uint64("12345") == 12345u;
+});
+
+EXO_TEST(convert_to_uint64_limit,
+{
+	return Samurai::Util::Convert::to_uint64("18446744073709551615") == UINT64_MAX;
+});
+
+EXO_TEST(convert_to_uint64_saturates,
+{
+	return Samurai::Util::Convert::to_uint64("18446744073709551616") == UINT64_MAX
+		&& Samurai::Util::Convert::to_uint64("99999999999999999999999") == UINT64_MAX;
+});
+
+/* Unsigned takes no sign, so a negative string is rejected outright. */
+EXO_TEST(convert_to_uint64_rejects_negative,
+{
+	return Samurai::Util::Convert::to_uint64("-1") == 0u;
+});
+
+EXO_TEST(convert_to_int32_plain_and_limits,
+{
+	return Samurai::Util::Convert::to_int32("1000") == 1000
+		&& Samurai::Util::Convert::to_int32("-1000") == -1000
+		&& Samurai::Util::Convert::to_int32("2147483647") == INT32_MAX;
+});
+
+EXO_TEST(convert_to_uint16_accepts_digits_only,
+{
+	return Samurai::Util::Convert::to_uint16("8080") == 8080
+		&& Samurai::Util::Convert::to_uint16("0") == 0;
+});
+
+/* Unlike the others, to_uint16 rejects a string that is not all digits rather
+   than stopping at the first one - url.cpp relies on that to reject a port. */
+EXO_TEST(convert_to_uint16_rejects_trailing_junk,
+{
+	return Samurai::Util::Convert::to_uint16("80a") == 0
+		&& Samurai::Util::Convert::to_uint16("") == 0
+		&& Samurai::Util::Convert::to_uint16("-80") == 0
+		&& Samurai::Util::Convert::to_uint16(" 80") == 0;
+});
+
+EXO_TEST(convert_to_uint16_rejects_out_of_range,
+{
+	return Samurai::Util::Convert::to_uint16("65535") == 65535
+		&& Samurai::Util::Convert::to_uint16("65536") == 0
+		&& Samurai::Util::Convert::to_uint16("70000") == 0;
 });
