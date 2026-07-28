@@ -27,6 +27,7 @@ class HashValue
 		HashValue(const HashValue& copy);
 		HashValue(size_t size);
 		HashValue(size_t size, uint8_t* data);
+		HashValue(HashValue&& other) noexcept;
 		virtual ~HashValue();
 		
 		size_t size() const;
@@ -42,6 +43,7 @@ class HashValue
 		
 		
 		HashValue& operator=(const HashValue& copy);
+		HashValue& operator=(HashValue&& other) noexcept;
 		bool operator==(const HashValue&);
 		bool operator!=(const HashValue&);
 	

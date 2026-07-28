@@ -1,4 +1,5 @@
 #include <samurai/io/buffer.h>
+#include <utility>
 
 EXO_TEST(buffer_append_size,
 {
@@ -133,4 +134,25 @@ EXO_TEST(buffer_assignment_copies,
 	Samurai::IO::Buffer b;
 	b = a;
 	return b.size() == 4 && b.at(0) == 'c';
+});
+
+EXO_TEST(buffer_move_construct,
+{
+	Samurai::IO::Buffer a;
+	a.append("abcdef");
+	a.remove(2);
+
+	Samurai::IO::Buffer b(std::move(a));
+	return b.size() == 4 && b.at(0) == 'c' && a.size() == 0;
+});
+
+EXO_TEST(buffer_move_assign,
+{
+	Samurai::IO::Buffer a;
+	a.append("abcdef");
+
+	Samurai::IO::Buffer b;
+	b.append("xyz");
+	b = std::move(a);
+	return b.size() == 6 && b.at(0) == 'a' && a.size() == 0;
 });

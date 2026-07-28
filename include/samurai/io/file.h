@@ -27,6 +27,8 @@ class File {
 		File(const char* path);
 		File(const File& file);
 		File(const File* file);
+		File(File&& other) noexcept;
+		File& operator=(File&& other) noexcept;
 		virtual ~File();
 		
 		enum Mode

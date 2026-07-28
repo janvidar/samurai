@@ -47,6 +47,25 @@ void Samurai::Crypto::Digest::HashValue::setData(const uint8_t* data)
 	memcpy(m_data, data, m_size);
 }
 
+Samurai::Crypto::Digest::HashValue::HashValue(Samurai::Crypto::Digest::HashValue&& other) noexcept
+	: m_data(other.m_data), m_size(other.m_size)
+{
+	other.m_data = 0;
+	other.m_size = 0;
+}
+
+Samurai::Crypto::Digest::HashValue& Samurai::Crypto::Digest::HashValue::operator=(Samurai::Crypto::Digest::HashValue&& other) noexcept
+{
+	if (this == &other) return *this;
+
+	delete[] m_data;
+	m_data = other.m_data;
+	m_size = other.m_size;
+	other.m_data = 0;
+	other.m_size = 0;
+	return *this;
+}
+
 Samurai::Crypto::Digest::HashValue::~HashValue()
 {
 	delete[] m_data; m_data = 0;

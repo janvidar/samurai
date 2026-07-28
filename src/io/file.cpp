@@ -68,6 +68,11 @@ class FileBase
 
 #define RETURN_IF_NOT_OPEN(X, VAL) if (X == -1) return VAL;
 
+Samurai::IO::File::File() : info_valid(false), temp(""), fd(-1)
+{
+}
+
+
 Samurai::IO::File::File(const char* path) : info_valid(false), temp(""), fd(-1)
 {
 	filename = resolvePath(std::string(path));
@@ -93,6 +98,35 @@ Samurai::IO::File::File(const Samurai::IO::File* copy) : info_valid(false), temp
 	filename = std::string(copy->filename);
 	info_valid = copy->info_valid;
 	if (info_valid) info = copy->info;
+}
+
+
+Samurai::IO::File::File(Samurai::IO::File&& other) noexcept
+	: info_valid(other.info_valid), info(other.info),
+	  filename(std::move(other.filename)), baseName(std::move(other.baseName)),
+	  temp(std::move(other.temp)), fd(other.fd)
+{
+	other.fd = -1;
+	other.info_valid = false;
+}
+
+
+Samurai::IO::File& Samurai::IO::File::operator=(Samurai::IO::File&& other) noexcept
+{
+	if (this == &other) return *this;
+
+	close();
+
+	info_valid = other.info_valid;
+	info = other.info;
+	filename = std::move(other.filename);
+	baseName = std::move(other.baseName);
+	temp = std::move(other.temp);
+	fd = other.fd;
+
+	other.fd = -1;
+	other.info_valid = false;
+	return *this;
 }
 
 
