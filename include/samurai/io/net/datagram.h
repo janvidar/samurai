@@ -114,6 +114,8 @@ class DatagramSocket : public SocketBase {
 		DatagramSocket();
 		DatagramSocket(SocketAddress*);
 		
+		void handleMonitorEvent(int trig);
+
 		void internal_create();
 		void internal_canRead();
 		void internal_error();

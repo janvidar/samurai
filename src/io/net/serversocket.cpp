@@ -71,6 +71,19 @@ bool Samurai::IO::Net::ServerSocket::listen(size_t backlog, std::error_code& ec)
 }
 
 /** accept() will now have something to accept, if called from SocketMonitor at least. */
+void Samurai::IO::Net::ServerSocket::handleMonitorEvent(int trig)
+{
+	if (trig & SocketMonitor::MRead)
+		internal_accept();
+
+	if (trig & (SocketMonitor::MError | SocketMonitor::MClose))
+	{
+		QERR("Listening socket signalled error/hangup, disabling monitor");
+		disableMonitor();
+	}
+}
+
+
 void Samurai::IO::Net::ServerSocket::internal_accept() {
 
 	struct sockaddr_storage new_addr;

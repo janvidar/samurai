@@ -95,6 +95,109 @@ void Samurai::IO::Net::Socket::lookup() {
 }
 
 
+void Samurai::IO::Net::Socket::handleMonitorEvent(int trig)
+{
+	if (trig & SocketMonitor::MRead)
+	{
+		switch (state)
+		{
+			case Connected:
+			{
+				char buf[1];
+#ifndef SAMURAI_WINSOCK
+				int x = recv(sd, &buf, 1, MSG_PEEK | MSG_DONTWAIT);
+#else
+				int x = recv(sd, (char*) &buf, 1, MSG_PEEK);
+#endif
+				if (x > 0)
+				{
+					internal_canRead();
+				}
+				else if (x == 0)
+				{
+					internal_closed();
+				}
+				else if (x == -1)
+				{
+					if (NETERROR != EAGAIN && NETERROR != EINTR)
+					{
+						QERR("Socket recv error: %d (%s) (x=%d)\n", NETERROR, strerror(NETERROR), x);
+						internal_error(NETERROR);
+					}
+				}
+			}
+			break;
+
+
+			case SSLBye:
+			case SSLHandshake:
+			case SSLConnected:
+				/* NOTE: This is a *read* event, so it has to dispatch to
+				   internal_canRead(). It used to call internal_canWrite(),
+				   which delivered incoming application data as
+				   EventCanWrite - so EventDataAvailable never fired once
+				   the TLS handshake had completed.
+
+				   No MSG_PEEK probe as in the Connected case above: a
+				   complete TLS record may already be buffered inside the
+				   TLS library while the socket itself reads empty, so
+				   peeking would skip valid reads. End-of-stream arrives
+				   as TLS_STATUS_CLOSED through read() instead. */
+				internal_canRead();
+				break;
+
+
+			default:
+				// ignore
+				break;
+		}
+	}
+
+	if (trig & SocketMonitor::MWrite)
+	{
+		switch (state)
+		{
+			case Connecting:
+				internal_connected();
+				break;
+
+			case SSLBye:
+			case SSLHandshake:
+			case Connected:
+			case SSLConnected:
+				internal_canWrite();
+				break;
+
+			default:
+				// ERROR!
+				break;
+		}
+	}
+
+	/* NOTE: Handled last, so that data still buffered on a socket that has
+	   also errored is delivered before the connection is torn down. */
+	if (trig & (SocketMonitor::MError | SocketMonitor::MClose))
+	{
+		/* The MRead path may already have torn this down; do not report twice. */
+		if (state == Invalid || state == Disconnected)
+			return;
+
+		if (trig & SocketMonitor::MError)
+		{
+			int value = 0;
+			socklen_t valsize = sizeof(value);
+			if (SAMURAI_GETSOCKOPT(sd, SOL_SOCKET, SO_ERROR, &value, &valsize) != 0)
+				value = 0;
+			internal_error(value);
+		}
+		else
+		{
+			internal_closed();
+		}
+	}
+}
+
+
 void Samurai::IO::Net::Socket::internal_canRead()
 {
 	if (state == Connected

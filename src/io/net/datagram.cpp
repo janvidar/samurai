@@ -233,6 +233,16 @@ int Samurai::IO::Net::DatagramSocket::read(DatagramPacket* packet) {
 }
 
 
+void Samurai::IO::Net::DatagramSocket::handleMonitorEvent(int trig)
+{
+	if (trig & SocketMonitor::MRead)
+		internal_canRead();
+
+	if (trig & (SocketMonitor::MError | SocketMonitor::MClose))
+		internal_error();
+}
+
+
 void Samurai::IO::Net::DatagramSocket::internal_canRead() {
 	if (!myPacket) myPacket = new DatagramPacket();
 	
