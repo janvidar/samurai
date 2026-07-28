@@ -9,7 +9,6 @@
 #include <string>
 #include <string_view>
 #include <bit>
-#include <samurai/io/device.h>
 #include <stdlib.h>
 #include <new>
 

@@ -29,12 +29,6 @@ class Resolver {
 			Unknown         //< "Unknown resolve error"
 		};
 		
-		enum State {
-			Idle,           //< "Ready to accept lookup jobs"
-			Busy,           //< "Busy handling a lookup job"
-			ResolveError    //< "An error has occured, check the error enum"
-		};
-		
 		virtual ~Resolver();
 		
 	public:

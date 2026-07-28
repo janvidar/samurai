@@ -17,12 +17,6 @@ class InetAddress;
 class HardwareAddress;
 class NetworkInterfacePrivate;
 
-class NetworkInterfaceIterator
-{
-	
-};
-
-
 /**
  * FIXME:
  * 1) Does not provide means to extract multiple IP addresses for one interface.

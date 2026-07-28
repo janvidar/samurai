@@ -12,8 +12,6 @@
 #include <samurai/io/net/socketevent.h>
 #include <samurai/io/net/inetaddress.h>
 
-// struct sockaddr;
-
 namespace Samurai {
 namespace IO {
 class Buffer;

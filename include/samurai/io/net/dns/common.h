@@ -6,6 +6,8 @@
 #ifndef HAVE_DNS_RESOLVER_COMMONS_H
 #define HAVE_DNS_RESOLVER_COMMONS_H
 
+#include <stdint.h>
+
 #define DNS_SERVER_PORT         53
 
 #define DNS_LABEL_SIZE          63
@@ -17,12 +19,12 @@
 
 #define DNS_RECURSE_MAX         10 /* most 10 recursions allowed for aliases (CNAME) */
 
-#ifdef UNIX
-#if !defined(MACOSX) && !defined(FREEBSD)
-#include <resolv.h>
-#endif
-#endif
-
+/*
+ * MAXNS and RES_TIMEOUT would come from <resolv.h> on the platforms that have
+ * it, but MAXNS bounds a public member array, so taking it from a system
+ * header would make the layout of ResolveConfiguration vary by platform.
+ * These are the values every build has actually used.
+ */
 #ifndef MAXNS
 #define MAXNS 3
 #endif
