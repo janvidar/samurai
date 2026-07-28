@@ -165,7 +165,7 @@ void Samurai::IO::Net::EPollSocketMonitor::internal_modify(Samurai::IO::Net::Soc
 	}
 }
 
-void Samurai::IO::Net::EPollSocketMonitor::wait(int time_ms)
+void Samurai::IO::Net::EPollSocketMonitor::internal_wait(int time_ms)
 {
 	int nfds = epoll_wait(epfd, act, EPOLL_BATCH, time_ms);
 	if (nfds == 0) return;

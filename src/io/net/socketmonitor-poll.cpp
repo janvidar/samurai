@@ -132,7 +132,7 @@ void Samurai::IO::Net::PollSocketMonitor::internal_modify(Samurai::IO::Net::Sock
 }
 
 
-void Samurai::IO::Net::PollSocketMonitor::wait(int time_ms)
+void Samurai::IO::Net::PollSocketMonitor::internal_wait(int time_ms)
 {
 	if (num == 0) return;
 

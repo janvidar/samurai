@@ -202,6 +202,12 @@ void Samurai::IO::Net::Socket::handleMonitorEvent(int trig)
 }
 
 
+size_t Samurai::IO::Net::Socket::bufferedInput() const
+{
+	if (state != SSLConnected || !tls) return 0;
+	return tls->pending();
+}
+
 void Samurai::IO::Net::Socket::internal_canRead()
 {
 	if (state == Connected

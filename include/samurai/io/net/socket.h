@@ -170,6 +170,7 @@ class Socket :
 
 	protected:
 		void handleMonitorEvent(int trig);
+		size_t bufferedInput() const;
 
 		void internal_canRead();
 		void internal_canWrite();

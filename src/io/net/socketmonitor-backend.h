@@ -50,7 +50,7 @@ class PollSocketMonitor : public SocketMonitor
 		void internal_add(SocketBase* socket);
 		void internal_remove(SocketBase* socket);
 		void internal_modify(SocketBase* socket);
-		void wait(int time_ms);
+		void internal_wait(int time_ms);
 		size_t size() { return num; }
 		size_t capacity() { return max; }
 		bool isValid();
@@ -75,7 +75,7 @@ class EPollSocketMonitor : public SocketMonitor
 		void internal_remove(SocketBase* socket);
 		void internal_modify(SocketBase* socket);
 		
-		void wait(int time_ms);
+		void internal_wait(int time_ms);
 		size_t size() { return num; }
 		size_t capacity() { return max; }
 		bool isValid();
@@ -99,7 +99,7 @@ class KQueueSocketMonitor : public SocketMonitor
 		void internal_add(SocketBase* socket);
 		void internal_remove(SocketBase* socket);
 		void internal_modify(SocketBase* socket);
-		void wait(int time_ms);
+		void internal_wait(int time_ms);
 		size_t size() { return num; }
 		size_t capacity() { return max; }
 		bool isValid();
@@ -130,7 +130,7 @@ class SelectSocketMonitor : public SocketMonitor
 		void internal_add(SocketBase* socket);
 		void internal_remove(SocketBase* socket);
 		void internal_modify(SocketBase* socket);
-		void wait(int time_ms);
+		void internal_wait(int time_ms);
 		size_t size() { return sockets.size(); }
 		size_t capacity() { return max; }
 		bool isValid();

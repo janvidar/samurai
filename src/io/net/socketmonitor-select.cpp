@@ -102,7 +102,7 @@ static bool fd_is_usable(socket_t fd)
 }
 
 
-void Samurai::IO::Net::SelectSocketMonitor::wait(int time_ms) {
+void Samurai::IO::Net::SelectSocketMonitor::internal_wait(int time_ms) {
 	fd_set rfds;
 	fd_set wfds;
 	fd_set efds;

@@ -115,6 +115,18 @@ class TlsFactory {
 		virtual ssize_t read(char* data, size_t length, enum TlsStatus& status) = 0;
 		virtual ssize_t peek(char* data, size_t length, enum TlsStatus& status) = 0;
 
+		/**
+		 * Decrypted application data already held by the TLS layer, waiting to
+		 * be read.
+		 *
+		 * A read of a single TLS record pulls the whole record off the
+		 * descriptor and decrypts it, so more application data can be sitting
+		 * here than the caller asked for while the descriptor itself has
+		 * nothing left to report. A readiness poll cannot see this, which is
+		 * why SocketMonitor asks.
+		 */
+		virtual size_t pending() const = 0;
+
 	protected:
 		socket_t sd;
 		enum TlsOperation mode;
