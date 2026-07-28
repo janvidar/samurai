@@ -9,6 +9,7 @@
 #include <samurai/samurai.h>
 #include <samurai/io/buffer.h>
 #include <vector>
+#include <memory>
 #include <samurai/crypto/digest/tigertree.h>
 
 namespace Samurai {
@@ -104,6 +105,9 @@ Determining the tree depth when file_size and all leafs are known.
 
 */
 
+/* The leaf block size TTH is defined over. */
+inline constexpr size_t DEFAULT_MERKLE_BLOCK_SIZE = 1024;
+
 class MerkleNode final : public Samurai::Crypto::Digest::HashValue
 {
 	public:
@@ -164,7 +168,12 @@ class MerkleTree : public Samurai::Crypto::Digest::Hash
 		/**
 		 * Create a Merkle tree using the given hasher for hashing.
 		 */
-		MerkleTree(Samurai::Crypto::Digest::Hash* hasher, size_t block_size = 1024, size_t max_levels = 7);
+		/**
+		 * @param block_size leaf block size; 0 selects
+		 *        DEFAULT_MERKLE_BLOCK_SIZE. A hash cannot accumulate into a
+		 *        zero-sized block, so it must never reach the base class.
+		 */
+		MerkleTree(Samurai::Crypto::Digest::Hash* hasher, size_t block_size = DEFAULT_MERKLE_BLOCK_SIZE, size_t max_levels = 7);
 
 		~MerkleTree() override;
 
@@ -251,8 +260,8 @@ class MerkleTree : public Samurai::Crypto::Digest::Hash
 
 	private:
 		Samurai::Crypto::Digest::Hash* m_hasher;
-		MerkleWorkStack* m_nodes;
-		MerkleWorkStack* m_work;
+		std::unique_ptr<MerkleWorkStack> m_nodes;
+		std::unique_ptr<MerkleWorkStack> m_work;
 		uint64_t m_count;
 		size_t   m_max_levels;
 		size_t   m_max_leaves;

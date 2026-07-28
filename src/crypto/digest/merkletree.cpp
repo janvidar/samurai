@@ -7,6 +7,7 @@
 #include <samurai/crypto/digest/tiger.h>
 #include <samurai/crypto/digest/merkletree.h>
 #include <algorithm>
+#include <memory>
 #include <samurai/util/base32.h>
 
 static uint8_t leaf_hash_prefix[1] = { 0x00 };
@@ -132,7 +133,7 @@ bool Samurai::Crypto::Digest::MerkleWorkStack::isFull() const
 
 
 
-Samurai::Crypto::Digest::MerkleTree::MerkleTree(Samurai::Crypto::Digest::Hash* hasher, size_t block_size, size_t max_levels) : Samurai::Crypto::Digest::Hash(hasher->size(), block_size, false, false, 0)
+Samurai::Crypto::Digest::MerkleTree::MerkleTree(Samurai::Crypto::Digest::Hash* hasher, size_t block_size, size_t max_levels) : Samurai::Crypto::Digest::Hash(hasher->size(), block_size ? block_size : DEFAULT_MERKLE_BLOCK_SIZE, false, false, 0)
 {
 	m_hasher = hasher;
 	m_hasher->reset();
@@ -141,8 +142,8 @@ Samurai::Crypto::Digest::MerkleTree::MerkleTree(Samurai::Crypto::Digest::Hash* h
 	m_max_leaves = calcMaxNumLeaves(m_max_levels);
 	m_blocks_per_leaf = 1;
 	m_count = 0;
-	m_nodes = new MerkleWorkStack(m_max_leaves);
-	m_work  = new MerkleWorkStack(m_max_leaves);
+	m_nodes = std::make_unique<MerkleWorkStack>(m_max_leaves);
+	m_work  = std::make_unique<MerkleWorkStack>(m_max_leaves);
 }
 
 size_t Samurai::Crypto::Digest::MerkleTree::countLeaves()
@@ -261,10 +262,8 @@ void Samurai::Crypto::Digest::MerkleTree::deleteNodes(Samurai::Crypto::Digest::M
 
 Samurai::Crypto::Digest::MerkleTree::~MerkleTree()
 {
-	deleteNodes(m_nodes);
-	deleteNodes(m_work);
-	delete m_nodes;
-	delete m_work;
+	deleteNodes(m_nodes.get());
+	deleteNodes(m_work.get());
 }
 
 
@@ -275,12 +274,10 @@ void Samurai::Crypto::Digest::MerkleTree::reset()
 	m_count = 0;
 	/* The stacks do not own their nodes, so release those before discarding
 	   the stacks themselves. */
-	deleteNodes(m_nodes);
-	deleteNodes(m_work);
-	delete m_nodes;
-	delete m_work;
-	m_nodes = new MerkleWorkStack(m_max_leaves);
-	m_work  = new MerkleWorkStack(m_max_leaves);
+	deleteNodes(m_nodes.get());
+	deleteNodes(m_work.get());
+	m_nodes = std::make_unique<MerkleWorkStack>(m_max_leaves);
+	m_work  = std::make_unique<MerkleWorkStack>(m_max_leaves);
 	m_finalized = false;
 }
 
@@ -298,7 +295,7 @@ void Samurai::Crypto::Digest::MerkleTree::finalize()
 	// Empty the work stack.
 	if (m_work->getSize())
 	{
-		compact_all(m_work);
+		compact_all(m_work.get());
 		m_nodes->add(m_work->getFirst());
 		m_work->clear();
 	}
@@ -310,7 +307,7 @@ void Samurai::Crypto::Digest::MerkleTree::finalize()
 		m_work->add(new MerkleNode(m_nodes->get(n)));
 
 	// Reduce to one node (root node).
-	compact_all(m_nodes);
+	compact_all(m_nodes.get());
 	
 	MerkleNode* root = m_nodes->getFirst();
 	set_finalized_value(root->getData());
@@ -390,7 +387,7 @@ void Samurai::Crypto::Digest::MerkleTree::hash(uint8_t* data, size_t length)
 	if (m_nodes->isFull())
 	{
 		// single compact
-		compact(m_nodes);
+		compact(m_nodes.get());
 		// QDBG("... leaf nodes=%zu (compacted)", m_nodes->getPosition());
 		m_blocks_per_leaf <<= 1;
 	}
@@ -404,7 +401,7 @@ void Samurai::Crypto::Digest::MerkleTree::hash(uint8_t* data, size_t length)
 	m_work->add(node);
 	if (m_work->getSize() == m_blocks_per_leaf)
 	{
-		compact_all(m_work);
+		compact_all(m_work.get());
 		m_nodes->add(m_work->getFirst());
 		// QDBG("... leaf nodes=%zu", m_nodes->getPosition());
 		
