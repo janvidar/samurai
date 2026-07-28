@@ -63,9 +63,9 @@ bool Samurai::IO::Net::MulticastSocket::dropMembership(Samurai::IO::Net::InetSoc
 	struct ip_mreq mreq;
 	if (!makeGroupRequest(group, mreq)) return false;
 
-	if (SAMURAI_SETSOCKOPT(sd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq)) != 0)
+	if (Samurai::IO::Net::set_sockopt(sd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq)) != 0)
 	{
-		QERR("Unable to leave multicast address: (%d) %s", NETERROR, strerror(NETERROR));
+		QERR("Unable to leave multicast address: (%d) %s", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
 		return false;
 	}
 
@@ -87,9 +87,9 @@ bool Samurai::IO::Net::MulticastSocket::join(const Samurai::IO::Net::InetAddress
 		return false;
 	}
 
-	if (SAMURAI_SETSOCKOPT(sd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) != 0)
+	if (Samurai::IO::Net::set_sockopt(sd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) != 0)
 	{
-		QERR("Unable to join multicast address: (%d) %s", NETERROR, strerror(NETERROR));
+		QERR("Unable to join multicast address: (%d) %s", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
 		return false;
 	}
 
@@ -131,9 +131,9 @@ void Samurai::IO::Net::MulticastSocket::setInterface(Samurai::IO::Net::NetworkIn
 bool Samurai::IO::Net::MulticastSocket::setLoopbackMode(bool toggle)
 {
 	socklen_t loop = toggle ? 1 : 0;
-	if (SAMURAI_SETSOCKOPT(sd, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop)) != 0)
+	if (Samurai::IO::Net::set_sockopt(sd, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop)) != 0)
 	{
-		QERR("Unable to set loopback mode (%d) %s", NETERROR, strerror(NETERROR));
+		QERR("Unable to set loopback mode (%d) %s", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
 		return false;
 	}
 	return true;
@@ -143,9 +143,9 @@ bool Samurai::IO::Net::MulticastSocket::getLoopbackMode()
 {
 	socklen_t loop;
 	socklen_t size;
-	if (SAMURAI_GETSOCKOPT(sd, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, &size) != 0)
+	if (Samurai::IO::Net::get_sockopt(sd, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, &size) != 0)
 	{
-		QERR("Unable to get loopback mode (%d) %s", NETERROR, strerror(NETERROR));
+		QERR("Unable to get loopback mode (%d) %s", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
 		return false;
 	}
 	return loop != 0;

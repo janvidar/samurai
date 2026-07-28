@@ -102,7 +102,7 @@ bool Samurai::IO::Net::DNS::Message::decodeS32Bits(size_t& offset, int32_t& data
 bool Samurai::IO::Net::DNS::Message::decodeName(size_t& offset, Name& name, size_t recursion, size_t maxlen)
 {
 	size_t offset_start = offset;
-	QDBG("Decoding name section at offset %d, recursion=%d, maxlen=%d", offset, recursion, maxlen);
+	QDBG("Decoding name section at offset %zu, recursion=%zu, maxlen=%zu", offset, recursion, maxlen);
 
 	if (recursion > 64) {
 		QDBG("decodeName: too many recursions");
@@ -111,7 +111,7 @@ bool Samurai::IO::Net::DNS::Message::decodeName(size_t& offset, Name& name, size
 	
 	if (recursion)
 	{
-		QDBG("Recursion: %d, offset=%d", recursion, offset);
+		QDBG("Recursion: %zu, offset=%zu", recursion, offset);
 	}
 	
 	

@@ -222,14 +222,14 @@ void Samurai::IO::Net::KQueueSocketMonitor::internal_wait(int time_ms)
 	timeout.tv_nsec = (time_ms % 1000) * 1000000;
 
 	int ret = kevent(kfd, change.data(), numChanges, events.data(), (int) events.size(), &timeout);
-	QDBG("kqueue - run changes=%d, max=%d, ret=%d", numChanges, max, ret);
+	QDBG("kqueue - run changes=%zu, max=%zu, ret=%d", numChanges, max, ret);
 	numChanges = 0;
 
 	if (ret == -1)
 	{
-		if (NETERROR != EINTR)
+		if (Samurai::IO::Net::net_error() != EINTR)
 		{
-			QERR("kevent error: %i, %s", NETERROR, strerror(NETERROR));
+			QERR("kevent error: %i, %s", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
 		}
 		return;
 	}

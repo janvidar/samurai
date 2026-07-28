@@ -49,14 +49,28 @@
 #define QDBG_FINI do { samurai_debug_fini(); } while(0)
 #endif
 
+/*
+ * The format attribute is what makes the compiler check these calls. Without it
+ * the macros below accept any argument for any conversion: passing a
+ * std::string, or a std::string_view, to a %s compiles silently and crashes at
+ * runtime. There are around two hundred call sites and no test covers the
+ * logging, so the check has to come from the compiler.
+ */
+#if defined(__GNUC__) || defined(__clang__)
+#define SAMURAI_PRINTF_LIKE(fmt_index, first_arg) \
+	__attribute__((format(printf, fmt_index, first_arg)))
+#else
+#define SAMURAI_PRINTF_LIKE(fmt_index, first_arg)
+#endif
+
 void samurai_debug_init();
 void samurai_debug_fini();
 
-void samurai_debug(const char* func, const char* file, int line, const char *format, ...);
-void samurai_error(const char* func, const char* file, int line, const char *format, ...);
-void samurai_net(const char* func, const char* file, int line, const char *format, ...);
-void samurai_search(const char* func, const char* file, int line, const char *format, ...);
-void samurai_hub(const char* func, const char* file, int line, const char *format, ...);
+void samurai_debug(const char* func, const char* file, int line, const char *format, ...) SAMURAI_PRINTF_LIKE(4, 5);
+void samurai_error(const char* func, const char* file, int line, const char *format, ...) SAMURAI_PRINTF_LIKE(4, 5);
+void samurai_net(const char* func, const char* file, int line, const char *format, ...) SAMURAI_PRINTF_LIKE(4, 5);
+void samurai_search(const char* func, const char* file, int line, const char *format, ...) SAMURAI_PRINTF_LIKE(4, 5);
+void samurai_hub(const char* func, const char* file, int line, const char *format, ...) SAMURAI_PRINTF_LIKE(4, 5);
 
 
 #else /* ! DEBUG */

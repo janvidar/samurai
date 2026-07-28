@@ -135,9 +135,9 @@ void Samurai::IO::Net::PollSocketMonitor::internal_wait(int time_ms)
 	
 	if (ret == -1)
 	{
-		if (NETERROR != EINTR)
+		if (Samurai::IO::Net::net_error() != EINTR)
 		{
-			QERR("Poll error: %i, %s", NETERROR, strerror(NETERROR));
+			QERR("Poll error: %i, %s", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
 		}
 		return;
 	}
