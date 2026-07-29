@@ -1,6 +1,8 @@
 #include <string.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string>
+#include <vector>
 #include <samurai/io/buffer.h>
 #include <utility>
 
@@ -355,4 +357,99 @@ EXO_TEST(buffer_copyrange_of_an_empty_buffer,
 {
 	Samurai::IO::Buffer buf;
 	return buf.copyRange(0, 0).empty();
+});
+
+/* ------------------------------------------------------------------------- */
+/* Refusing to grow                                                          */
+/*                                                                           */
+/* resize() returns false and leaves the buffer alone when it cannot grow.    */
+/* Two ways to get there: an arithmetic overflow computing what is needed,    */
+/* and a request larger than the allocator can represent at all - which       */
+/* vector::resize() reports by throwing length_error, not bad_alloc, so it    */
+/* escaped through append() rather than being absorbed.                       */
+/*                                                                           */
+/* Every size used here is refused before anything is allocated. A request    */
+/* merely large would be attempted for real and take the machine with it.     */
+/* ------------------------------------------------------------------------- */
+
+/* len + needed wraps, so the buffer cannot tell how much was asked for. */
+EXO_TEST(buffer_growth_overflowing_size_t_is_refused,
+{
+	Samurai::IO::Buffer buf;
+	buf.append("hello", 5);
+
+	buf.reserve(SIZE_MAX);
+
+	return buf.size() == 5 && buf.copyRange(0, 5) == "hello";
+});
+
+/* Representable, but beyond what the allocator will ever hand out. */
+EXO_TEST(buffer_growth_beyond_max_size_is_refused,
+{
+	Samurai::IO::Buffer buf;
+	buf.append("hello", 5);
+
+	buf.reserve(std::vector<char>().max_size());
+
+	return buf.size() == 5 && buf.copyRange(0, 5) == "hello";
+});
+
+EXO_TEST(buffer_growth_just_under_max_size_is_refused,
+{
+	Samurai::IO::Buffer buf;
+	buf.append("hello", 5);
+
+	/* Doubling from the initial capacity overshoots max_size() long before it
+	   reaches this, so it is refused on the same check. */
+	buf.reserve(std::vector<char>().max_size() - 64);
+
+	return buf.size() == 5 && buf.copyRange(0, 5) == "hello";
+});
+
+/* append() drops the data and says so rather than letting anything escape. */
+EXO_TEST(buffer_append_that_cannot_fit_drops_the_data,
+{
+	Samurai::IO::Buffer buf;
+	buf.append("hello", 5);
+
+	buf.append("x", SIZE_MAX / 2);
+
+	return buf.size() == 5 && buf.copyRange(0, 5) == "hello";
+});
+
+EXO_TEST(buffer_append_overflowing_size_t_drops_the_data,
+{
+	Samurai::IO::Buffer buf;
+	buf.append("hello", 5);
+
+	buf.append("x", SIZE_MAX);
+
+	return buf.size() == 5 && buf.copyRange(0, 5) == "hello";
+});
+
+/* A refused growth must leave the buffer working, not wedged. */
+EXO_TEST(buffer_still_usable_after_a_refused_growth,
+{
+	Samurai::IO::Buffer buf;
+	buf.append("hello", 5);
+
+	buf.reserve(std::vector<char>().max_size());
+	buf.append(" world", 6);
+
+	if (buf.size() != 11 || buf.copyRange(0, 11) != "hello world") return false;
+
+	buf.remove(6);
+	return buf.copyRange(0, buf.size()) == "world";
+});
+
+/* The consumed prefix is still reclaimed even when the growth is refused. */
+EXO_TEST(buffer_a_refused_growth_does_not_lose_the_live_bytes,
+{
+	Samurai::IO::Buffer buf;
+	buf.append("0123456789", 10);
+	buf.remove(7);
+
+	buf.reserve(SIZE_MAX);
+
+	return buf.size() == 3 && buf.copyRange(0, 3) == "789";
 });
