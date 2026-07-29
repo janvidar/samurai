@@ -540,7 +540,8 @@ ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
 
 	ssize_t ret = ::recv(sd, data, length, MSG_PEEK);
 	if (ret == -1) {
-		if (Samurai::IO::Net::net_error() == EAGAIN || Samurai::IO::Net::net_error() == EWOULDBLOCK)
+		if (Samurai::IO::Net::net_error() == EAGAIN || Samurai::IO::Net::net_error() == EWOULDBLOCK
+			|| Samurai::IO::Net::net_error() == EINTR)
 		{
 			// try again later
 			return 0;
