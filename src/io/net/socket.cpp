@@ -293,6 +293,7 @@ void Samurai::IO::Net::Socket::internal_connected() {
 			default:
 				sockErr = Samurai::IO::Net::SocketError::ConnectionRefused;
 		}
+		state = SocketState::Disconnected;
 		close();
 		if (eventHandler) eventHandler->EventError(this, sockErr, error);
 		return;
@@ -306,6 +307,7 @@ void Samurai::IO::Net::Socket::internal_connected() {
 
 
 void Samurai::IO::Net::Socket::internal_timeout() {
+	state = SocketState::Disconnected;
 	close();
 	if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::ConnectionTimeout, "Connection timed out.");
 }
@@ -422,7 +424,7 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 	}
 	else
 	{
-		ret = ::send(sd, data, length, SAMURAI_SENDFLAGS);
+		ret = ::send(sd, data, length, Samurai::IO::Net::send_flags);
 		if (ret == -1) {
 			if (Samurai::IO::Net::net_error() == EAGAIN || Samurai::IO::Net::net_error() == EWOULDBLOCK || Samurai::IO::Net::net_error() == EINTR) {
 				return 0;
@@ -802,7 +804,7 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length, std::er
 	if (state == SocketState::SSLConnected && tls)
 		return write(data, length);
 
-	ssize_t ret = ::send(sd, data, length, SAMURAI_SENDFLAGS);
+	ssize_t ret = ::send(sd, data, length, Samurai::IO::Net::send_flags);
 	if (ret >= 0)
 	{
 		if (bandwidthManager) bandwidthManager->dataSendTCP((size_t) ret);
@@ -897,7 +899,7 @@ ssize_t Samurai::IO::Net::Socket::write(std::span<const std::string_view> buffer
 	msg.msg_iov = vec;
 	msg.msg_iovlen = count;
 
-	ssize_t ret = ::sendmsg(sd, &msg, SAMURAI_SENDFLAGS);
+	ssize_t ret = ::sendmsg(sd, &msg, Samurai::IO::Net::send_flags);
 	if (ret >= 0)
 	{
 		if (bandwidthManager) bandwidthManager->dataSendTCP((size_t) ret);

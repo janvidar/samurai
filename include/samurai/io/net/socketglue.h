@@ -33,16 +33,6 @@ inline constexpr int CONNECT_TIMEOUT = 30;
 #include <samurai/io/net/socketglue-bsd.h>
 #endif
 
-#ifdef SAMURAI_OS_LINUX
-# define SAMURAI_SENDFLAGS MSG_NOSIGNAL
-#else
-# if defined(SAMURAI_BSD)
-#  define SAMURAI_SENDFLAGS SO_NOSIGPIPE
-# else
-#  define SAMURAI_SENDFLAGS 0
-# endif
-#endif // SAMURAI_OS_LINUX
-
 #ifndef INET_ADDRSTRLEN
 #define INET_ADDRSTRLEN 16
 #endif
@@ -98,6 +88,32 @@ inline int set_sockopt(socket_t sd, int level, int option, const void* value, so
 	return ::setsockopt(sd, level, option, (const char*) value, len);
 #else
 	return ::setsockopt(sd, level, option, value, len);
+#endif
+}
+
+/**
+ * Flags for send(), sendto() and sendmsg().
+ *
+ * Only MSG_* values belong here. A platform without MSG_NOSIGNAL suppresses
+ * SIGPIPE per socket through set_nosigpipe() instead.
+ */
+inline constexpr int send_flags =
+#ifdef MSG_NOSIGNAL
+	MSG_NOSIGNAL;
+#else
+	0;
+#endif
+
+/**
+ * Suppress SIGPIPE for one socket, where the platform offers no send flag for
+ * it. Without this a write to a closed peer raises the signal rather than
+ * returning EPIPE. Advisory: a refusal costs nothing.
+ */
+inline void set_nosigpipe([[maybe_unused]] socket_t sd)
+{
+#ifdef SO_NOSIGPIPE
+	int on = 1;
+	set_sockopt(sd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
 #endif
 }
 

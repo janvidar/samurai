@@ -523,3 +523,109 @@ EXO_TEST(sockets_monitor_shutdown, {
 	socket_tests_destroy();
 	return !g_socket_test_vars;
 });
+
+
+/* ------------------------------------------------------------------------- */
+/* A refused connect leaves the socket reusable                               */
+/*                                                                            */
+/* A connection that was refused or timed out is one that can be attempted     */
+/* again, so the socket ends up Disconnected: a state connect() accepts, and   */
+/* one the Error trigger recognises as already handled, so a single failure    */
+/* is reported once.                                                          */
+/* ------------------------------------------------------------------------- */
+
+namespace {
+
+/* Nothing listens on port 1 of the loopback interface without privileges, so a
+   connect there is refused immediately rather than left to time out. */
+const uint16_t REFUSED_PORT = 1;
+
+class ConnectFailureListener : public Samurai::IO::Net::SocketEventHandler
+{
+	public:
+		size_t errors = 0;
+		size_t connects = 0;
+		size_t disconnects = 0;
+
+		void EventConnected(const Samurai::IO::Net::Socket*) { connects++; }
+		void EventDisconnected(const Samurai::IO::Net::Socket*) { disconnects++; }
+		void EventError(const Samurai::IO::Net::Socket*, Samurai::IO::Net::SocketError, const char*) { errors++; }
+};
+
+/* Drive the monitor until the handler has seen an error, or the budget runs
+   out. The refusal arrives on the first or second pass in practice. */
+static bool pump_until_error(ConnectFailureListener& listener)
+{
+	Samurai::IO::Net::SocketMonitor* monitor = Samurai::IO::Net::SocketMonitor::getInstance();
+	for (int n = 0; n < 40 && listener.errors == 0; n++)
+		monitor->wait(25);
+	return listener.errors > 0;
+}
+
+}
+
+EXO_TEST(sockets_refused_connect_reports_one_error, {
+	ConnectFailureListener listener;
+	std::shared_ptr<Samurai::IO::Net::Socket> sock =
+		Samurai::IO::Net::Socket::create(&listener, std::string("127.0.0.1"), REFUSED_PORT);
+	if (!sock) return false;
+
+	sock->connect();
+	if (!pump_until_error(listener)) return false;
+
+	/* The Write and Error triggers arrive together for a refused connect, so
+	   pump once more: one refusal is still one error. */
+	Samurai::IO::Net::SocketMonitor::getInstance()->wait(25);
+	return listener.errors == 1 && listener.connects == 0;
+});
+
+EXO_TEST(sockets_refused_connect_can_be_retried, {
+	ConnectFailureListener listener;
+	std::shared_ptr<Samurai::IO::Net::Socket> sock =
+		Samurai::IO::Net::Socket::create(&listener, std::string("127.0.0.1"), REFUSED_PORT);
+	if (!sock) return false;
+
+	sock->connect();
+	if (!pump_until_error(listener)) return false;
+
+	/* The failed attempt released the descriptor, so a retry that is really
+	   made allocates a new one. */
+	sock->connect();
+	return sock->getFD() != INVALID_SOCKET;
+});
+
+/* NOTE: that disconnect() stays quiet for a connection which never came up has
+   no assertion here. A refused connect reaches Disconnected, which disconnect()
+   ignores for the same reason Invalid is ignored, so the two are
+   indistinguishable from outside. Only the connect timeout separates them, and
+   that needs an address which blackholes rather than refuses. */
+
+
+/* ------------------------------------------------------------------------- */
+/* Writing to a peer that has gone away                                       */
+/*                                                                            */
+/* A platform with no MSG_NOSIGNAL relies on SO_NOSIGPIPE being set on the     */
+/* descriptor, without which this write raises the signal instead of failing.  */
+/* Reaching the assertion at all is the test.                                  */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(sockets_write_to_closed_peer_returns_an_error_not_a_signal, {
+	int sv[2];
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) != 0) return false;
+
+	/* Close the reader, so the first or second write to sv[0] gets EPIPE. */
+	Samurai::IO::Net::socket_close(sv[1]);
+
+	ssize_t total = 0;
+	for (int n = 0; n < 8; n++)
+	{
+		const ssize_t ret = ::send(sv[0], "payload", 7, Samurai::IO::Net::send_flags);
+		if (ret < 0) { total = ret; break; }
+		total += ret;
+	}
+
+	Samurai::IO::Net::socket_close(sv[0]);
+
+	/* Still running, and the failure surfaced as a return value. */
+	return total < 0;
+});

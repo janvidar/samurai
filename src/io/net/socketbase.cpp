@@ -428,6 +428,10 @@ bool Samurai::IO::Net::SocketBase::createDescriptor(int af)
 		QERR("Unable to create socket: %s (%d)", strerror(Samurai::IO::Net::net_error()), Samurai::IO::Net::net_error());
 		return false;
 	}
+
+	/* Every socket the library creates passes through here, so this covers both
+	   socket types and every caller. */
+	Samurai::IO::Net::set_nosigpipe(sd);
 	return true;
 }
 
