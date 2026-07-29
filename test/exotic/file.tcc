@@ -549,3 +549,88 @@ EXO_TEST(file_size_of_missing_file_is_not_positive,
 	Samurai::IO::File f(scratch.directory() + "/absent.bin");
 	return f.size() <= 0;
 });
+
+/* ------------------------------------------------------------------------- */
+/* The stat cache follows the file                                            */
+/*                                                                            */
+/* The accessors answer from a cached stat, which every operation through the  */
+/* descriptor drops, so a size() taken at any point describes the file as it   */
+/* is then and not as it was when first asked.                                 */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(file_size_reflects_a_write_after_an_earlier_size,
+{
+	Scratch scratch("stat-cache");
+	Samurai::IO::File f(scratch.path("grows.bin"));
+
+	if (!f.open(Samurai::IO::File::Mode::Write | Samurai::IO::File::Mode::Truncate))
+		return false;
+
+	/* Caches the stat of the empty file. */
+	if (f.size() != 0) return false;
+
+	if (f.write("hello", 5) != 5) return false;
+
+	return f.size() == 5;
+});
+
+EXO_TEST(file_size_keeps_up_across_several_writes,
+{
+	Scratch scratch("stat-cache-2");
+	Samurai::IO::File f(scratch.path("grows-more.bin"));
+
+	if (!f.open(Samurai::IO::File::Mode::Write | Samurai::IO::File::Mode::Truncate))
+		return false;
+
+	for (int n = 0; n < 4; n++)
+	{
+		if (f.write("abcd", 4) != 4) return false;
+		if (f.size() != (off_t) ((n + 1) * 4)) return false;
+	}
+	return true;
+});
+
+/* The accessors describe the file the descriptor holds, so renaming the path
+   out from under an open File does not change what size() reports. */
+EXO_TEST(file_size_follows_the_descriptor_not_the_path,
+{
+	Scratch scratch("stat-fd");
+	const std::string original = scratch.path("held.bin");
+	const std::string decoy    = scratch.path("decoy.bin");
+
+	Samurai::IO::File f(original);
+	if (!f.open(Samurai::IO::File::Mode::Write | Samurai::IO::File::Mode::Truncate))
+		return false;
+	if (f.write("0123456789", 10) != 10) return false;
+
+	/* Something else puts a shorter file at the same path. */
+	if (::rename(original.c_str(), decoy.c_str()) != 0) return false;
+	Samurai::IO::File other(original);
+	if (!other.open(Samurai::IO::File::Mode::Write | Samurai::IO::File::Mode::Truncate))
+		return false;
+	other.write("xy", 2);
+	other.close();
+
+	const off_t held = f.size();
+	f.close();
+	return held == 10;
+});
+
+/* exists() is a question about the name, so an open file whose path is gone
+   answers false even though the descriptor is still good. */
+EXO_TEST(file_exists_asks_about_the_path,
+{
+	Scratch scratch("exists-path");
+	const std::string path = scratch.path("vanishes.bin");
+
+	Samurai::IO::File f(path);
+	if (!f.open(Samurai::IO::File::Mode::Write | Samurai::IO::File::Mode::Truncate))
+		return false;
+	if (!f.exists()) return false;
+
+	if (::unlink(path.c_str()) != 0) return false;
+
+	const bool gone = !f.exists();
+	f.close();
+	return gone;
+});
