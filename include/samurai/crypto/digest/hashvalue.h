@@ -25,7 +25,6 @@ class HashValue
 		enum class Format { Hex, Base32 };
 
 	public:
-		explicit HashValue(HashValue* copy);
 		explicit HashValue(size_t size);
 		HashValue(size_t size, const uint8_t* data);
 

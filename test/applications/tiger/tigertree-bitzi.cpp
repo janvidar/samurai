@@ -49,8 +49,8 @@ static void tiger(const uint8_t* str, size_t length, uint8_t* res)
 {
 	Samurai::Crypto::Digest::Tiger tiger;
 	tiger.update(str, length);
-	Samurai::Crypto::Digest::HashValue* value = tiger.digest();
-	memcpy(res, value->getData(), value->size());
+	const Samurai::Crypto::Digest::HashValue& value = tiger.digest();
+	memcpy(res, value.getData(), value.size());
 }
 
 

@@ -24,11 +24,6 @@ Samurai::Crypto::Digest::HashValue::HashValue(size_t size)
 {
 }
 
-Samurai::Crypto::Digest::HashValue::HashValue(Samurai::Crypto::Digest::HashValue* copy)
-	: m_data(copy->m_data)
-{
-}
-
 bool Samurai::Crypto::Digest::HashValue::setData(std::span<const uint8_t> data)
 {
 	/* The size is fixed at construction, so the existing storage is reused. */

@@ -20,7 +20,7 @@
 void hash_tiger(std::span<const uint8_t> buffer, std::span<uint8_t, Samurai::Crypto::Digest::TIGER_HASH_SIZE> hash) {
 	Samurai::Crypto::Digest::Tiger tiger;
 	tiger.update(buffer);
-	std::ranges::copy(tiger.digest()->bytes(), hash.begin());
+	std::ranges::copy(tiger.digest().bytes(), hash.begin());
 }
 
 /* The Bitzi reference, for comparison against what the library produces. */
@@ -36,7 +36,7 @@ void hash_tth_new(std::span<const uint8_t> buffer, std::span<uint8_t, Samurai::C
 	Samurai::Crypto::Digest::Tiger tiger;
 	Samurai::Crypto::Digest::MerkleTree merkle(&tiger);
 	merkle.update(buffer);
-	std::ranges::copy(merkle.digest()->bytes(), hash.begin());
+	std::ranges::copy(merkle.digest().bytes(), hash.begin());
 	
 	if (tthl)
 	{

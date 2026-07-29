@@ -23,7 +23,7 @@ class Tiger final : public Hash {
 		~Tiger() override;
 
 		void reset() override;
-		HashValue* digest() override;
+		const HashValue& digest() override;
 
 	private:
 		void pass(uint64_t& a, uint64_t& b, uint64_t& c, uint8_t mul);

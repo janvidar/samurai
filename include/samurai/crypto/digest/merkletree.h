@@ -110,7 +110,7 @@ inline constexpr size_t DEFAULT_MERKLE_BLOCK_SIZE = 1024;
 class MerkleNode final : public Samurai::Crypto::Digest::HashValue
 {
 	public:
-		MerkleNode(Samurai::Crypto::Digest::HashValue* value);
+		MerkleNode(const Samurai::Crypto::Digest::HashValue& value);
 		~MerkleNode();
 
 	private:
@@ -199,7 +199,7 @@ class MerkleTree : public Samurai::Crypto::Digest::Hash
 
 		void finalize() override;
 
-		Samurai::Crypto::Digest::HashValue* digest() override;
+		const Samurai::Crypto::Digest::HashValue& digest() override;
 
 		size_t countLeaves();
 		size_t maxLeaves();
