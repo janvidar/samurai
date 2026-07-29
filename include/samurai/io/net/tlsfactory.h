@@ -7,7 +7,9 @@
 #define HAVE_SAMURAI_SOCKET_SSL_API_H
 
 #include <samurai/io/net/socketglue.h>
+#include <array>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace Samurai {

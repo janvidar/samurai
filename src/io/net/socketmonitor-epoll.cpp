@@ -32,8 +32,7 @@ Samurai::IO::Net::EPollSocketMonitor::EPollSocketMonitor() : Samurai::IO::Net::S
 {
 	max = Samurai::OS::getMaxOpenSockets();
 	num = 0;
-	act.resize(EPOLL_BATCH);
-	memset(act, 0, sizeof(struct epoll_event) * EPOLL_BATCH);
+	act.assign(EPOLL_BATCH, epoll_event{});
 	epfd = epoll_create(max);
 }
 
@@ -56,11 +55,18 @@ bool Samurai::IO::Net::EPollSocketMonitor::isValid()
 }
 
 
-static void set_poll_events(struct epoll_event* handle, int trigger)
+/*
+ * NOTE: the two sides are not symmetric. 'trigger' is a Triggers bitmask, so it
+ * is tested with any(); 'handle->events' is the kernel's own uint32_t of EPOLL*
+ * bits, which is tested with a plain '&'.
+ */
+static void set_poll_events(struct epoll_event* handle, Samurai::IO::Net::SocketMonitor::Triggers trigger)
 {
 	memset(handle, 0, sizeof(struct epoll_event));
 
-	if (trigger & Samurai::IO::Net::SocketMonitor::Triggers::Read || trigger & Samurai::IO::Net::SocketMonitor::Triggers::Accept || trigger & Samurai::IO::Net::SocketMonitor::Triggers::Close)
+	if (any(trigger & (Samurai::IO::Net::SocketMonitor::Triggers::Read
+	                 | Samurai::IO::Net::SocketMonitor::Triggers::Accept
+	                 | Samurai::IO::Net::SocketMonitor::Triggers::Close)))
 		handle->events |= EPOLLIN;
 
 	if (any(trigger & Samurai::IO::Net::SocketMonitor::Triggers::Write))
@@ -75,28 +81,28 @@ static void set_poll_events(struct epoll_event* handle, int trigger)
 #endif
 }
 
-static int get_poll_events(struct epoll_event* handle)
+static Samurai::IO::Net::SocketMonitor::Triggers get_poll_events(struct epoll_event* handle)
 {
-	uint32_t trig = handle->events;
-	int evt  = 0;
+	const uint32_t trig = handle->events;
+	Samurai::IO::Net::SocketMonitor::Triggers evt = Samurai::IO::Net::SocketMonitor::Triggers::None;
 
-	if (any(trig & EPOLLIN))
+	if (trig & EPOLLIN)
 		evt |= Samurai::IO::Net::SocketMonitor::Triggers::Read;
 
-	if (any(trig & EPOLLPRI))
+	if (trig & EPOLLPRI)
 		evt |= Samurai::IO::Net::SocketMonitor::Triggers::Urgent;
 
-	if (any(trig & EPOLLOUT))
+	if (trig & EPOLLOUT)
 		evt |= Samurai::IO::Net::SocketMonitor::Triggers::Write;
 
-	if (any(trig & EPOLLHUP))
+	if (trig & EPOLLHUP)
 		evt |= Samurai::IO::Net::SocketMonitor::Triggers::Close;
 
-	if (any(trig & EPOLLERR))
+	if (trig & EPOLLERR)
 		evt |= Samurai::IO::Net::SocketMonitor::Triggers::Error;
 
 #ifdef EPOLLRDHUP
-	if (any(trig & EPOLLRDHUP))
+	if (trig & EPOLLRDHUP)
 		evt |= Samurai::IO::Net::SocketMonitor::Triggers::Close;
 #endif
 	return evt;
@@ -174,7 +180,7 @@ void Samurai::IO::Net::EPollSocketMonitor::internal_wait(int time_ms)
 	
 	for(int n = 0; n < nfds; n++)
 	{
-		int trig = get_poll_events(&act[n]);
+		Samurai::IO::Net::SocketMonitor::Triggers trig = get_poll_events(&act[n]);
 		dispatch(act[n].data.fd, trig);
 	}
 }
