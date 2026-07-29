@@ -574,3 +574,17 @@ EXO_TEST(inet_addr_assign_literal_over_name_clears_the_name,
 	addr = std::string("1.2.3.4");
 	return addr.getHostname() == "1.2.3.4" && addr.isResolved();
 });
+
+/* Self-assignment releases the storage before the source is read, so it needs
+   a guard of its own. */
+EXO_TEST(inet_addr_self_assignment_preserves_the_address,
+{
+	Samurai::IO::Net::InetAddress addr("192.0.2.17");
+	const std::string before = addr.getAddress();
+
+	Samurai::IO::Net::InetAddress& alias = addr;
+	addr = alias;
+
+	return addr.getAddress() == before && addr.getAddress() == "192.0.2.17"
+		&& addr.isValid();
+});
