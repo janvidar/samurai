@@ -30,6 +30,19 @@ option(SAMURAI_BUILD_TESTS "Build the test and example programs" ON)
 option(SAMURAI_SANITIZE
     "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
+# ThreadSanitizer needs its own build: it cannot be combined with
+# AddressSanitizer, and it instruments every memory access, so a run is slower
+# than an ASan one rather than comparable to it.
+option(SAMURAI_SANITIZE_THREAD
+    "Build with ThreadSanitizer (cannot be combined with SAMURAI_SANITIZE)" OFF)
+
+if(SAMURAI_SANITIZE AND SAMURAI_SANITIZE_THREAD)
+    message(FATAL_ERROR
+        "SAMURAI_SANITIZE and SAMURAI_SANITIZE_THREAD are mutually exclusive; "
+        "AddressSanitizer and ThreadSanitizer cannot instrument the same build. "
+        "Configure two build directories instead.")
+endif()
+
 # LeakSanitizer rides along with AddressSanitizer. Turn it off if the ptrace
 # restrictions on the host make stopping the world too slow to be useful.
 #
@@ -251,6 +264,23 @@ if(SAMURAI_SANITIZE)
     message(STATUS "Sanitizers enabled (address, undefined)")
 endif()
 
+if(SAMURAI_SANITIZE_THREAD)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        message(FATAL_ERROR
+            "SAMURAI_SANITIZE_THREAD needs GCC or Clang, not ${CMAKE_CXX_COMPILER_ID}")
+    endif()
+
+    # -fno-sanitize-recover, as above: a reported race must fail the run rather
+    # than print and continue to a zero exit.
+    set(SAMURAI_SANITIZE_FLAGS
+        -fsanitize=thread
+        -fno-sanitize-recover=thread
+        -fno-omit-frame-pointer
+        -g)
+
+    message(STATUS "Sanitizers enabled (thread)")
+endif()
+
 # Applied to the object library as well as to the finished libraries: the
 # objects need the include paths and definitions in order to compile, and the
 # libraries need them as usage requirements for consumers.
@@ -300,8 +330,9 @@ foreach(target IN ITEMS samurai_objects ${SAMURAI_LIBRARIES})
 
     # PUBLIC, and on the link line as well as the compile line: a consumer that
     # is not built with the same -fsanitize= set fails to link against a
-    # sanitized library with undefined references to __asan_* / __ubsan_*.
-    if(SAMURAI_SANITIZE)
+    # sanitized library with undefined references to __asan_* / __ubsan_* /
+    # __tsan_*.
+    if(SAMURAI_SANITIZE OR SAMURAI_SANITIZE_THREAD)
         target_compile_options(${target} PUBLIC ${SAMURAI_SANITIZE_FLAGS})
         target_link_options(${target} PUBLIC ${SAMURAI_SANITIZE_FLAGS})
     endif()
@@ -367,6 +398,8 @@ message(STATUS "  Build tests     : ${SAMURAI_BUILD_TESTS}")
 if(SAMURAI_SANITIZE)
     message(STATUS "  Sanitizers      : address, undefined")
     message(STATUS "  Leak detection  : ${SAMURAI_SANITIZE_LEAKS}")
+elseif(SAMURAI_SANITIZE_THREAD)
+    message(STATUS "  Sanitizers      : thread")
 else()
     message(STATUS "  Sanitizers      : OFF")
 endif()
