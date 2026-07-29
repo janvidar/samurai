@@ -13,6 +13,14 @@ std::unique_ptr<Samurai::IO::File> Samurai::IO::Net::TlsFactory::pem_cert;
 bool Samurai::IO::Net::TlsFactory::allow_untrusted = false;
 bool Samurai::IO::Net::TlsFactory::require_client_cert = false;
 
+Samurai::IO::Net::TlsFactory::TlsFactory()
+	: sd(INVALID_SOCKET)
+	, mode(TlsOperation::Client)
+	, allow_untrusted_conn(allow_untrusted)
+	, require_client_cert_conn(require_client_cert)
+{
+}
+
 void Samurai::IO::Net::TlsFactory::priv_init()
 {
 	resetKeys();
@@ -23,22 +31,22 @@ void Samurai::IO::Net::TlsFactory::priv_fini()
 	freeKeys();
 }
 
-bool Samurai::IO::Net::TlsFactory::allowUntrustedConnections()
+bool Samurai::IO::Net::TlsFactory::defaultAllowUntrusted()
 {
 	return allow_untrusted;
 }
 
-void Samurai::IO::Net::TlsFactory::setAllowUntrustedConnections(bool toggle)
+void Samurai::IO::Net::TlsFactory::setDefaultAllowUntrusted(bool toggle)
 {
 	allow_untrusted = toggle;
 }
 
-bool Samurai::IO::Net::TlsFactory::requireClientCertificate()
+bool Samurai::IO::Net::TlsFactory::defaultRequireClientCertificate()
 {
 	return require_client_cert;
 }
 
-void Samurai::IO::Net::TlsFactory::setRequireClientCertificate(bool toggle)
+void Samurai::IO::Net::TlsFactory::setDefaultRequireClientCertificate(bool toggle)
 {
 	require_client_cert = toggle;
 }

@@ -23,9 +23,15 @@ supports it.
 Certificates are verified by default. A client checks the server's chain against
 the system trust store and its name against the certificate, and refuses the
 connection if either fails, so the peer name has to be set before the handshake.
-TlsFactory::setAllowUntrustedConnections(true) turns that off and gives an
-unauthenticated channel. A server does not ask its clients for a certificate
-unless TlsFactory::setRequireClientCertificate(true) is called.
+A server does not ask its clients for a certificate unless it is told to.
+
+Both settings belong to the connection, not to the process, so reaching one peer
+that cannot be verified does not stop verifying any of the others. Call
+setAllowUntrusted(true) or setRequireClientCertificate(true) on the TlsFactory
+before initialize(); afterwards they change nothing. A connection starts from the
+process-wide defaults, which TlsFactory::setDefaultAllowUntrusted() and
+TlsFactory::setDefaultRequireClientCertificate() move for connections made after
+the call.
 
 Both are found through find_package(OpenSSL); pass -DOPENSSL_ROOT_DIR=... to
 pick a particular installation. The configure summary names the one that was

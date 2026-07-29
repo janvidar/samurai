@@ -188,8 +188,7 @@ Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initialize(
 	 * that has none - which is nearly all of them, and would make verifying
 	 * connections unusable for a server.
 	 */
-	verify_peer = !TlsFactory::allowUntrustedConnections()
-		&& (client || TlsFactory::requireClientCertificate());
+	verify_peer = !allowUntrusted() && (client || requireClientCertificate());
 
 	if (verify_peer)
 	{

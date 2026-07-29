@@ -34,6 +34,9 @@ class TlsFactory {
 			Error
 		};
 
+		/* Takes its verification settings from the process defaults, so a
+		   connection that says nothing gets whatever the program asked for. */
+		TlsFactory();
 		virtual ~TlsFactory() { }
 
 		/**
@@ -117,26 +120,41 @@ class TlsFactory {
 		static std::optional<Sha256Digest> getOwnCertificateSHA256();
 
 		/**
-		 * Whether a peer whose certificate cannot be verified is accepted.
+		 * Whether this connection accepts a peer whose certificate cannot be
+		 * verified.
 		 *
-		 * False by default: a client checks the server's chain against the
-		 * system trust store and its name against the certificate, and refuses
-		 * the connection if either fails. Turning this on gives an
-		 * unauthenticated channel, which is worth having only where the peer is
-		 * authenticated some other way.
+		 * False unless the process default says otherwise: a client checks the
+		 * server's chain against the system trust store and its name against
+		 * the certificate, and refuses the connection if either fails. Turning
+		 * it on gives an unauthenticated channel, which is worth having only
+		 * where the peer is authenticated some other way.
+		 *
+		 * Per connection, so reaching one peer that cannot be verified does not
+		 * stop verifying any of the others. Read by initialize(); setting it
+		 * afterwards changes nothing.
 		 */
-		static bool allowUntrustedConnections();
-		static void setAllowUntrustedConnections(bool toggle);
+		bool allowUntrusted() const { return allow_untrusted_conn; }
+		void setAllowUntrusted(bool toggle) { allow_untrusted_conn = toggle; }
 
 		/**
-		 * Whether a server asks its clients for a certificate - mutual TLS.
+		 * Whether this connection, as a server, asks its client for a
+		 * certificate - mutual TLS.
 		 *
-		 * False by default. A server that demands one rejects every client that
-		 * has none, which is most of them, so this is not implied by verifying
-		 * connections.
+		 * False unless the process default says otherwise. A server that
+		 * demands one rejects every client that has none, which is most of
+		 * them, so this is not implied by verifying connections.
 		 */
-		static bool requireClientCertificate();
-		static void setRequireClientCertificate(bool toggle);
+		bool requireClientCertificate() const { return require_client_cert_conn; }
+		void setRequireClientCertificate(bool toggle) { require_client_cert_conn = toggle; }
+
+		/**
+		 * The values a connection starts with. Changing a default affects
+		 * connections created after the call, never one already under way.
+		 */
+		static bool defaultAllowUntrusted();
+		static void setDefaultAllowUntrusted(bool toggle);
+		static bool defaultRequireClientCertificate();
+		static void setDefaultRequireClientCertificate(bool toggle);
 		
 		
 
@@ -167,8 +185,12 @@ class TlsFactory {
 		   factories, so they must not transfer ownership. */
 		static std::unique_ptr<Samurai::IO::File> pem_key;
 		static std::unique_ptr<Samurai::IO::File> pem_cert;
+		/* The process-wide defaults, and this connection's copy of them taken
+		   at construction. */
 		static bool allow_untrusted;
 		static bool require_client_cert;
+		bool allow_untrusted_conn;
+		bool require_client_cert_conn;
 		
 		static void priv_init();
 		static void priv_fini();

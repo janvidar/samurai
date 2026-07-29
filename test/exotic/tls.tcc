@@ -209,34 +209,16 @@ static bool tls_handshake(Samurai::IO::Net::OpenSSL& server, Samurai::IO::Net::O
 	return server_done && client_done;
 }
 
-/* Sets the global toggle for as long as it is in scope. Leaving it flipped
-   would decide the outcome of whichever case ran next. */
-struct TlsVerifyGuard
-{
-	bool saved;
-
-	explicit TlsVerifyGuard(bool allow_untrusted)
-		: saved(Tls::allowUntrustedConnections())
-	{
-		Tls::setAllowUntrustedConnections(allow_untrusted);
-	}
-
-	~TlsVerifyGuard() { Tls::setAllowUntrustedConnections(saved); }
-
-	TlsVerifyGuard(const TlsVerifyGuard&) = delete;
-	TlsVerifyGuard& operator=(const TlsVerifyGuard&) = delete;
-};
-
 /*
  * A connected, handshaken pair, or nothing.
  *
- * The fixture certificate is self-signed and in no trust store, so these cases
- * run untrusted: what they exercise is the transport, not the validation. The
- * cases that do exercise validation build their own pair below.
+ * The fixture certificate is self-signed and in no trust store, so both ends opt
+ * out of verification - per connection, so nothing here changes what any other
+ * case sees. What these exercise is the transport, not the validation; the cases
+ * that do exercise validation build their own pair below.
  */
 struct TlsSession
 {
-	TlsVerifyGuard guard{true};
 	SocketPair pair;
 	Samurai::IO::Net::OpenSSL server;
 	Samurai::IO::Net::OpenSSL client;
@@ -245,6 +227,9 @@ struct TlsSession
 	TlsSession()
 	{
 		if (!tls_fixture().ready || !pair.valid()) return;
+
+		server.setAllowUntrusted(true);
+		client.setAllowUntrusted(true);
 
 		if (server.initialize(TlsOperation::Server, pair.fd[0]) != TlsStatus::Ok) return;
 		if (client.initialize(TlsOperation::Client, pair.fd[1]) != TlsStatus::Ok) return;
@@ -310,16 +295,16 @@ EXO_TEST(tls_key_accessors_do_not_transfer_ownership,
 			== Samurai::IO::Net::TlsFactory::getCertificate();
 });
 
-EXO_TEST(tls_allow_untrusted_toggles,
+EXO_TEST(tls_default_allow_untrusted_toggles,
 {
-	const bool original = Samurai::IO::Net::TlsFactory::allowUntrustedConnections();
+	const bool original = Samurai::IO::Net::TlsFactory::defaultAllowUntrusted();
 
-	Samurai::IO::Net::TlsFactory::setAllowUntrustedConnections(true);
-	const bool on = Samurai::IO::Net::TlsFactory::allowUntrustedConnections();
-	Samurai::IO::Net::TlsFactory::setAllowUntrustedConnections(false);
-	const bool off = Samurai::IO::Net::TlsFactory::allowUntrustedConnections();
+	Samurai::IO::Net::TlsFactory::setDefaultAllowUntrusted(true);
+	const bool on = Samurai::IO::Net::TlsFactory::defaultAllowUntrusted();
+	Samurai::IO::Net::TlsFactory::setDefaultAllowUntrusted(false);
+	const bool off = Samurai::IO::Net::TlsFactory::defaultAllowUntrusted();
 
-	Samurai::IO::Net::TlsFactory::setAllowUntrustedConnections(original);
+	Samurai::IO::Net::TlsFactory::setDefaultAllowUntrusted(original);
 	return on && !off;
 });
 
@@ -512,26 +497,30 @@ EXO_TEST(tls_sessions_are_independent,
 
 EXO_TEST(tls_verification_is_on_by_default,
 {
-	/* Not merely the accessor: this is the value a consumer that never calls
-	   the setter gets. */
-	return Samurai::IO::Net::TlsFactory::allowUntrustedConnections() == false;
+	/* Not merely the accessor: this is what a connection gets when nobody has
+	   said anything about verification. */
+	Samurai::IO::Net::OpenSSL fresh;
+	return Samurai::IO::Net::TlsFactory::defaultAllowUntrusted() == false
+		&& fresh.allowUntrusted() == false;
 });
 
 EXO_TEST(tls_client_certificates_are_not_required_by_default,
 {
-	return Samurai::IO::Net::TlsFactory::requireClientCertificate() == false;
+	Samurai::IO::Net::OpenSSL fresh;
+	return Samurai::IO::Net::TlsFactory::defaultRequireClientCertificate() == false
+		&& fresh.requireClientCertificate() == false;
 });
 
-EXO_TEST(tls_require_client_certificate_toggles,
+EXO_TEST(tls_default_require_client_certificate_toggles,
 {
-	const bool original = Samurai::IO::Net::TlsFactory::requireClientCertificate();
+	const bool original = Samurai::IO::Net::TlsFactory::defaultRequireClientCertificate();
 
-	Samurai::IO::Net::TlsFactory::setRequireClientCertificate(true);
-	const bool on = Samurai::IO::Net::TlsFactory::requireClientCertificate();
-	Samurai::IO::Net::TlsFactory::setRequireClientCertificate(false);
-	const bool off = Samurai::IO::Net::TlsFactory::requireClientCertificate();
+	Samurai::IO::Net::TlsFactory::setDefaultRequireClientCertificate(true);
+	const bool on = Samurai::IO::Net::TlsFactory::defaultRequireClientCertificate();
+	Samurai::IO::Net::TlsFactory::setDefaultRequireClientCertificate(false);
+	const bool off = Samurai::IO::Net::TlsFactory::defaultRequireClientCertificate();
 
-	Samurai::IO::Net::TlsFactory::setRequireClientCertificate(original);
+	Samurai::IO::Net::TlsFactory::setDefaultRequireClientCertificate(original);
 	return on && !off;
 });
 
@@ -541,7 +530,6 @@ EXO_TEST(tls_verifying_client_without_a_peer_name_refuses_to_initialize,
 {
 	if (!tls_fixture().ready) return false;
 
-	TlsVerifyGuard guard{false};
 	SocketPair pair;
 	if (!pair.valid()) return false;
 
@@ -558,15 +546,12 @@ EXO_TEST(tls_self_signed_certificate_is_rejected_when_verifying,
 	if (!pair.valid()) return false;
 
 	Samurai::IO::Net::OpenSSL server;
+	server.setAllowUntrusted(true);
+
 	Samurai::IO::Net::OpenSSL client;
-
-	{
-		TlsVerifyGuard untrusted{true};
-		if (server.initialize(TlsOperation::Server, pair.fd[0]) != TlsStatus::Ok) return false;
-	}
-
-	TlsVerifyGuard verifying{false};
 	client.setPeerName("localhost");
+
+	if (server.initialize(TlsOperation::Server, pair.fd[0]) != TlsStatus::Ok) return false;
 	if (client.initialize(TlsOperation::Client, pair.fd[1]) != TlsStatus::Ok) return false;
 
 	/* The chain cannot be built, so the handshake must not complete. */
@@ -585,19 +570,78 @@ EXO_TEST(tls_verifying_server_does_not_demand_a_client_certificate,
 	SocketPair pair;
 	if (!pair.valid()) return false;
 
+	/* Server left at the verifying default. */
 	Samurai::IO::Net::OpenSSL server;
-	Samurai::IO::Net::OpenSSL client;
-
-	{
-		/* Server built with verification on, which is the default. */
-		TlsVerifyGuard verifying{false};
-		if (server.initialize(TlsOperation::Server, pair.fd[0]) != TlsStatus::Ok) return false;
-	}
 
 	/* Client that does not check the self-signed certificate, so the only thing
 	   that can fail the handshake is the server asking for something. */
-	TlsVerifyGuard untrusted{true};
+	Samurai::IO::Net::OpenSSL client;
+	client.setAllowUntrusted(true);
+
+	if (server.initialize(TlsOperation::Server, pair.fd[0]) != TlsStatus::Ok) return false;
 	if (client.initialize(TlsOperation::Client, pair.fd[1]) != TlsStatus::Ok) return false;
 
 	return tls_handshake(server, client);
+});
+
+/* ------------------------------------------------------------------------- */
+/* The settings are per connection                                           */
+/*                                                                           */
+/* Reaching one peer that cannot be verified must not stop verifying any of   */
+/* the others, which a process-wide toggle could not express.                */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(tls_a_connection_starts_from_the_process_default,
+{
+	Samurai::IO::Net::OpenSSL fresh;
+	return fresh.allowUntrusted() == Tls::defaultAllowUntrusted()
+		&& fresh.requireClientCertificate() == Tls::defaultRequireClientCertificate();
+});
+
+EXO_TEST(tls_a_connection_setting_does_not_touch_the_default,
+{
+	const bool before = Tls::defaultAllowUntrusted();
+
+	Samurai::IO::Net::OpenSSL relaxed;
+	relaxed.setAllowUntrusted(true);
+
+	Samurai::IO::Net::OpenSSL strict;
+
+	return Tls::defaultAllowUntrusted() == before
+		&& relaxed.allowUntrusted()
+		&& !strict.allowUntrusted();
+});
+
+/*
+ * Two live sessions in one process, one verifying and one not, each behaving
+ * the way it was told to. With the setting held process-wide the first one to
+ * opt out decided the outcome for the second.
+ */
+EXO_TEST(tls_one_untrusted_connection_leaves_the_others_verifying,
+{
+	if (!tls_fixture().ready) return false;
+
+	SocketPair relaxed_pair;
+	SocketPair strict_pair;
+	if (!relaxed_pair.valid() || !strict_pair.valid()) return false;
+
+	Samurai::IO::Net::OpenSSL relaxed_server;
+	Samurai::IO::Net::OpenSSL relaxed_client;
+	relaxed_server.setAllowUntrusted(true);
+	relaxed_client.setAllowUntrusted(true);
+
+	Samurai::IO::Net::OpenSSL strict_server;
+	Samurai::IO::Net::OpenSSL strict_client;
+	strict_server.setAllowUntrusted(true);
+	strict_client.setPeerName("localhost");
+
+	if (relaxed_server.initialize(TlsOperation::Server, relaxed_pair.fd[0]) != TlsStatus::Ok) return false;
+	if (relaxed_client.initialize(TlsOperation::Client, relaxed_pair.fd[1]) != TlsStatus::Ok) return false;
+	if (strict_server.initialize(TlsOperation::Server, strict_pair.fd[0]) != TlsStatus::Ok) return false;
+	if (strict_client.initialize(TlsOperation::Client, strict_pair.fd[1]) != TlsStatus::Ok) return false;
+
+	/* The one that opted out completes; the one that did not still refuses the
+	   same self-signed certificate. */
+	return tls_handshake(relaxed_server, relaxed_client)
+		&& !tls_handshake(strict_server, strict_client);
 });
