@@ -596,6 +596,8 @@ bool Samurai::IO::Net::Socket::TLSInitialize(bool server) {
 
 	tls = std::make_unique<OpenSSL>();
 
+	if (allow_untrusted) tls->setAllowUntrusted(*allow_untrusted);
+
 	/* The name we asked for - not one derived from the connection - is the
 	   only thing a certificate can meaningfully be verified against. */
 	if (!server && address && !address->getHostname().empty())
