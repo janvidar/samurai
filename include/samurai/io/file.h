@@ -109,7 +109,13 @@ class File final {
 		ssize_t read(char* data, size_t length);
 		ssize_t write(const char* data, size_t length);
 
-		/** @return bytes transferred, 0 at end of file, or -1 with 'ec' set. */
+		/**
+		 * @return bytes transferred, 0 at end of file, or -1 with 'ec' set.
+		 *
+		 * read() may return less than asked for. write() places the whole
+		 * extent unless the descriptor would block, so a short count from it
+		 * means the caller should offer the remainder again.
+		 */
 		ssize_t read(char* data, size_t length, std::error_code& ec);
 		ssize_t write(const char* data, size_t length, std::error_code& ec);
 		ssize_t read(Samurai::IO::Buffer* data, size_t length = 65536);

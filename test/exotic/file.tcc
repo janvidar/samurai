@@ -10,7 +10,11 @@
 #include <samurai/io/dir.h>
 #include <string.h>
 #include <stdlib.h>
+#include <signal.h>
+#include <sys/time.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <utility>
 #include <span>
 
@@ -633,4 +637,105 @@ EXO_TEST(file_exists_asks_about_the_path,
 	const bool gone = !f.exists();
 	f.close();
 	return gone;
+});
+
+/* rmdir() removes directories. A regular file at the same name is not one, and
+   must survive the call. */
+EXO_TEST(file_rmdir_refuses_a_regular_file,
+{
+	Scratch scratch("rmdir-file");
+	const std::string path = scratch.path("not-a-directory.txt");
+
+	Samurai::IO::File f(path);
+	if (!f.open(Samurai::IO::File::Mode::Write | Samurai::IO::File::Mode::Truncate))
+		return false;
+	f.write("keep me", 7);
+	f.close();
+
+	const int ret = Samurai::IO::File::rmdir(path.c_str());
+
+	Samurai::IO::File check(path);
+	return ret == -1 && check.exists() && check.size() == 7;
+});
+
+EXO_TEST(file_rmdir_removes_an_empty_directory,
+{
+	Scratch scratch("rmdir-dir");
+	const std::string dir = scratch.directory() + "/inner";
+
+	if (Samurai::IO::File::mkdir(dir.c_str()) != 0) return false;
+
+	const int ret = Samurai::IO::File::rmdir(dir.c_str());
+
+	Samurai::IO::File check(dir);
+	return ret == 0 && !check.exists();
+});
+
+/* ------------------------------------------------------------------------- */
+/* A signal is not an I/O error                                               */
+/*                                                                            */
+/* read() returning EINTR means the call was cut short before anything could  */
+/* be transferred, so it is reissued rather than reported.                    */
+/*                                                                            */
+/* A fifo opened for both reading and writing gives a descriptor that blocks  */
+/* on an empty read without blocking on open. The handler supplies the byte,  */
+/* so the reissued call has something to return and the case cannot hang.     */
+/* ------------------------------------------------------------------------- */
+
+namespace {
+
+int g_fifo_write_end = -1;
+
+extern "C" void samurai_test_file_alarm(int)
+{
+	if (g_fifo_write_end != -1)
+	{
+		[[maybe_unused]] ssize_t ignored = ::write(g_fifo_write_end, "x", 1);
+	}
+}
+
+static bool arm_writing_alarm()
+{
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = samurai_test_file_alarm;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0; /* not SA_RESTART: the call must fail with EINTR */
+	if (sigaction(SIGALRM, &sa, nullptr) != 0) return false;
+
+	struct itimerval timer;
+	memset(&timer, 0, sizeof(timer));
+	timer.it_value.tv_usec = 100000;
+	return setitimer(ITIMER_REAL, &timer, nullptr) == 0;
+}
+
+}
+
+EXO_TEST(file_read_interrupted_by_a_signal_is_reissued,
+{
+	Scratch scratch("eintr");
+	const std::string path = scratch.path("fifo");
+
+	if (::mkfifo(path.c_str(), 0600) != 0) return false;
+
+	Samurai::IO::File f(path);
+	if (!f.open(Samurai::IO::File::Mode::Read | Samurai::IO::File::Mode::Write))
+		return false;
+
+	/* A second handle for the signal handler to write through; the fifo
+	   already has a reader, so this does not block. */
+	g_fifo_write_end = ::open(path.c_str(), O_WRONLY);
+	if (g_fifo_write_end == -1) return false;
+
+	if (!arm_writing_alarm()) { ::close(g_fifo_write_end); g_fifo_write_end = -1; return false; }
+
+	char buf[1] = { 0 };
+	std::error_code ec;
+	const ssize_t got = f.read(buf, sizeof(buf), ec);
+
+	::close(g_fifo_write_end);
+	g_fifo_write_end = -1;
+	f.close();
+
+	return got == 1 && buf[0] == 'x' && !ec;
 });
