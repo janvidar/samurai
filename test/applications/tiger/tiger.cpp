@@ -6,7 +6,7 @@
 #include <samurai/samurai.h>
 #include <stdio.h>
 #include <string.h>
-#include <samurai/crypto/digest/tigertree.h>
+#include "tigertree-bitzi.h"
 #include <samurai/crypto/digest/merkletree.h>
 #include <samurai/io/file.h>
 #include <samurai/util/base32.h>
@@ -17,20 +17,21 @@
 
 #define HASH 40
 
-void hash_tiger(std::span<const uint8_t> buffer, std::span<uint8_t, Samurai::Crypto::Digest::TIGERSIZE> hash) {
+void hash_tiger(std::span<const uint8_t> buffer, std::span<uint8_t, Samurai::Crypto::Digest::TIGER_HASH_SIZE> hash) {
 	Samurai::Crypto::Digest::Tiger tiger;
 	tiger.update(buffer);
 	std::ranges::copy(tiger.digest()->bytes(), hash.begin());
 }
 
-void hash_tth_old(std::span<const uint8_t> buffer, std::span<uint8_t, Samurai::Crypto::Digest::TIGERSIZE> hash) {
-	Samurai::Crypto::Digest::TT_CONTEXT tigerCtx;
-	Samurai::Crypto::Digest::tt_init(&tigerCtx);
-	Samurai::Crypto::Digest::tt_update(&tigerCtx, buffer);
-	Samurai::Crypto::Digest::tt_digest(&tigerCtx, hash);
+/* The Bitzi reference, for comparison against what the library produces. */
+void hash_tth_old(std::span<const uint8_t> buffer, std::span<uint8_t, Bitzi::TIGERSIZE> hash) {
+	Bitzi::TT_CONTEXT tigerCtx;
+	Bitzi::tt_init(&tigerCtx);
+	Bitzi::tt_update(&tigerCtx, buffer);
+	Bitzi::tt_digest(&tigerCtx, hash);
 }
 
-void hash_tth_new(std::span<const uint8_t> buffer, std::span<uint8_t, Samurai::Crypto::Digest::TIGERSIZE> hash, bool tthl)
+void hash_tth_new(std::span<const uint8_t> buffer, std::span<uint8_t, Samurai::Crypto::Digest::TIGER_HASH_SIZE> hash, bool tthl)
 {
 	Samurai::Crypto::Digest::Tiger tiger;
 	Samurai::Crypto::Digest::MerkleTree merkle(&tiger);
@@ -83,7 +84,7 @@ int main(int argc, char* argv[]) {
 	}
 	
 	for (int i = n; i < argc; i++) {
-		uint8_t hash[Samurai::Crypto::Digest::TIGERSIZE];
+		uint8_t hash[Samurai::Crypto::Digest::TIGER_HASH_SIZE];
 		/* On the stack so that sizeof() below is the buffer's length rather
 		 * than a pointer's, and so the 'continue' paths do not leak it. */
 		char digest[HASH];
@@ -120,7 +121,7 @@ int main(int argc, char* argv[]) {
 		
 		delete[] buffer;
 
-		Samurai::Util::base32_encode(std::span<const unsigned char>(hash, Samurai::Crypto::Digest::TIGERSIZE), std::span<char>(digest, sizeof(digest)));
+		Samurai::Util::base32_encode(std::span<const unsigned char>(hash, Samurai::Crypto::Digest::TIGER_HASH_SIZE), std::span<char>(digest, sizeof(digest)));
 		printf("%s  %s\n", digest, argv[i]);
 	}
 	

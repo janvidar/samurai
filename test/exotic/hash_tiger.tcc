@@ -1,7 +1,6 @@
 #include "samurai/crypto/digest/hash.h"
 #include "samurai/crypto/digest/tiger.h"
 #include "samurai/crypto/digest/merkletree.h"
-#include "samurai/crypto/digest/tigertree.h"
 #include "samurai/util/base32.h"
 #include <vector>
 #include <array>
@@ -10,7 +9,6 @@
 
 /* Named here because a comma inside EXO_TEST's second argument would be
    read as an argument separator. */
-using TigerDigest = std::array<uint8_t, Samurai::Crypto::Digest::TIGERSIZE>;
 
 bool testTiger(const char* input, const char* expected) {
 	char buf[64];
@@ -218,32 +216,71 @@ EXO_TEST(hash_tth_stream_8m_bytewise, {
 	return strcasecmp(buf, "6L6GMENTBLX2UE5JIVSCPX4P5PQYB7YUIY6PJ6I") == 0;
 });
 
-/*
- * A size that is not a whole number of leaves, checked against the other
- * tiger-tree implementation in the tree rather than against a recorded digest:
- * the two are independent, so agreeing on an awkward length is the property
- * worth asserting.
- */
-EXO_TEST(hash_tth_stream_matches_reference_impl, {
-	const size_t N = 12957194;
-	std::vector<uint8_t> data(N, 'a');
+/* ------------------------------------------------------------------------- */
+/* Tiger tree known answers across leaf boundaries                            */
+/*                                                                            */
+/* Sizes either side of a 1024-byte leaf, and one that is nowhere near a whole */
+/* number of leaves, so the odd-node handling in the tree build is exercised   */
+/* rather than only the balanced case.                                        */
+/*                                                                            */
+/* Every digest below was produced by both this implementation and the Bitzi   */
+/* reference, which the suite used to run side by side; the reference now sits */
+/* beside the testtiger program. The empty-input value is the published TTH of */
+/* the empty string, so the set is anchored outside this tree as well.         */
+/* ------------------------------------------------------------------------- */
 
-	char from_tree[64];
+static bool tth_of_repeated_a(size_t count, const char* expected)
+{
+	const std::vector<uint8_t> data(count, 'a');
+
+	char buf[64];
 	Samurai::Crypto::Digest::Tiger tiger;
 	Samurai::Crypto::Digest::MerkleTree merkle(&tiger, 0);
-	merkle.update(data.data(), N);
-	merkle.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::Format::Base32, from_tree, 64);
+	if (count) merkle.update(data.data(), data.size());
+	merkle.digest()->getFormattedString(Samurai::Crypto::Digest::HashValue::Format::Base32, buf, 64);
+	return strcasecmp(buf, expected) == 0;
+}
 
-	Samurai::Crypto::Digest::TT_CONTEXT ctx;
-	Samurai::Crypto::Digest::tt_init(&ctx);
-	Samurai::Crypto::Digest::tt_update(&ctx, data);
-	TigerDigest raw{};
-	Samurai::Crypto::Digest::tt_digest(&ctx, raw);
+EXO_TEST(hash_tth_size_empty, {
+	return tth_of_repeated_a(0, "LWPNACQDBZRYXW3VHJVCJ64QBZNGHOHHHZWCLNQ");
+});
 
-	char from_ref[64];
-	Samurai::Util::base32_encode(std::span<const unsigned char>(raw.data(), raw.size()), std::span<char>(from_ref, sizeof(from_ref)));
+EXO_TEST(hash_tth_size_1, {
+	return tth_of_repeated_a(1, "CZQUWH3IYXBF5L3BGYUGZHASSMXU647IP2IKE4Y");
+});
 
-	return strcasecmp(from_tree, from_ref) == 0;
+EXO_TEST(hash_tth_size_1023, {
+	return tth_of_repeated_a(1023, "YBJDV4HQU6LDJZMP36DEUZ7MMNXA6TBLMOX55PI");
+});
+
+EXO_TEST(hash_tth_size_1024, {
+	return tth_of_repeated_a(1024, "BR4BVJBMHDFVCFI4WBPSL63W5TWXWVBSC574BLI");
+});
+
+EXO_TEST(hash_tth_size_1025, {
+	return tth_of_repeated_a(1025, "CDYY2OW6F6DTGCH3Q6NMSDLSRV7PNMAL3CED3DA");
+});
+
+EXO_TEST(hash_tth_size_2048, {
+	return tth_of_repeated_a(2048, "YPAYMUL6MIZR2X34IKJON6TN2KPYPNE7IHGP2MQ");
+});
+
+EXO_TEST(hash_tth_size_2049, {
+	return tth_of_repeated_a(2049, "5ROSDZNI2SQAVSITIGLFULZQNFUGPAID2V45YFY");
+});
+
+EXO_TEST(hash_tth_size_65537, {
+	return tth_of_repeated_a(65537, "SVNLUONR2CQSU2VDCKJJKORSZ5OTK6MEAE32D5Y");
+});
+
+EXO_TEST(hash_tth_size_100000, {
+	return tth_of_repeated_a(100000, "WJYXXZ3KYQB2MQSOE42HLXJ5XE6OGXKFIDYLOQQ");
+});
+
+/* Not a whole number of leaves, and large enough that the stack collapses
+   several times on the way. */
+EXO_TEST(hash_tth_size_12957194, {
+	return tth_of_repeated_a(12957194, "OKDA34GX7KFK5VGURZARYTKRJ6N26IJ4C5YGNFY");
 });
 
 /* ------------------------------------------------------------------------- */

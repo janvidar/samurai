@@ -10,7 +10,6 @@
 #include <samurai/io/buffer.h>
 #include <vector>
 #include <memory>
-#include <samurai/crypto/digest/tigertree.h>
 
 namespace Samurai {
 namespace Crypto {

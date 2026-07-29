@@ -9,7 +9,11 @@
 # but not registered with CTest.
 # ---------------------------------------------------------------------------
 
-add_executable(testtiger  applications/tiger/tiger.cpp)
+# The Bitzi tigertree implementation lives with this program rather than in
+# the library: it is the reference the Samurai MerkleTree is compared against.
+add_executable(testtiger
+    applications/tiger/tiger.cpp
+    applications/tiger/tigertree-bitzi.cpp)
 add_executable(dnslookup  applications/dnslookup/dnslookup.cpp)
 add_executable(netcat     applications/netcat/netcat.cpp)
 add_executable(wget       applications/wget/wget.cpp)

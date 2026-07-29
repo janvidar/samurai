@@ -3,8 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
-#ifndef HAVE_SAMURAI_TIGER_TREE_H
-#define HAVE_SAMURAI_TIGER_TREE_H
+#ifndef HAVE_TIGERTREE_BITZI_H
+#define HAVE_TIGERTREE_BITZI_H
 
 /* (PD) 2001 The Bitzi Corporation
  * Please see file COPYING or http://bitzi.com/publicdomain 
@@ -15,20 +15,23 @@
 #include <samurai/crypto/digest/tiger.h>
 
 /*
- * NOTE: tt_init, tt_update, tt_digest and tt_copy are the names of the Bitzi
- * reference API that DC++ and the gnutella clients also derive from, so they
- * stay inside the namespace with C++ linkage: unmangled globals would let a
- * consumer that links a second TigerTree implementation bind to either. The
- * sizes are constants for the same reason - this is an installed header, and
- * BLOCKSIZE is not a name to be defining in one.
+ * The Bitzi reference implementation, kept beside this program rather than in
+ * the library: Samurai hashes with MerkleTree, and this is here only so the two
+ * can be compared against each other on the same input.
+ *
+ * Its own namespace, because tt_init, tt_update, tt_digest and tt_copy are the
+ * names DC++ and the gnutella clients derive from too, and BLOCKSIZE is not a
+ * name to leave at file scope.
  */
 
-namespace Samurai {
-namespace Crypto {
-namespace Digest {
+namespace Bitzi {
 
 /* tiger hash result size, in bytes */
 inline constexpr size_t TIGERSIZE = 24;
+
+/* Comparing the two implementations only means something while they produce
+   the same length. */
+static_assert(TIGERSIZE == Samurai::Crypto::Digest::TIGER_HASH_SIZE);
 
 /* size of each block independently tiger-hashed, not counting leaf 0x00 prefix */
 inline constexpr size_t BLOCKSIZE = 1024;
@@ -58,7 +61,5 @@ void tt_digest(TT_CONTEXT* ctx, std::span<uint8_t, TIGERSIZE> hash);
 void tt_copy(TT_CONTEXT* dest, TT_CONTEXT* src);
 
 }
-}
-}
 
-#endif // HAVE_SAMURAI_TIGER_TREE_H
+#endif // HAVE_TIGERTREE_BITZI_H

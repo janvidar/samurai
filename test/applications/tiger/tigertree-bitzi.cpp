@@ -27,7 +27,7 @@
  */
 
 #include <string.h>
-#include <samurai/crypto/digest/tigertree.h>
+#include "tigertree-bitzi.h"
 #include <samurai/crypto/digest/tiger.h>
 
 // #define DUMP_MERKLE_TREE_DEBUG
@@ -37,9 +37,7 @@
 #endif
 
 
-namespace Samurai {
-namespace Crypto {
-namespace Digest {
+namespace Bitzi {
 
 /*
  * NOTE: the scratch areas are deliberately unaligned - tt_init() sets
@@ -147,7 +145,7 @@ static void tt_final(TT_CONTEXT *ctx)
     tt_block(ctx);
 }
 
-void tt_digest(TT_CONTEXT *ctx, std::span<uint8_t, Samurai::Crypto::Digest::TIGERSIZE> s)
+void tt_digest(TT_CONTEXT *ctx, std::span<uint8_t, TIGERSIZE> s)
 {
 	QDBG("Digesting 1");
 	tt_final(ctx);
@@ -178,6 +176,4 @@ void tt_copy(TT_CONTEXT *dest, TT_CONTEXT *src)
   dest->top   = dest->nodes + (src->top - src->nodes);
 }
 
-}
-}
 }
