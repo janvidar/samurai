@@ -739,3 +739,203 @@ EXO_TEST(file_read_interrupted_by_a_signal_is_reissued,
 
 	return got == 1 && buf[0] == 'x' && !ec;
 });
+
+
+/* ------------------------------------------------------------------------- */
+/* Predicates and the advisory open modes                                    */
+/*                                                                           */
+/* isDeleteable() used to answer false for everything, and isExecutable() was */
+/* spelled isExcecutable in an installed header. Neither had a caller, which  */
+/* is how both survived.                                                     */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(file_readable_and_writable,
+{
+	Scratch scratch("perm");
+	const std::string path = scratch.path("plain.txt");
+	if (!write_file(path, "x")) return false;
+
+	Samurai::IO::File f(path);
+	return f.isReadable() && f.isWritable();
+});
+
+EXO_TEST(file_predicates_are_false_for_what_is_not_there,
+{
+	Samurai::IO::File f("samurai-file-test-no-such-file");
+	return !f.exists()
+		&& !f.isReadable()
+		&& !f.isWritable()
+		&& !f.isExecutable()
+		&& !f.isSymlink()
+		&& !f.isDirectory();
+});
+
+/* A file the umask left non-executable, and the same file with the bit set. */
+EXO_TEST(file_executable_follows_the_mode,
+{
+	Scratch scratch("exec");
+	const std::string path = scratch.path("script.sh");
+	if (!write_file(path, "#!/bin/sh\nexit 0\n")) return false;
+
+	Samurai::IO::File f(path);
+	if (f.isExecutable()) return false;
+
+	if (chmod(path.c_str(), 0755) != 0) return false;
+	return f.isExecutable();
+});
+
+EXO_TEST(file_a_directory_is_executable_because_it_is_searchable,
+{
+	Scratch scratch("execdir");
+	Samurai::IO::File dir(scratch.directory());
+	return dir.isDirectory() && dir.isExecutable();
+});
+
+/*
+ * Deleting writes to the directory, not to the file, so a read-only file in a
+ * writable directory can still go.
+ */
+EXO_TEST(file_deleteable_reads_the_directory_not_the_file,
+{
+	Scratch scratch("del");
+	const std::string path = scratch.path("readonly.txt");
+	if (!write_file(path, "x")) return false;
+	if (chmod(path.c_str(), 0444) != 0) return false;
+
+	Samurai::IO::File f(path);
+	if (f.isWritable()) return false;
+
+	const bool deleteable = f.isDeleteable();
+	chmod(path.c_str(), 0644);
+	return deleteable;
+});
+
+EXO_TEST(file_not_deleteable_from_a_read_only_directory,
+{
+	Scratch scratch("delro");
+	const std::string path = scratch.path("locked.txt");
+	if (!write_file(path, "x")) return false;
+
+	if (chmod(scratch.directory().c_str(), 0500) != 0) return false;
+
+	Samurai::IO::File f(path);
+	const bool deleteable = f.isDeleteable();
+
+	/* Put it back, or the scratch directory cannot clean itself up. */
+	chmod(scratch.directory().c_str(), 0755);
+
+	/* Nothing to stop root, so only assert the refusal where it applies. */
+	if (geteuid() == 0) return true;
+	return !deleteable;
+});
+
+/* What it says has to match what actually happens. */
+EXO_TEST(file_deleteable_agrees_with_remove,
+{
+	Scratch scratch("delreal");
+	const std::string path = scratch.path("goes.txt");
+	if (!write_file(path, "x")) return false;
+
+	Samurai::IO::File f(path);
+	if (!f.isDeleteable()) return false;
+
+	return f.remove() && !f.exists();
+});
+
+EXO_TEST(file_symlink_is_recognised,
+{
+	Scratch scratch("symlink");
+	const std::string target = scratch.path("target.txt");
+	const std::string link = scratch.path("link.txt");
+	if (!write_file(target, "pointed at")) return false;
+	if (symlink("target.txt", link.c_str()) != 0) return false;
+
+	Samurai::IO::File l(link);
+	Samurai::IO::File t(target);
+
+	/* isSymlink() asks about the link; everything else follows it. */
+	return l.isSymlink() && !t.isSymlink() && l.exists() && !l.isDirectory();
+});
+
+EXO_TEST(file_symlink_to_a_directory_is_both,
+{
+	Scratch scratch("symdir");
+	const std::string link = scratch.path("dirlink");
+	if (symlink(".", link.c_str()) != 0) return false;
+
+	Samurai::IO::File l(link);
+	return l.isSymlink() && l.isDirectory();
+});
+
+/*
+ * Paranoid maps to O_NOFOLLOW, so a symlink must not open through it. This is
+ * what the mode is for: a path that was a regular file a moment ago and is a
+ * link to something else by the time it is opened.
+ */
+EXO_TEST(file_paranoid_refuses_to_follow_a_symlink,
+{
+	Scratch scratch("paranoid");
+	const std::string target = scratch.path("real.txt");
+	const std::string link = scratch.path("sneaky.txt");
+	if (!write_file(target, "the real thing")) return false;
+	if (symlink("real.txt", link.c_str()) != 0) return false;
+
+	Samurai::IO::File plain(link);
+	if (!plain.open(FileMode::Read)) return false;
+	plain.close();
+
+	Samurai::IO::File guarded(link);
+	std::error_code ec;
+	const bool opened = guarded.open(FileMode::Read | FileMode::Paranoid, ec);
+	if (opened) guarded.close();
+
+	return !opened && ec;
+});
+
+EXO_TEST(file_paranoid_opens_a_regular_file,
+{
+	Scratch scratch("paranoidok");
+	const std::string path = scratch.path("real.txt");
+	if (!write_file(path, "content")) return false;
+
+	Samurai::IO::File f(path);
+	if (!f.open(FileMode::Read | FileMode::Paranoid)) return false;
+
+	char buf[32] = { 0 };
+	const ssize_t n = f.read(buf, sizeof(buf) - 1);
+	f.close();
+
+	return n == 7 && std::string(buf) == "content";
+});
+
+/*
+ * NoAccess maps to O_NOATIME, which only Linux has. Everywhere else the flag is
+ * dropped, so all that can be asserted is that asking for it is harmless.
+ */
+EXO_TEST(file_no_access_mode_is_harmless,
+{
+	Scratch scratch("noatime");
+	const std::string path = scratch.path("timed.txt");
+	if (!write_file(path, "content")) return false;
+
+	Samurai::IO::File f(path);
+	if (!f.open(FileMode::Read | FileMode::NoAccess)) return false;
+
+	char buf[32] = { 0 };
+	const ssize_t n = f.read(buf, sizeof(buf) - 1);
+	f.close();
+
+	return n == 7 && std::string(buf) == "content";
+});
+
+EXO_TEST(file_no_access_combines_with_paranoid,
+{
+	Scratch scratch("bothmodes");
+	const std::string path = scratch.path("both.txt");
+	if (!write_file(path, "content")) return false;
+
+	Samurai::IO::File f(path);
+	const bool ok = f.open(FileMode::Read | FileMode::Paranoid | FileMode::NoAccess);
+	if (ok) f.close();
+	return ok;
+});

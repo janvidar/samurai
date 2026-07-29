@@ -169,6 +169,26 @@ static bool pump(Fn done, int timeout_ms = SOCKET_TEST_TIMEOUT_MS)
 }
 
 /*
+ * Waits without running the event loop, for cases that ask a socket directly
+ * what it sees. Pumping would race them: the monitor notices a closed peer
+ * first, and from Disconnected a read reports Error rather than EndOfFile.
+ */
+template<typename Fn>
+static bool spin(Fn done, int timeout_ms = SOCKET_TEST_TIMEOUT_MS)
+{
+	const auto deadline = std::chrono::steady_clock::now()
+		+ std::chrono::milliseconds(timeout_ms);
+
+	while (!done())
+	{
+		if (std::chrono::steady_clock::now() > deadline)
+			return done();
+		usleep(1000);
+	}
+	return true;
+}
+
+/*
  * A listening server and a client connected to it over the loopback, plus the
  * socket the server accepted - three registrations in the monitor.
  */
@@ -231,14 +251,6 @@ struct TcpFixture
 		return (now > baseline) ? now - baseline : 0;
 	}
 
-	/* Sends from one end and waits for the other to be told about it. */
-	bool send(Socket* from, SocketRecorder& to_events, const std::string& text)
-	{
-		to_events.data_available = false;
-		const ssize_t n = from->write(text.data(), text.size());
-		if (n != (ssize_t) text.size()) return false;
-		return pump([&] { return to_events.data_available; });
-	}
 };
 
 /*
@@ -287,17 +299,77 @@ struct TlsFixture
 	Socket* server() { return tcp.accepted(); }
 };
 
-/* Reads whatever is waiting, having first let the loop notice it. */
-static std::string drain(Socket* socket, size_t limit = 512)
+/*
+ * Writes the whole of 'text', retrying while the socket has no room.
+ *
+ * A stream write is allowed to take part of what it was offered, and over TLS
+ * it can take nothing at all and ask to be called again.
+ */
+static bool sendAll(Socket* socket, const std::string& text)
+{
+	size_t sent = 0;
+	bool failed = false;
+
+	pump([&] {
+		while (sent < text.size())
+		{
+			std::error_code ec;
+			const ssize_t n = socket->write(&text[sent], text.size() - sent, ec);
+			if (n < 0) { failed = true; return true; }
+			if (n == 0) return false; /* no room; come back after a wait */
+			sent += (size_t) n;
+		}
+		return true;
+	});
+
+	return !failed && sent == text.size();
+}
+
+/*
+ * Reads until 'want' bytes have arrived, or gives up.
+ *
+ * One EventDataAvailable is not one message. The event says the descriptor has
+ * bytes; over TLS those may be part of a record that cannot be decrypted until
+ * the rest of it lands, so the read that follows reports WouldBlock and the
+ * loop has to come back.
+ */
+static std::string receive(Socket* socket, size_t want)
 {
 	std::string out;
-	char buf[512];
-	if (limit > sizeof(buf)) limit = sizeof(buf);
 
-	size_t got = 0;
-	std::error_code ec;
-	if (socket->read(buf, limit, got, ec) == Samurai::IO::ReadResult::Ok)
-		out.assign(buf, got);
+	pump([&] {
+		for (;;)
+		{
+			char buf[4096];
+			size_t got = 0;
+			std::error_code ec;
+
+			if (socket->read(buf, sizeof(buf), got, ec) != Samurai::IO::ReadResult::Ok)
+				break;
+			if (!got) break;
+			out.append(buf, got);
+		}
+		return out.size() >= want;
+	});
+
+	return out;
+}
+
+/* Peeks once 'want' bytes are there, without taking any of them. */
+static std::string peekAll(Socket* socket, size_t want)
+{
+	std::string out;
+
+	pump([&] {
+		char buf[4096];
+		size_t got = 0;
+		std::error_code ec;
+
+		if (socket->peek(buf, sizeof(buf), got, ec) == Samurai::IO::ReadResult::Ok)
+			out.assign(buf, got);
+		return out.size() >= want;
+	});
+
 	return out;
 }
 
@@ -491,9 +563,9 @@ EXO_TEST(sockets_client_to_server,
 	if (!fix.ready) return false;
 
 	const std::string message = "Hello, there!\n";
-	if (!fix.send(fix.client.get(), fix.server_events, message)) return false;
+	if (!sendAll(fix.client.get(), message)) return false;
 
-	return drain(fix.accepted()) == message;
+	return receive(fix.accepted(), message.size()) == message;
 });
 
 EXO_TEST(sockets_server_to_client,
@@ -502,9 +574,9 @@ EXO_TEST(sockets_server_to_client,
 	if (!fix.ready) return false;
 
 	const std::string message = "Reply from the other end\n";
-	if (!fix.send(fix.accepted(), fix.client_events, message)) return false;
+	if (!sendAll(fix.accepted(), message)) return false;
 
-	return drain(fix.client.get()) == message;
+	return receive(fix.client.get(), message.size()) == message;
 });
 
 EXO_TEST(sockets_both_directions_at_once,
@@ -515,10 +587,11 @@ EXO_TEST(sockets_both_directions_at_once,
 	const std::string out = "from the client";
 	const std::string back = "from the server";
 
-	if (!fix.send(fix.client.get(), fix.server_events, out)) return false;
-	if (!fix.send(fix.accepted(), fix.client_events, back)) return false;
+	if (!sendAll(fix.client.get(), out)) return false;
+	if (!sendAll(fix.accepted(), back)) return false;
 
-	return drain(fix.accepted()) == out && drain(fix.client.get()) == back;
+	return receive(fix.accepted(), out.size()) == out
+		&& receive(fix.client.get(), back.size()) == back;
 });
 
 EXO_TEST(sockets_write_reports_what_it_took,
@@ -540,12 +613,10 @@ EXO_TEST(sockets_vectored_write_joins_the_buffers,
 
 	const std::string expect = "GET /index.html HTTP/1.0\r\n\r\n";
 
-	fix.server_events.data_available = false;
 	const ssize_t n = fix.client->write({"GET /index.html", " HTTP/1.0\r\n", "\r\n"});
 	if (n != (ssize_t) expect.size()) return false;
 
-	if (!pump([&] { return fix.server_events.data_available; })) return false;
-	return drain(fix.accepted()) == expect;
+	return receive(fix.accepted(), expect.size()) == expect;
 });
 
 /* An empty buffer contributes nothing and does not end the write. */
@@ -556,12 +627,10 @@ EXO_TEST(sockets_vectored_write_skips_empty_buffers,
 
 	const std::string expect = "abcd";
 
-	fix.server_events.data_available = false;
 	const ssize_t n = fix.client->write({"", "ab", "", "cd", ""});
 	if (n != (ssize_t) expect.size()) return false;
 
-	if (!pump([&] { return fix.server_events.data_available; })) return false;
-	return drain(fix.accepted()) == expect;
+	return receive(fix.accepted(), expect.size()) == expect;
 });
 
 EXO_TEST(sockets_peek_does_not_consume,
@@ -570,18 +639,12 @@ EXO_TEST(sockets_peek_does_not_consume,
 	if (!fix.ready) return false;
 
 	const std::string message = "peek at me";
-	if (!fix.send(fix.client.get(), fix.server_events, message)) return false;
+	if (!sendAll(fix.client.get(), message)) return false;
 
-	char buf[64];
-	size_t got = 0;
-	std::error_code ec;
-
-	if (fix.accepted()->peek(buf, sizeof(buf), got, ec) != Samurai::IO::ReadResult::Ok)
-		return false;
-	if (std::string(buf, got) != message) return false;
+	if (peekAll(fix.accepted(), message.size()) != message) return false;
 
 	/* Still there for the read that follows. */
-	return drain(fix.accepted()) == message;
+	return receive(fix.accepted(), message.size()) == message;
 });
 
 /*
@@ -613,7 +676,7 @@ EXO_TEST(sockets_read_reports_end_of_file_when_the_peer_goes,
 	std::error_code ec;
 	Samurai::IO::ReadResult res = Samurai::IO::ReadResult::WouldBlock;
 
-	pump([&] {
+	spin([&] {
 		res = fix.accepted()->read(buf, sizeof(buf), got, ec);
 		return res != Samurai::IO::ReadResult::WouldBlock;
 	});
@@ -628,15 +691,21 @@ EXO_TEST(sockets_data_available_fires_once_per_arrival,
 
 	fix.server_events.data_available_count = 0;
 
-	if (!fix.send(fix.client.get(), fix.server_events, "first")) return false;
-	if (drain(fix.accepted()).empty()) return false;
+	/*
+	 * Waiting on the count rather than on the bytes. Over the loopback the data
+	 * is often already in the receive buffer, so a read can succeed without the
+	 * loop ever running - and it is the loop that reports the arrival.
+	 */
+	if (!sendAll(fix.client.get(), "first")) return false;
+	if (!pump([&] { return fix.server_events.data_available_count >= 1; })) return false;
+	if (receive(fix.accepted(), 5) != "first") return false;
 
 	const int after_first = fix.server_events.data_available_count;
 
-	if (!fix.send(fix.client.get(), fix.server_events, "second")) return false;
-	if (drain(fix.accepted()).empty()) return false;
+	if (!sendAll(fix.client.get(), "second")) return false;
+	if (!pump([&] { return fix.server_events.data_available_count > after_first; })) return false;
 
-	return after_first >= 1 && fix.server_events.data_available_count > after_first;
+	return receive(fix.accepted(), 6) == "second";
 });
 
 /* Bigger than a single segment, so it arrives in pieces. */
@@ -659,8 +728,11 @@ EXO_TEST(sockets_a_large_transfer_arrives_whole,
 			else if (n < 0) return true;
 		}
 
-		std::string chunk = drain(fix.accepted());
-		received += chunk;
+		char buf[4096];
+		size_t got = 0;
+		std::error_code ec;
+		while (fix.accepted()->read(buf, sizeof(buf), got, ec) == Samurai::IO::ReadResult::Ok && got)
+			received.append(buf, got);
 		return received.size() >= message.size();
 	});
 
@@ -1067,12 +1139,8 @@ EXO_TEST(sockets_tls_carries_data_client_to_server,
 
 	const std::string message = "encrypted, going out";
 
-	fix.tcp.server_events.data_available = false;
-	if (fix.client()->write(message.data(), message.size()) != (ssize_t) message.size())
-		return false;
-
-	if (!pump([&] { return fix.tcp.server_events.data_available; })) return false;
-	return drain(fix.server()) == message;
+	if (!sendAll(fix.client(), message)) return false;
+	return receive(fix.server(), message.size()) == message;
 });
 
 EXO_TEST(sockets_tls_carries_data_server_to_client,
@@ -1082,12 +1150,8 @@ EXO_TEST(sockets_tls_carries_data_server_to_client,
 
 	const std::string message = "encrypted, coming back";
 
-	fix.tcp.client_events.data_available = false;
-	if (fix.server()->write(message.data(), message.size()) != (ssize_t) message.size())
-		return false;
-
-	if (!pump([&] { return fix.tcp.client_events.data_available; })) return false;
-	return drain(fix.client()) == message;
+	if (!sendAll(fix.server(), message)) return false;
+	return receive(fix.client(), message.size()) == message;
 });
 
 EXO_TEST(sockets_tls_peek_does_not_consume,
@@ -1097,19 +1161,10 @@ EXO_TEST(sockets_tls_peek_does_not_consume,
 
 	const std::string message = "peek through TLS";
 
-	fix.tcp.server_events.data_available = false;
-	if (fix.client()->write(message.data(), message.size()) != (ssize_t) message.size())
-		return false;
-	if (!pump([&] { return fix.tcp.server_events.data_available; })) return false;
+	if (!sendAll(fix.client(), message)) return false;
+	if (peekAll(fix.server(), message.size()) != message) return false;
 
-	char buf[64];
-	size_t got = 0;
-	std::error_code ec;
-	if (fix.server()->peek(buf, sizeof(buf), got, ec) != Samurai::IO::ReadResult::Ok)
-		return false;
-	if (std::string(buf, got) != message) return false;
-
-	return drain(fix.server()) == message;
+	return receive(fix.server(), message.size()) == message;
 });
 
 /*
@@ -1124,10 +1179,10 @@ EXO_TEST(sockets_tls_a_partial_read_leaves_the_rest_available,
 
 	const std::string message = "0123456789abcdefghij";
 
-	fix.tcp.server_events.data_available = false;
-	if (fix.client()->write(message.data(), message.size()) != (ssize_t) message.size())
-		return false;
-	if (!pump([&] { return fix.tcp.server_events.data_available; })) return false;
+	if (!sendAll(fix.client(), message)) return false;
+
+	/* Wait for the record, then take only part of it. */
+	if (peekAll(fix.server(), message.size()) != message) return false;
 
 	char head[4];
 	size_t got = 0;
@@ -1136,7 +1191,7 @@ EXO_TEST(sockets_tls_a_partial_read_leaves_the_rest_available,
 		return false;
 	if (got != sizeof(head)) return false;
 
-	const std::string rest = drain(fix.server());
+	const std::string rest = receive(fix.server(), message.size() - sizeof(head));
 	return std::string(head, sizeof(head)) + rest == message;
 });
 
@@ -1152,10 +1207,8 @@ EXO_TEST(sockets_tls_the_loop_notices_data_the_descriptor_cannot_report,
 
 	const std::string message = "0123456789abcdefghij";
 
-	fix.tcp.server_events.data_available = false;
-	if (fix.client()->write(message.data(), message.size()) != (ssize_t) message.size())
-		return false;
-	if (!pump([&] { return fix.tcp.server_events.data_available; })) return false;
+	if (!sendAll(fix.client(), message)) return false;
+	if (peekAll(fix.server(), message.size()) != message) return false;
 
 	char head[4];
 	size_t got = 0;
@@ -1163,11 +1216,13 @@ EXO_TEST(sockets_tls_the_loop_notices_data_the_descriptor_cannot_report,
 	if (fix.server()->read(head, sizeof(head), got, ec) != Samurai::IO::ReadResult::Ok)
 		return false;
 
-	/* Nothing further arrives on the wire from here on. */
+	/* Nothing further arrives on the wire from here on, yet the loop must
+	   still report the socket readable for what the TLS layer is holding. */
 	fix.tcp.server_events.data_available = false;
 	if (!pump([&] { return fix.tcp.server_events.data_available; }, 1000)) return false;
 
-	return drain(fix.server()) == message.substr(sizeof(head));
+	return receive(fix.server(), message.size() - sizeof(head))
+		== message.substr(sizeof(head));
 });
 
 EXO_TEST(sockets_tls_goodbye_is_reported,
