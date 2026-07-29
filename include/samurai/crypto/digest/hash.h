@@ -48,11 +48,10 @@ class Hash {
 		size_t size() const { return m_size; }
 		
 		/**
-		 * Returns a pointer to the internal raw data of the digest.
-		 * NOTE: Do not read more than size() bytes from this!
-		 * FIXME: Do not return a pointer, but rather a const reference!
+		 * The finalized digest, owned by this object and valid until it is
+		 * reset or destroyed. Copy it to keep it beyond that.
 		 */
-		virtual HashValue* digest() = 0;
+		virtual const HashValue& digest() = 0;
 		
 		/**
 		 * Update/append the internal digest.

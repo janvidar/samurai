@@ -48,7 +48,7 @@ static size_t calcMaxNumLeaves(size_t depth)
 
 
 
-Samurai::Crypto::Digest::MerkleNode::MerkleNode(Samurai::Crypto::Digest::HashValue* value) : Samurai::Crypto::Digest::HashValue(value)
+Samurai::Crypto::Digest::MerkleNode::MerkleNode(const Samurai::Crypto::Digest::HashValue& value) : Samurai::Crypto::Digest::HashValue(value)
 {
 
 }
@@ -184,7 +184,7 @@ void Samurai::Crypto::Digest::MerkleTree::setLeavesLTR(Samurai::IO::Buffer& buff
 		buffer.pop((char*) buf.data(), n*leaf_size, leaf_size);
 		value.setData(buf);
 
-		m_nodes->add(std::make_unique<MerkleNode>(&value));
+		m_nodes->add(std::make_unique<MerkleNode>(value));
 	}
 	m_count = file_size;
 }
@@ -206,7 +206,7 @@ void Samurai::Crypto::Digest::MerkleTree::setLeavesRTL(Samurai::IO::Buffer& buff
 		buffer.pop((char*) buf.data(), ((n-1)*leaf_size), leaf_size);
 		value.setData(buf);
 
-		m_nodes->add(std::make_unique<MerkleNode>(&value));
+		m_nodes->add(std::make_unique<MerkleNode>(value));
 	}
 	m_count = file_size;
 }
@@ -302,7 +302,7 @@ void Samurai::Crypto::Digest::MerkleTree::finalize()
 
 	// Save the leaf nodes in the work stack (which is empty)
 	for (size_t n = 0; n < m_nodes->getPosition(); n++)
-		m_work->add(std::make_unique<MerkleNode>(m_nodes->get(n)));
+		m_work->add(std::make_unique<MerkleNode>(*m_nodes->get(n)));
 
 	// Reduce to one node (root node).
 	compact_all(m_nodes.get());
@@ -321,10 +321,10 @@ void Samurai::Crypto::Digest::MerkleTree::finalize()
 }
 
 
-Samurai::Crypto::Digest::HashValue* Samurai::Crypto::Digest::MerkleTree::digest()
+const Samurai::Crypto::Digest::HashValue& Samurai::Crypto::Digest::MerkleTree::digest()
 {
 	finalize();
-	return &m_finalized_value;
+	return m_finalized_value;
 }
 
 
@@ -334,8 +334,7 @@ void Samurai::Crypto::Digest::MerkleTree::combine(Samurai::Crypto::Digest::Merkl
 	m_hasher->update(node_hash_prefix, 1);
 	m_hasher->update(a.getData(), m_hasher->size());
 	m_hasher->update(b.getData(), m_hasher->size());
-	Samurai::Crypto::Digest::HashValue* value = m_hasher->digest();
-	a.setData(value->bytes());
+	a.setData(m_hasher->digest().bytes());
 }
 
 
@@ -390,9 +389,7 @@ void Samurai::Crypto::Digest::MerkleTree::hash(uint8_t* data, size_t length)
 	m_hasher->reset();
 	m_hasher->update(leaf_hash_prefix, 1);
 	m_hasher->update(data, length);
-	Samurai::Crypto::Digest::HashValue* value = m_hasher->digest();
-
-	m_work->add(std::make_unique<MerkleNode>(value));
+	m_work->add(std::make_unique<MerkleNode>(m_hasher->digest()));
 	if (m_work->getSize() == m_blocks_per_leaf)
 	{
 		compact_all(m_work.get());

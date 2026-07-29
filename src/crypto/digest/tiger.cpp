@@ -212,11 +212,11 @@ void Samurai::Crypto::Digest::Tiger::internal_finalize()
 }
 
 
-Samurai::Crypto::Digest::HashValue* Samurai::Crypto::Digest::Tiger::digest()
+const Samurai::Crypto::Digest::HashValue& Samurai::Crypto::Digest::Tiger::digest()
 {
 	internal_finalize();
-	
-	return &m_finalized_value;
+
+	return m_finalized_value;
 }
 
 
