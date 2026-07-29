@@ -163,7 +163,7 @@ int Samurai::IO::Net::DatagramSocket::send(DatagramPacket* packet) {
 	struct sockaddr* sa = packet->addr->getSockAddr();
 	size_t sa_len = packet->addr->getSockAddrSize();
 
-	ssize_t ret = ::sendto(sd, Samurai::IO::Net::sendto_arg(data), length, SAMURAI_SENDFLAGS, (sockaddr*) sa, sa_len);
+	ssize_t ret = ::sendto(sd, Samurai::IO::Net::sendto_arg(data), length, Samurai::IO::Net::send_flags, (sockaddr*) sa, sa_len);
 
 	if (ret == -1) {
 		if (Samurai::IO::Net::net_error() == EAGAIN || Samurai::IO::Net::net_error() == EWOULDBLOCK || Samurai::IO::Net::net_error() == EINTR) {
