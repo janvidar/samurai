@@ -134,8 +134,20 @@ Samurai::IO::File::~File()
 }
 
 
+/* An open File describes the object behind its descriptor, not whatever the
+   path resolves to now. */
 void Samurai::IO::File::getInfo() const {
 	struct stat st;
+
+	if (fd != -1)
+	{
+		if (fstat(fd, &st) == 0)
+			info = st;
+		else
+			info.reset();
+		return;
+	}
+
 	if (stat(filename.c_str(), &st) == 0)
 		info = st;
 	else
@@ -227,10 +239,12 @@ bool Samurai::IO::File::close(std::error_code& ec)
 		/* The descriptor is gone either way; holding on to it would mean
 		   closing someone else's file on a later attempt. */
 		fd = -1;
+		info.reset();
 		return false;
 	}
 
 	fd = -1;
+	info.reset();
 	return true;
 }
 
@@ -278,6 +292,8 @@ bool Samurai::IO::File::seek(off_t offset, std::error_code& ec)
 		ec = Samurai::system_error(errno);
 		return false;
 	}
+
+	info.reset();
 	return true;
 }
 
@@ -306,6 +322,8 @@ bool Samurai::IO::File::flush(std::error_code& ec)
 		ec = Samurai::system_error(errno);
 		return false;
 	}
+
+	info.reset();
 	return true;
 }
 
@@ -324,6 +342,8 @@ ssize_t Samurai::IO::File::read(char* data, size_t length, std::error_code& ec)
 
 	ssize_t status = ::read(fd, data, length);
 	if (status == -1) { ec = Samurai::system_error(errno); return -1; }
+
+	info.reset();
 	return status;
 }
 
@@ -347,6 +367,8 @@ ssize_t Samurai::IO::File::write(const char* data, size_t length, std::error_cod
 		ec = Samurai::system_error(errno);
 		return -1;
 	}
+
+	info.reset();
 	return status;
 }
 
@@ -360,6 +382,7 @@ ssize_t Samurai::IO::File::read(Samurai::IO::Buffer* data, size_t length) {
 		return status;
 
 	data->append(buf.data(), (size_t) status);
+	info.reset();
 	return status;
 }
 
@@ -378,6 +401,7 @@ ssize_t Samurai::IO::File::write(Samurai::IO::Buffer* data, size_t length, bool 
 
 	if (remove) data->remove((size_t) status);
 
+	info.reset();
 	return status;
 }
 
@@ -497,10 +521,12 @@ bool Samurai::IO::File::exists(const char* path)
 	return (retval != -1);
 }
 
+/* A question about the name, not about the descriptor, so it does not go
+   through the cache the other accessors share. */
 bool Samurai::IO::File::exists() const
 {
-	if (!info) getInfo();
-	return info.has_value();
+	struct stat st;
+	return stat(filename.c_str(), &st) == 0;
 }
 
 bool Samurai::IO::File::remove() {
