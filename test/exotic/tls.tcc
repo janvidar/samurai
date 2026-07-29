@@ -7,6 +7,8 @@
 #include <samurai/io/net/tlsfactory-openssl.h>
 #include <samurai/io/file.h>
 
+#include "testkeys.h"
+
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/x509.h>
@@ -28,13 +30,13 @@
  * TLS is mandatory per the README and had no automated coverage at all: 720
  * lines across tlsfactory.cpp and tlsfactory-openssl.cpp, of which nothing ran.
  *
- * The key and certificate are generated in process rather than checked in.
- * That keeps a private key out of the repository, needs no 'openssl' command
- * line tool, and cannot expire out from under the suite.
+ * The key and certificate come from testkeys.h, which generates them in
+ * process and hands the same pair to sockets.tcc.
  *
  * The handshake runs over a socketpair() rather than through Socket and
  * SocketMonitor: initialize() takes a descriptor, so the TLS layer can be
- * driven directly and the test does not depend on the event loop.
+ * driven directly and the test does not depend on the event loop. What Socket
+ * does with the factory is covered in sockets.tcc, where the loop is.
  */
 
 using Tls = Samurai::IO::Net::TlsFactory;
@@ -42,92 +44,6 @@ using TlsStatus = Samurai::IO::Net::TlsFactory::TlsStatus;
 using TlsOperation = Samurai::IO::Net::TlsFactory::TlsOperation;
 
 namespace {
-
-struct TlsFixture
-{
-	std::string key_path;
-	std::string cert_path;
-	bool ready = false;
-
-	/* The PEM files have to outlive every case - setKeys() keeps File objects
-	   pointing at them - so they are removed when the process exits. */
-	~TlsFixture()
-	{
-		if (!key_path.empty()) unlink(key_path.c_str());
-		if (!cert_path.empty()) unlink(cert_path.c_str());
-	}
-
-	TlsFixture() = default;
-	TlsFixture(TlsFixture&&) = default;
-	TlsFixture& operator=(TlsFixture&&) = default;
-	TlsFixture(const TlsFixture&) = delete;
-	TlsFixture& operator=(const TlsFixture&) = delete;
-};
-
-/* Written next to the generated test sources, which is a writable build dir. */
-static std::string tls_temp_path(const char* leaf)
-{
-	return std::string("samurai-tls-test-") + leaf;
-}
-
-static bool tls_write_keypair(const std::string& key_path, const std::string& cert_path)
-{
-	EVP_PKEY* pkey = EVP_RSA_gen(2048);
-	if (!pkey) return false;
-
-	X509* cert = X509_new();
-	if (!cert) { EVP_PKEY_free(pkey); return false; }
-
-	ASN1_INTEGER_set(X509_get_serialNumber(cert), 1);
-	X509_gmtime_adj(X509_getm_notBefore(cert), 0);
-	/* Long enough that the suite never fails because a fixture aged out. */
-	X509_gmtime_adj(X509_getm_notAfter(cert), 60L * 60 * 24 * 3650);
-	X509_set_pubkey(cert, pkey);
-
-	X509_NAME* name = X509_get_subject_name(cert);
-	X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
-		(const unsigned char*) "localhost", -1, -1, 0);
-	X509_set_issuer_name(cert, name);
-
-	bool ok = X509_sign(cert, pkey, EVP_sha256()) > 0;
-
-	if (ok)
-	{
-		FILE* kf = fopen(key_path.c_str(), "wb");
-		ok = kf && PEM_write_PrivateKey(kf, pkey, nullptr, nullptr, 0, nullptr, nullptr);
-		if (kf) fclose(kf);
-	}
-
-	if (ok)
-	{
-		FILE* cf = fopen(cert_path.c_str(), "wb");
-		ok = cf && PEM_write_X509(cf, cert);
-		if (cf) fclose(cf);
-	}
-
-	X509_free(cert);
-	EVP_PKEY_free(pkey);
-	return ok;
-}
-
-/* Built once: generating a 2048 bit key per case would dominate the run. */
-static TlsFixture& tls_fixture()
-{
-	static TlsFixture fixture = []
-	{
-		TlsFixture f;
-		f.key_path = tls_temp_path("key.pem");
-		f.cert_path = tls_temp_path("cert.pem");
-
-		if (!Tls::global_init()) return f;
-		if (!tls_write_keypair(f.key_path, f.cert_path)) return f;
-
-		Tls::setKeys(f.key_path.c_str(), f.cert_path.c_str());
-		f.ready = true;
-		return f;
-	}();
-	return fixture;
-}
 
 /* The fingerprint as an X.509 tool reports it, computed independently of the
    library so the two are not the same code checked against itself. */
@@ -226,7 +142,7 @@ struct TlsSession
 
 	TlsSession()
 	{
-		if (!tls_fixture().ready || !pair.valid()) return;
+		if (!tls_test_keys().ready || !pair.valid()) return;
 
 		server.setAllowUntrusted(true);
 		client.setAllowUntrusted(true);
@@ -275,12 +191,12 @@ static bool tls_read_exactly(Samurai::IO::Net::OpenSSL& tls, size_t want, std::s
 
 EXO_TEST(tls_global_init_and_fixture,
 {
-	return tls_fixture().ready;
+	return tls_test_keys().ready;
 });
 
 EXO_TEST(tls_get_private_key_and_certificate,
 {
-	if (!tls_fixture().ready) return false;
+	if (!tls_test_keys().ready) return false;
 	return Samurai::IO::Net::TlsFactory::getPrivateKey() != nullptr
 		&& Samurai::IO::Net::TlsFactory::getCertificate() != nullptr;
 });
@@ -288,7 +204,7 @@ EXO_TEST(tls_get_private_key_and_certificate,
 /* Accessors, not factories: the same object must come back each time. */
 EXO_TEST(tls_key_accessors_do_not_transfer_ownership,
 {
-	if (!tls_fixture().ready) return false;
+	if (!tls_test_keys().ready) return false;
 	return Samurai::IO::Net::TlsFactory::getPrivateKey()
 			== Samurai::IO::Net::TlsFactory::getPrivateKey()
 		&& Samurai::IO::Net::TlsFactory::getCertificate()
@@ -310,10 +226,10 @@ EXO_TEST(tls_default_allow_untrusted_toggles,
 
 EXO_TEST(tls_own_certificate_fingerprint_matches_der_sha256,
 {
-	if (!tls_fixture().ready) return false;
+	if (!tls_test_keys().ready) return false;
 
 	Tls::Sha256Digest expected{};
-	if (!tls_expected_fingerprint(tls_fixture().cert_path, expected)) return false;
+	if (!tls_expected_fingerprint(tls_test_keys().cert_path, expected)) return false;
 
 	const auto got = Samurai::IO::Net::TlsFactory::getOwnCertificateSHA256();
 	return got.has_value() && *got == expected;
@@ -355,7 +271,7 @@ EXO_TEST(tls_peer_certificate_is_the_one_we_serve,
 	if (!session.ok) return false;
 
 	Tls::Sha256Digest expected{};
-	if (!tls_expected_fingerprint(tls_fixture().cert_path, expected)) return false;
+	if (!tls_expected_fingerprint(tls_test_keys().cert_path, expected)) return false;
 
 	/* The client sees the server's certificate, which is the fixture. */
 	const auto seen = session.client.getPeerCertificateSHA256();
@@ -528,7 +444,7 @@ EXO_TEST(tls_default_require_client_certificate_toggles,
    client refuses to start rather than connect unauthenticated. */
 EXO_TEST(tls_verifying_client_without_a_peer_name_refuses_to_initialize,
 {
-	if (!tls_fixture().ready) return false;
+	if (!tls_test_keys().ready) return false;
 
 	SocketPair pair;
 	if (!pair.valid()) return false;
@@ -540,7 +456,7 @@ EXO_TEST(tls_verifying_client_without_a_peer_name_refuses_to_initialize,
 /* The point of C1: a self-signed peer is turned away rather than accepted. */
 EXO_TEST(tls_self_signed_certificate_is_rejected_when_verifying,
 {
-	if (!tls_fixture().ready) return false;
+	if (!tls_test_keys().ready) return false;
 
 	SocketPair pair;
 	if (!pair.valid()) return false;
@@ -565,7 +481,7 @@ EXO_TEST(tls_self_signed_certificate_is_rejected_when_verifying,
  */
 EXO_TEST(tls_verifying_server_does_not_demand_a_client_certificate,
 {
-	if (!tls_fixture().ready) return false;
+	if (!tls_test_keys().ready) return false;
 
 	SocketPair pair;
 	if (!pair.valid()) return false;
@@ -619,7 +535,7 @@ EXO_TEST(tls_a_connection_setting_does_not_touch_the_default,
  */
 EXO_TEST(tls_one_untrusted_connection_leaves_the_others_verifying,
 {
-	if (!tls_fixture().ready) return false;
+	if (!tls_test_keys().ready) return false;
 
 	SocketPair relaxed_pair;
 	SocketPair strict_pair;
