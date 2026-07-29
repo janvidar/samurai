@@ -5,52 +5,45 @@
 
 #include <samurai/io/compression.h>
 #include <samurai/io/codec.h>
+#include <span>
 #include <string>
 #include <vector>
 #include <string.h>
 
 /*
- * Codec::exec() uses each length as an in/out parameter: on the way in it is
- * how much is available (input) or how much room there is (output), and on the
- * way out it is how much was consumed or produced. An empty input asks the
- * codec to finish.
+ * Codec::step() reports what it took and what it made separately from the
+ * buffers it was given, so neither is a length meaning one thing on the way in
+ * and another on the way out. An empty input asks the codec to finish.
  *
  * The helpers live at file scope because EXO_TEST takes two macro arguments and
  * a braced initialiser inside a case would be split on its commas.
  */
 
 /**
- * Run a codec to completion through step().
+ * Run a codec to completion.
  *
- * Driving it through exec() instead cannot be done correctly: a flush into a
- * small output buffer needs several calls that each consume nothing, so "stop
- * when nothing was consumed" truncates, and "stop when nothing was consumed and
- * nothing produced" calls the codec once more after it has finished - which
- * bzip2 rejects. Status::StreamEnd is what says when to stop.
+ * A flush too large for one output buffer needs several calls that each consume
+ * nothing, so "stop when nothing was consumed" truncates. Status::StreamEnd is
+ * what says when to stop.
  */
 static bool codec_run(Samurai::IO::Codec& codec, const std::string& in, std::string& out,
                       size_t chunk_size = 64)
 {
 	std::vector<char> chunk(chunk_size);
-	std::string input = in;
-	size_t offset = 0;
+	std::span<const char> input(in);
 	out.clear();
 
 	for (int spins = 0; spins < 100000; spins++)
 	{
-		size_t consumed = input.size() - offset;
-		size_t produced = chunk.size();
+		const Samurai::IO::Codec::Progress p = codec.step(input, chunk);
 
-		char* at = input.empty() ? nullptr : &input[offset];
-		const auto status = codec.step(at, consumed, chunk.data(), produced);
+		if (p.status == Samurai::IO::Codec::Status::Error) return false;
 
-		if (status == Samurai::IO::Codec::Status::Error) return false;
+		if (p.produced) out.append(chunk.data(), p.produced);
+		input = input.subspan(p.consumed);
 
-		if (produced) out.append(chunk.data(), produced);
-		offset += consumed;
-
-		if (status == Samurai::IO::Codec::Status::StreamEnd) return true;
-		if (!consumed && !produced) return true;
+		if (p.status == Samurai::IO::Codec::Status::StreamEnd) return true;
+		if (!p.consumed && !p.produced) return true;
 	}
 	return false;
 }
@@ -175,6 +168,39 @@ EXO_TEST(bzip2_binary_safe,
 	return unpacked == binary;
 });
 
+/*
+ * A flush too large for one output buffer takes several calls, and every one of
+ * them consumes nothing. A loop that stops at the first keeps only what fitted.
+ *
+ * This is not hypothetical: it is how the share manager wrote its compressed
+ * file list. The payload here is deliberately poor at compressing, because that
+ * is what makes the final block bigger than the buffer - a file list gets there
+ * through one random TTH per file.
+ */
+EXO_TEST(codec_a_flush_spanning_several_buffers_completes,
+{
+	std::string noise;
+	unsigned seed = 12345;
+	for (size_t n = 0; n < 200000; n++)
+	{
+		seed = seed * 1103515245u + 12345u;
+		noise += (char) ((seed >> 16) & 0xff);
+	}
+
+	Samurai::IO::BZip2Compressor deflater;
+	std::string packed;
+	if (!codec_run(deflater, noise, packed, 4096)) return false;
+
+	/* Several buffers' worth, or the case is not testing what it claims. */
+	if (packed.size() < 4 * 4096) return false;
+
+	Samurai::IO::BZip2Decompressor inflater;
+	std::string unpacked;
+	if (!codec_run(inflater, packed, unpacked, 4096)) return false;
+
+	return unpacked == noise;
+});
+
 /* ------------------------------------------------------------------------- */
 /* Failure reporting                                                          */
 /* ------------------------------------------------------------------------- */
@@ -184,23 +210,41 @@ EXO_TEST(bzip2_binary_safe,
 EXO_TEST(codec_no_output_room_reports_enobufs,
 {
 	Samurai::IO::GzipCompressor deflater;
-	std::string in = compressible;
-	size_t consumed = in.size();
-	size_t produced = 0;
 	std::error_code ec;
 
-	const bool ok = deflater.exec(&in[0], consumed, nullptr, produced, ec);
-	return !ok && ec == std::errc::no_buffer_space;
+	const Samurai::IO::Codec::Progress p = deflater.step(compressible, {}, ec);
+	return p.status == Samurai::IO::Codec::Status::Error
+		&& ec == std::errc::no_buffer_space;
 });
 
-EXO_TEST(codec_bool_overload_agrees_with_error_code,
+/* The overload without an error_code reports the same failure. */
+EXO_TEST(codec_both_overloads_agree,
 {
 	Samurai::IO::GzipCompressor deflater;
-	std::string in = compressible;
-	size_t consumed = in.size();
-	size_t produced = 0;
 
-	return !deflater.exec(&in[0], consumed, nullptr, produced);
+	const Samurai::IO::Codec::Progress p = deflater.step(compressible, {});
+	return p.status == Samurai::IO::Codec::Status::Error;
+});
+
+/* Nothing moved on a failed step. */
+EXO_TEST(codec_a_failed_step_moved_nothing,
+{
+	Samurai::IO::GzipCompressor deflater;
+
+	const Samurai::IO::Codec::Progress p = deflater.step(compressible, {});
+	return p.consumed == 0 && p.produced == 0;
+});
+
+/* consumed and produced are counts in their own right, not what is left over. */
+EXO_TEST(codec_reports_what_it_took_and_made,
+{
+	Samurai::IO::GzipCompressor deflater;
+	char out[512];
+
+	const Samurai::IO::Codec::Progress p = deflater.step(compressible, out);
+	return p.status == Samurai::IO::Codec::Status::Ok
+		&& p.consumed == compressible.size()
+		&& p.produced < sizeof(out);
 });
 
 /* Decompressing something that is not a compressed stream has to fail rather

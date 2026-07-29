@@ -19,17 +19,15 @@ class BZip2Compressor final : public Samurai::IO::Codec {
 	public:
 		BZip2Compressor();
 		~BZip2Compressor() override;
-		bool exec(char* input, size_t& input_len, char* output, size_t& output_len) override;
-		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec) override;
-		Status step(char* input, size_t& input_len, char* output, size_t& output_len) override;
-
 		/* Owns a zlib/bzip2 stream: copying would free it twice. */
 		BZip2Compressor(const BZip2Compressor&) = delete;
 		BZip2Compressor& operator=(const BZip2Compressor&) = delete;
 
 	protected:
+		Progress internal_step(std::span<const char> input, std::span<char> output,
+		                       std::error_code& ec) override;
+
 		std::unique_ptr<Bz2Private> d;
-		int m_last_status;
 
 };
 
@@ -37,17 +35,15 @@ class BZip2Decompressor final : public Samurai::IO::Codec {
 	public:
 		BZip2Decompressor();
 		~BZip2Decompressor() override;
-		bool exec(char* input, size_t& input_len, char* output, size_t& output_len) override;
-		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec) override;
-		Status step(char* input, size_t& input_len, char* output, size_t& output_len) override;
-
 		/* Owns a zlib/bzip2 stream: copying would free it twice. */
 		BZip2Decompressor(const BZip2Decompressor&) = delete;
 		BZip2Decompressor& operator=(const BZip2Decompressor&) = delete;
 
 	protected:
+		Progress internal_step(std::span<const char> input, std::span<char> output,
+		                       std::error_code& ec) override;
+
 		std::unique_ptr<Bz2Private> d;
-		int m_last_status;
 
 };
 
@@ -55,17 +51,15 @@ class GzipCompressor final : public Samurai::IO::Codec {
 	public:
 		GzipCompressor();
 		~GzipCompressor() override;
-		bool exec(char* input, size_t& input_len, char* output, size_t& output_len) override;
-		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec) override;
-		Status step(char* input, size_t& input_len, char* output, size_t& output_len) override;
-
 		/* Owns a zlib/bzip2 stream: copying would free it twice. */
 		GzipCompressor(const GzipCompressor&) = delete;
 		GzipCompressor& operator=(const GzipCompressor&) = delete;
 
 	protected:
+		Progress internal_step(std::span<const char> input, std::span<char> output,
+		                       std::error_code& ec) override;
+
 		std::unique_ptr<GzPrivate> d;
-		int m_last_status;
 
 };
 
@@ -73,17 +67,15 @@ class GzipDecompressor final : public Samurai::IO::Codec {
 	public:
 		GzipDecompressor();
 		~GzipDecompressor() override;
-		bool exec(char* input, size_t& input_len, char* output, size_t& output_len) override;
-		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec) override;
-		Status step(char* input, size_t& input_len, char* output, size_t& output_len) override;
-
 		/* Owns a zlib/bzip2 stream: copying would free it twice. */
 		GzipDecompressor(const GzipDecompressor&) = delete;
 		GzipDecompressor& operator=(const GzipDecompressor&) = delete;
 
 	protected:
+		Progress internal_step(std::span<const char> input, std::span<char> output,
+		                       std::error_code& ec) override;
+
 		std::unique_ptr<GzPrivate> d;
-		int m_last_status;
 
 };
 

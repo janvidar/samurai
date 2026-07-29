@@ -80,7 +80,6 @@ static std::error_code gz_error(int status)
 
 Samurai::IO::BZip2Compressor::BZip2Compressor()
 {
-	m_last_status = 0;
 	d = std::make_unique<Bz2Private>();
 	
 	if (BZ2_bzCompressInit(d->stream.get(), 5, 0, 0) != BZ_OK)
@@ -99,32 +98,37 @@ Samurai::IO::BZip2Compressor::~BZip2Compressor()
 		BZ2_bzCompressEnd(d->stream.get());
 }
 
-bool Samurai::IO::BZip2Compressor::exec(char* input, size_t& input_len, char* output, size_t& output_len)
+Samurai::IO::Codec::Progress Samurai::IO::BZip2Compressor::internal_step(
+	std::span<const char> input, std::span<char> output, std::error_code& ec)
 {
-	if (!output_len || !d) return false;
-	
-	d->stream->avail_in = input_len;
-	d->stream->next_in = input;
-	d->stream->avail_out = output_len;
-	d->stream->next_out = output;
-	
-	int action = (input_len) ? BZ_RUN : BZ_FINISH;
-	int retval = BZ2_bzCompress(d->stream.get(), action);
-	m_last_status = retval;
+	Progress progress;
 
-	if (retval == BZ_RUN_OK || retval == BZ_FINISH_OK || retval == BZ_STREAM_END)
+	if (!d) { ec = Samurai::system_error(ENOMEM); return progress; }
+	if (output.empty()) { ec = Samurai::system_error(ENOBUFS); return progress; }
+
+	/* bzlib takes a mutable pointer, but only reads through it. */
+	d->stream->next_in = const_cast<char*>(input.data());
+	d->stream->avail_in = (unsigned int) input.size();
+	d->stream->next_out = output.data();
+	d->stream->avail_out = (unsigned int) output.size();
+
+	/* No input left to give is what asks it to finish. */
+	const int retval = BZ2_bzCompress(d->stream.get(), input.empty() ? BZ_FINISH : BZ_RUN);
+
+	if (retval != BZ_RUN_OK && retval != BZ_FINISH_OK && retval != BZ_STREAM_END)
 	{
-		output_len -= d->stream->avail_out;
-		input_len -=  d->stream->avail_in;
-		return true;
+		ec = bz2_error(retval);
+		return progress;
 	}
-	
-	return false;
+
+	progress.consumed = input.size() - d->stream->avail_in;
+	progress.produced = output.size() - d->stream->avail_out;
+	progress.status = (retval == BZ_STREAM_END) ? Status::StreamEnd : Status::Ok;
+	return progress;
 }
 
 Samurai::IO::BZip2Decompressor::BZip2Decompressor()
 {
-	m_last_status = 0;
 	d = std::make_unique<Bz2Private>();
 	
 	if (BZ2_bzDecompressInit(d->stream.get(), 0, 0) != BZ_OK)
@@ -143,30 +147,35 @@ Samurai::IO::BZip2Decompressor::~BZip2Decompressor()
 		BZ2_bzDecompressEnd(d->stream.get());
 }
 
-bool Samurai::IO::BZip2Decompressor::exec(char* input, size_t& input_len, char* output, size_t& output_len)
+Samurai::IO::Codec::Progress Samurai::IO::BZip2Decompressor::internal_step(
+	std::span<const char> input, std::span<char> output, std::error_code& ec)
 {
-	if (!output_len || !d) return false;
-	
-	d->stream->avail_in = input_len;
-	d->stream->next_in = (char*) input;
-	d->stream->avail_out = output_len;
-	d->stream->next_out = (char*) output;
+	Progress progress;
 
-	int retval = BZ2_bzDecompress(d->stream.get());
-	m_last_status = retval;
+	if (!d) { ec = Samurai::system_error(ENOMEM); return progress; }
+	if (output.empty()) { ec = Samurai::system_error(ENOBUFS); return progress; }
 
-	if (retval == BZ_OK || retval == BZ_STREAM_END)
+	d->stream->next_in = const_cast<char*>(input.data());
+	d->stream->avail_in = (unsigned int) input.size();
+	d->stream->next_out = output.data();
+	d->stream->avail_out = (unsigned int) output.size();
+
+	const int retval = BZ2_bzDecompress(d->stream.get());
+
+	if (retval != BZ_OK && retval != BZ_STREAM_END)
 	{
-		output_len -= d->stream->avail_out;
-		input_len -= d->stream->avail_in;
-		return true;
+		ec = bz2_error(retval);
+		return progress;
 	}
-	return false;
+
+	progress.consumed = input.size() - d->stream->avail_in;
+	progress.produced = output.size() - d->stream->avail_out;
+	progress.status = (retval == BZ_STREAM_END) ? Status::StreamEnd : Status::Ok;
+	return progress;
 }
 
 Samurai::IO::GzipCompressor::GzipCompressor()
 {
-	m_last_status = 0;
 	d = std::make_unique<GzPrivate>();
 	
 	 // FIXME: Default compression level: 5
@@ -184,32 +193,37 @@ Samurai::IO::GzipCompressor::~GzipCompressor()
 
 
 
-bool Samurai::IO::GzipCompressor::exec(char* input, size_t& input_len, char* output, size_t& output_len)
+Samurai::IO::Codec::Progress Samurai::IO::GzipCompressor::internal_step(
+	std::span<const char> input, std::span<char> output, std::error_code& ec)
 {
-	if (!output_len || !d) return false;
+	Progress progress;
 
-	d->stream->avail_in = input_len;
-	d->stream->next_in = (Bytef*) input;
-	d->stream->avail_out = output_len;
-	d->stream->next_out = (Bytef*) output;
-	
-	int action = (input_len) ? Z_NO_FLUSH : Z_FINISH;
-	int retval = deflate(d->stream.get(), action);
-	m_last_status = retval;
+	if (!d) { ec = Samurai::system_error(ENOMEM); return progress; }
+	if (output.empty()) { ec = Samurai::system_error(ENOBUFS); return progress; }
 
-	if (retval == Z_OK || retval == Z_STREAM_END)
+	/* zlib takes a mutable pointer, but only reads through it. */
+	d->stream->next_in = (Bytef*) const_cast<char*>(input.data());
+	d->stream->avail_in = (uInt) input.size();
+	d->stream->next_out = (Bytef*) output.data();
+	d->stream->avail_out = (uInt) output.size();
+
+	/* No input left to give is what asks it to finish. */
+	const int retval = deflate(d->stream.get(), input.empty() ? Z_FINISH : Z_NO_FLUSH);
+
+	if (retval != Z_OK && retval != Z_STREAM_END && retval != Z_BUF_ERROR)
 	{
-		output_len -= d->stream->avail_out;
-		input_len -=  d->stream->avail_in;
-		return true;
+		ec = gz_error(retval);
+		return progress;
 	}
-	return false;
-}
 
+	progress.consumed = input.size() - d->stream->avail_in;
+	progress.produced = output.size() - d->stream->avail_out;
+	progress.status = (retval == Z_STREAM_END) ? Status::StreamEnd : Status::Ok;
+	return progress;
+}
 
 Samurai::IO::GzipDecompressor::GzipDecompressor()
 {
-	m_last_status = 0;
 	d = std::make_unique<GzPrivate>();
 	if (inflateInit(d->stream.get()) != Z_OK)
 	{
@@ -224,99 +238,29 @@ Samurai::IO::GzipDecompressor::~GzipDecompressor()
 		inflateEnd(d->stream.get());
 }
 
-bool Samurai::IO::GzipDecompressor::exec(char* input, size_t& input_len, char* output, size_t& output_len)
+Samurai::IO::Codec::Progress Samurai::IO::GzipDecompressor::internal_step(
+	std::span<const char> input, std::span<char> output, std::error_code& ec)
 {
-	if (!output_len || !d) return false;
-	
-	d->stream->avail_in = input_len;
-	d->stream->next_in = (Bytef*) input;
-	d->stream->avail_out = output_len;
-	d->stream->next_out = (Bytef*) output;
+	Progress progress;
 
-	int retval = inflate(d->stream.get(), Z_NO_FLUSH);
-	m_last_status = retval;
-	
-	if (retval == Z_OK || retval == Z_STREAM_END) {
-		output_len -= d->stream->avail_out;
-		input_len  -= d->stream->avail_in;
-		return true;
+	if (!d) { ec = Samurai::system_error(ENOMEM); return progress; }
+	if (output.empty()) { ec = Samurai::system_error(ENOBUFS); return progress; }
+
+	d->stream->next_in = (Bytef*) const_cast<char*>(input.data());
+	d->stream->avail_in = (uInt) input.size();
+	d->stream->next_out = (Bytef*) output.data();
+	d->stream->avail_out = (uInt) output.size();
+
+	const int retval = inflate(d->stream.get(), Z_NO_FLUSH);
+
+	if (retval != Z_OK && retval != Z_STREAM_END && retval != Z_BUF_ERROR)
+	{
+		ec = gz_error(retval);
+		return progress;
 	}
-	return false;
-}
 
-bool Samurai::IO::BZip2Compressor::exec(char* input, size_t& input_len,
-                                              char* output, size_t& output_len, std::error_code& ec)
-{
-	ec.clear();
-	if (!d) { ec = Samurai::system_error(ENOMEM); return false; }
-	if (!output_len) { ec = Samurai::system_error(ENOBUFS); return false; }
-
-	if (exec(input, input_len, output, output_len)) return true;
-
-	ec = bz2_error(m_last_status);
-	return false;
-}
-
-bool Samurai::IO::BZip2Decompressor::exec(char* input, size_t& input_len,
-                                              char* output, size_t& output_len, std::error_code& ec)
-{
-	ec.clear();
-	if (!d) { ec = Samurai::system_error(ENOMEM); return false; }
-	if (!output_len) { ec = Samurai::system_error(ENOBUFS); return false; }
-
-	if (exec(input, input_len, output, output_len)) return true;
-
-	ec = bz2_error(m_last_status);
-	return false;
-}
-
-bool Samurai::IO::GzipCompressor::exec(char* input, size_t& input_len,
-                                              char* output, size_t& output_len, std::error_code& ec)
-{
-	ec.clear();
-	if (!d) { ec = Samurai::system_error(ENOMEM); return false; }
-	if (!output_len) { ec = Samurai::system_error(ENOBUFS); return false; }
-
-	if (exec(input, input_len, output, output_len)) return true;
-
-	ec = gz_error(m_last_status);
-	return false;
-}
-
-bool Samurai::IO::GzipDecompressor::exec(char* input, size_t& input_len,
-                                              char* output, size_t& output_len, std::error_code& ec)
-{
-	ec.clear();
-	if (!d) { ec = Samurai::system_error(ENOMEM); return false; }
-	if (!output_len) { ec = Samurai::system_error(ENOBUFS); return false; }
-
-	if (exec(input, input_len, output, output_len)) return true;
-
-	ec = gz_error(m_last_status);
-	return false;
-}
-
-
-Samurai::IO::Codec::Status Samurai::IO::BZip2Compressor::step(char* input, size_t& input_len, char* output, size_t& output_len)
-{
-	if (!exec(input, input_len, output, output_len)) return Status::Error;
-	return m_last_status == BZ_STREAM_END ? Status::StreamEnd : Status::Ok;
-}
-
-Samurai::IO::Codec::Status Samurai::IO::BZip2Decompressor::step(char* input, size_t& input_len, char* output, size_t& output_len)
-{
-	if (!exec(input, input_len, output, output_len)) return Status::Error;
-	return m_last_status == BZ_STREAM_END ? Status::StreamEnd : Status::Ok;
-}
-
-Samurai::IO::Codec::Status Samurai::IO::GzipCompressor::step(char* input, size_t& input_len, char* output, size_t& output_len)
-{
-	if (!exec(input, input_len, output, output_len)) return Status::Error;
-	return m_last_status == Z_STREAM_END ? Status::StreamEnd : Status::Ok;
-}
-
-Samurai::IO::Codec::Status Samurai::IO::GzipDecompressor::step(char* input, size_t& input_len, char* output, size_t& output_len)
-{
-	if (!exec(input, input_len, output, output_len)) return Status::Error;
-	return m_last_status == Z_STREAM_END ? Status::StreamEnd : Status::Ok;
+	progress.consumed = input.size() - d->stream->avail_in;
+	progress.produced = output.size() - d->stream->avail_out;
+	progress.status = (retval == Z_STREAM_END) ? Status::StreamEnd : Status::Ok;
+	return progress;
 }

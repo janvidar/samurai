@@ -20,14 +20,14 @@ class Unicode final : public Codec
 	public:
 		Unicode(const char* to, const char* from);
 		~Unicode() override;
-		bool exec(char* input, size_t& input_len, char* output, size_t& output_len) override;
-		bool exec(char* input, size_t& input_len, char* output, size_t& output_len, std::error_code& ec) override;
-
 		/* Owns an iconv descriptor: copying would close it twice. */
 		Unicode(const Unicode&) = delete;
 		Unicode& operator=(const Unicode&) = delete;
 
 	protected:
+		Progress internal_step(std::span<const char> input, std::span<char> output,
+		                       std::error_code& ec) override;
+
 		std::unique_ptr<UnicodePrivate> cvt;
 };
 	
