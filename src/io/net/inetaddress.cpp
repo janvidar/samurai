@@ -236,12 +236,10 @@ uint32_t Samurai::IO::Net::InetAddress::getIPv4HostOrder() const
 bool Samurai::IO::Net::InetAddress::isValid() const
 {
 	if (version == Version::IPv4) {
-#ifdef SAMURAI_POSIX
 		const uint32_t host_order = getIPv4HostOrder();
-		return host_order && !IN_BADCLASS(host_order) && !IN_EXPERIMENTAL(host_order);
-#else
-		return true; // FIXME
-#endif
+		if (host_order == 0) return false;                          /* 0.0.0.0 */
+		if ((host_order & 0xf0000000) == 0xf0000000) return false;  /* 240.0.0.0/4 */
+		return true;
 	} else if (version == Version::IPv6) {
 #ifdef SAMURAI_POSIX
 		const auto words = data->ipv6_32();
