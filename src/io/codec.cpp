@@ -4,26 +4,20 @@
  */
 
 #include <samurai/io/codec.h>
-#include <errno.h>
 
 Samurai::IO::Codec::~Codec() { }
 
-/*
- * The default maps the bool overload onto the tri-state, which loses the
- * distinction between "finished" and "failed". Implementations that know the
- * difference override this.
- */
-Samurai::IO::Codec::Status Samurai::IO::Codec::step(char* input, size_t& input_len,
-                                                    char* output, size_t& output_len)
+Samurai::IO::Codec::Progress Samurai::IO::Codec::step(std::span<const char> input,
+                                                      std::span<char> output)
 {
-	return exec(input, input_len, output, output_len) ? Status::Ok : Status::Error;
+	std::error_code ec;
+	return internal_step(input, output, ec);
 }
 
-bool Samurai::IO::Codec::exec(char* input, size_t& input_len,
-                              char* output, size_t& output_len, std::error_code& ec)
+Samurai::IO::Codec::Progress Samurai::IO::Codec::step(std::span<const char> input,
+                                                      std::span<char> output,
+                                                      std::error_code& ec)
 {
 	ec.clear();
-	if (exec(input, input_len, output, output_len)) return true;
-	ec = Samurai::system_error(EIO);
-	return false;
+	return internal_step(input, output, ec);
 }

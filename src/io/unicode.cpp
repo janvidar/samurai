@@ -73,20 +73,31 @@ Samurai::IO::Unicode::~Unicode()
 {
 }
 
-bool Samurai::IO::Unicode::exec(char* in, size_t& inlen, char* out, size_t& outlen)
+Samurai::IO::Codec::Progress Samurai::IO::Unicode::internal_step(
+	std::span<const char> input, std::span<char> output, std::error_code& ec)
 {
-	return cvt->convert(in, inlen, out, outlen);
-}
+	Progress progress;
 
-bool Samurai::IO::Unicode::exec(char* in, size_t& inlen, char* out, size_t& outlen,
-                                std::error_code& ec)
-{
-	ec.clear();
+	/* iconv reports what is left rather than what it took, and takes a
+	   mutable pointer to input it only reads. */
+	char* in = const_cast<char*>(input.data());
+	char* out = output.data();
+	size_t inleft = input.size();
+	size_t outleft = output.size();
+
 	errno = 0;
-	if (cvt->convert(in, inlen, out, outlen)) return true;
+	if (!cvt->convert(in, inleft, out, outleft))
+	{
+		/* iconv sets EILSEQ for invalid input, EINVAL for a truncated
+		   multibyte sequence and E2BIG for a full output buffer. */
+		ec = Samurai::system_error(errno ? errno : EIO);
+		return progress;
+	}
 
-	/* iconv sets EILSEQ for invalid input, EINVAL for a truncated multibyte
-	   sequence and E2BIG for a full output buffer. */
-	ec = Samurai::system_error(errno ? errno : EIO);
-	return false;
+	progress.consumed = input.size() - inleft;
+	progress.produced = output.size() - outleft;
+	/* A converter has no end of stream of its own; it is done when the
+	   caller stops feeding it. */
+	progress.status = Status::Ok;
+	return progress;
 }
