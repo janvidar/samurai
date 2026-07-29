@@ -325,3 +325,17 @@ EXO_TEST(url_invalid_has_no_scheme,
 	Samurai::IO::Net::URL url("not a url");
 	return !url.isValid() && url.getScheme().empty();
 });
+
+/* An address literal is a peer name too - it is what a TLS client verifies an
+   iPAddress SAN against - so it has to survive URL parsing. */
+EXO_TEST(url_host_keeps_an_ipv4_literal,
+{
+	Samurai::IO::Net::URL url("http://127.0.0.1/index.html");
+	return url.isValid() && url.getHost().getHostname() == "127.0.0.1";
+});
+
+EXO_TEST(url_host_keeps_an_ipv6_literal_without_brackets,
+{
+	Samurai::IO::Net::URL url("http://[::1]:8080/index.html");
+	return url.isValid() && url.getHost().getHostname() == "::1";
+});
