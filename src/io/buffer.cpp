@@ -152,19 +152,6 @@ std::string Samurai::IO::Buffer::copyRange(size_t offset, size_t end) const {
 	return std::string(&buf[head + offset], end - offset);
 }
 
-char* Samurai::IO::Buffer::memdup(size_t offset, size_t end) {
-	const size_t live = len - head;
-	if (offset > end || end > live) return nullptr;
-
-	size_t size = end - offset;
-	char* temp_buf = (char*) malloc(size + 1);
-	if (!temp_buf) return nullptr;
-
-	memcpy(temp_buf, &buf[head + offset], size);
-	temp_buf[size] = 0;
-	return temp_buf;
-}
-
 
 std::string Samurai::IO::Buffer::pop(size_t len_) {
 	const size_t live = len - head;

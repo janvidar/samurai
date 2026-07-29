@@ -105,12 +105,6 @@ class Buffer {
 		std::string copyRange(size_t offset, size_t end) const;
 
 		/**
-		 * As copyRange(), but returning a malloc()ed, NUL terminated copy the
-		 * caller must free(), or null if the range is out of bounds.
-		 */
-		char* memdup(size_t offset, size_t end);
-
-		/**
 		 * Returns a pointer to the data area.
 		 * NOTE: Use with care!
 		 */
