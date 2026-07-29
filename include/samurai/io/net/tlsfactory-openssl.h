@@ -40,6 +40,11 @@ class OpenSSL final : public TlsFactory {
 	protected:
 		SSL_CTX *ctx;
 		SSL *ssl;
+
+		/* Decided in initialize() and read again after the handshake, rather
+		   than asked of the static twice: a toggle flipped in between would
+		   otherwise leave the two halves disagreeing about what was required. */
+		bool verify_peer;
 };
 
 }

@@ -209,9 +209,34 @@ static bool tls_handshake(Samurai::IO::Net::OpenSSL& server, Samurai::IO::Net::O
 	return server_done && client_done;
 }
 
-/* A connected, handshaken pair, or nothing. */
+/* Sets the global toggle for as long as it is in scope. Leaving it flipped
+   would decide the outcome of whichever case ran next. */
+struct TlsVerifyGuard
+{
+	bool saved;
+
+	explicit TlsVerifyGuard(bool allow_untrusted)
+		: saved(Tls::allowUntrustedConnections())
+	{
+		Tls::setAllowUntrustedConnections(allow_untrusted);
+	}
+
+	~TlsVerifyGuard() { Tls::setAllowUntrustedConnections(saved); }
+
+	TlsVerifyGuard(const TlsVerifyGuard&) = delete;
+	TlsVerifyGuard& operator=(const TlsVerifyGuard&) = delete;
+};
+
+/*
+ * A connected, handshaken pair, or nothing.
+ *
+ * The fixture certificate is self-signed and in no trust store, so these cases
+ * run untrusted: what they exercise is the transport, not the validation. The
+ * cases that do exercise validation build their own pair below.
+ */
 struct TlsSession
 {
+	TlsVerifyGuard guard{true};
 	SocketPair pair;
 	Samurai::IO::Net::OpenSSL server;
 	Samurai::IO::Net::OpenSSL client;
@@ -221,7 +246,6 @@ struct TlsSession
 	{
 		if (!tls_fixture().ready || !pair.valid()) return;
 
-		Tls::setAllowUntrustedConnections(true);
 		if (server.initialize(TlsOperation::Server, pair.fd[0]) != TlsStatus::Ok) return;
 		if (client.initialize(TlsOperation::Client, pair.fd[1]) != TlsStatus::Ok) return;
 
@@ -475,4 +499,105 @@ EXO_TEST(tls_sessions_are_independent,
 		if (received != message) return false;
 	}
 	return true;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Verification is the default                                               */
+/*                                                                           */
+/* A client checks the server's chain against the system trust store and its */
+/* name against the certificate, and refuses the connection when either      */
+/* fails. The fixture certificate is self-signed and in no trust store, so it */
+/* is exactly what must be turned away.                                      */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(tls_verification_is_on_by_default,
+{
+	/* Not merely the accessor: this is the value a consumer that never calls
+	   the setter gets. */
+	return Samurai::IO::Net::TlsFactory::allowUntrustedConnections() == false;
+});
+
+EXO_TEST(tls_client_certificates_are_not_required_by_default,
+{
+	return Samurai::IO::Net::TlsFactory::requireClientCertificate() == false;
+});
+
+EXO_TEST(tls_require_client_certificate_toggles,
+{
+	const bool original = Samurai::IO::Net::TlsFactory::requireClientCertificate();
+
+	Samurai::IO::Net::TlsFactory::setRequireClientCertificate(true);
+	const bool on = Samurai::IO::Net::TlsFactory::requireClientCertificate();
+	Samurai::IO::Net::TlsFactory::setRequireClientCertificate(false);
+	const bool off = Samurai::IO::Net::TlsFactory::requireClientCertificate();
+
+	Samurai::IO::Net::TlsFactory::setRequireClientCertificate(original);
+	return on && !off;
+});
+
+/* Fail closed: with nothing to check the certificate name against, a verifying
+   client refuses to start rather than connect unauthenticated. */
+EXO_TEST(tls_verifying_client_without_a_peer_name_refuses_to_initialize,
+{
+	if (!tls_fixture().ready) return false;
+
+	TlsVerifyGuard guard{false};
+	SocketPair pair;
+	if (!pair.valid()) return false;
+
+	Samurai::IO::Net::OpenSSL client;
+	return client.initialize(TlsOperation::Client, pair.fd[1]) != TlsStatus::Ok;
+});
+
+/* The point of C1: a self-signed peer is turned away rather than accepted. */
+EXO_TEST(tls_self_signed_certificate_is_rejected_when_verifying,
+{
+	if (!tls_fixture().ready) return false;
+
+	SocketPair pair;
+	if (!pair.valid()) return false;
+
+	Samurai::IO::Net::OpenSSL server;
+	Samurai::IO::Net::OpenSSL client;
+
+	{
+		TlsVerifyGuard untrusted{true};
+		if (server.initialize(TlsOperation::Server, pair.fd[0]) != TlsStatus::Ok) return false;
+	}
+
+	TlsVerifyGuard verifying{false};
+	client.setPeerName("localhost");
+	if (client.initialize(TlsOperation::Client, pair.fd[1]) != TlsStatus::Ok) return false;
+
+	/* The chain cannot be built, so the handshake must not complete. */
+	return !tls_handshake(server, client);
+});
+
+/*
+ * The other half of the fix: verifying connections must stay usable for a
+ * server. Demanding a client certificate would reject every client that has
+ * none, so a server does not ask for one unless mutual TLS is turned on.
+ */
+EXO_TEST(tls_verifying_server_does_not_demand_a_client_certificate,
+{
+	if (!tls_fixture().ready) return false;
+
+	SocketPair pair;
+	if (!pair.valid()) return false;
+
+	Samurai::IO::Net::OpenSSL server;
+	Samurai::IO::Net::OpenSSL client;
+
+	{
+		/* Server built with verification on, which is the default. */
+		TlsVerifyGuard verifying{false};
+		if (server.initialize(TlsOperation::Server, pair.fd[0]) != TlsStatus::Ok) return false;
+	}
+
+	/* Client that does not check the self-signed certificate, so the only thing
+	   that can fail the handshake is the server asking for something. */
+	TlsVerifyGuard untrusted{true};
+	if (client.initialize(TlsOperation::Client, pair.fd[1]) != TlsStatus::Ok) return false;
+
+	return tls_handshake(server, client);
 });
