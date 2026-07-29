@@ -340,7 +340,13 @@ ssize_t Samurai::IO::File::read(char* data, size_t length, std::error_code& ec)
 	ec.clear();
 	if (fd == -1) { ec = Samurai::system_error(EBADF); return -1; }
 
-	ssize_t status = ::read(fd, data, length);
+	/* A short read is the normal contract - it means end of file, or that this
+	   is all there is for now - so only the signal is retried. */
+	ssize_t status;
+	do {
+		status = ::read(fd, data, length);
+	} while (status == -1 && errno == EINTR);
+
 	if (status == -1) { ec = Samurai::system_error(errno); return -1; }
 
 	info.reset();
@@ -360,48 +366,55 @@ ssize_t Samurai::IO::File::write(const char* data, size_t length, std::error_cod
 	ec.clear();
 	if (fd == -1) { ec = Samurai::system_error(EBADF); return -1; }
 
-	ssize_t status = ::write(fd, data, length);
-	if (status == -1)
+	/* A short write is not the contract here: the loop runs until the whole
+	   extent is placed. It gives up early only when the descriptor would block,
+	   or on an error after some of it has already gone out - in which case the
+	   progress is what gets reported, and the next call reports the error. */
+	size_t done = 0;
+	while (done < length)
 	{
-		if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
-		ec = Samurai::system_error(errno);
-		return -1;
+		const ssize_t status = ::write(fd, data + done, length - done);
+		if (status == -1)
+		{
+			if (errno == EINTR) continue;
+			if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+			if (done == 0) { ec = Samurai::system_error(errno); return -1; }
+			break;
+		}
+		done += (size_t) status;
 	}
 
-	info.reset();
-	return status;
+	if (done) info.reset();
+	return (ssize_t) done;
 }
 
 
 ssize_t Samurai::IO::File::read(Samurai::IO::Buffer* data, size_t length) {
-	RETURN_IF_NOT_OPEN(fd, -1);
-
 	std::vector<char> buf(length);
-	int status = ::read(fd, buf.data(), length);
+
+	std::error_code ec;
+	const ssize_t status = read(buf.data(), length, ec);
 	if (status <= 0)
 		return status;
 
 	data->append(buf.data(), (size_t) status);
-	info.reset();
 	return status;
 }
 
 ssize_t Samurai::IO::File::write(Samurai::IO::Buffer* data, size_t length, bool remove) {
-	RETURN_IF_NOT_OPEN(fd, -1);
-	
 	size_t len = length;
 	if (len > data->size()) len = data->size();
 
 	std::vector<char> buf(len);
+	data->pop(buf.data(), len);
 
-	data->pop(buf.data(), length);
-	int status = ::write(fd, buf.data(), len);
-	if (status == -1)
-		return (errno == EAGAIN) ? 0 : -1;
+	std::error_code ec;
+	const ssize_t status = write(buf.data(), len, ec);
+	if (status <= 0)
+		return status;
 
 	if (remove) data->remove((size_t) status);
 
-	info.reset();
 	return status;
 }
 
@@ -603,6 +616,14 @@ int Samurai::IO::File::rmdir(const char* dirname)
 	const std::string dir = resolvePath(dirname ? dirname : "");
 
 	std::error_code ec;
+
+	/* remove() takes anything the name resolves to, so the type has to be
+	   checked here for this to mean ::rmdir. A symlink to a directory is not
+	   one either, which is why this is is_directory() and not a status check
+	   that follows the link. */
+	if (!std::filesystem::is_directory(std::filesystem::symlink_status(dir, ec)) || ec)
+		return -1;
+
 	if (!std::filesystem::remove(dir, ec) || ec)
 		return -1;
 
