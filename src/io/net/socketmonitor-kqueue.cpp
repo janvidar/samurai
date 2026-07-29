@@ -263,6 +263,37 @@ void Samurai::IO::Net::KQueueSocketMonitor::internal_wait(int time_ms)
 		return;
 	}
 
+	/*
+	 * A call that reported a rejected change has not waited and has not looked
+	 * at readiness: kevent() returns as soon as it has an EV_ERROR entry to
+	 * hand back. Rejections are ordinary here - closing a descriptor removes
+	 * its knotes, so the EV_DELETE queued when a socket was released is
+	 * answered with ENOENT on the next pass - and letting one swallow the wait
+	 * left a descriptor that was already readable unreported until something
+	 * else woke the loop. Wait again, with the changelist now committed.
+	 */
+	int errors = 0;
+	for (int n = 0; n < ret; n++)
+	{
+		if (events[n].flags & EV_ERROR) errors++;
+	}
+
+	if (ret > 0 && errors == ret)
+	{
+		QDBG("kqueue - %d rejected change(s) and nothing else; waiting again", errors);
+		ret = kevent(kfd, nullptr, 0, events.data(), (int) events.size(), &timeout);
+		QDBG("kqueue - rerun ret=%d", ret);
+
+		if (ret == -1)
+		{
+			if (Samurai::IO::Net::net_error() != EINTR)
+			{
+				QERR("kevent error: %i, %s", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
+			}
+			return;
+		}
+	}
+
 	for (int n = 0; n < ret; n++)
 	{
 		struct kevent* ev = &events[n];
