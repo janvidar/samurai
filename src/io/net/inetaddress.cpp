@@ -432,6 +432,9 @@ Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const st
 
 Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const Samurai::IO::Net::InetAddress& copy)
 {
+	// The source is read after data is released, so it must not be this object.
+	if (this == &copy) return *this;
+
 	data.reset();
 	resolver.reset();
 
