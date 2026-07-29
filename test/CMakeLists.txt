@@ -73,6 +73,7 @@ set(SAMURAI_EXOTIC_INPUTS
     interface.tcc
     misc.tcc
     multicast.tcc
+    notifier.tcc
     socketmonitor.tcc
     sockets.tcc
     tls.tcc

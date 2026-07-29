@@ -178,6 +178,7 @@ set(SAMURAI_SOURCES
     src/io/net/inetaddress.cpp
     src/io/net/interface.cpp
     src/io/net/multicast.cpp
+    src/io/net/notifier.cpp
     src/io/net/socket.cpp
     src/io/net/socketaddress.cpp
     src/io/net/socketbase.cpp
