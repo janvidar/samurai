@@ -1,4 +1,8 @@
 #include <memory>
+#include <signal.h>
+#include <string.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 #include <samurai/messagehandler.h>
 #include <samurai/io/net/socketbase.h>
@@ -628,4 +632,99 @@ EXO_TEST(sockets_write_to_closed_peer_returns_an_error_not_a_signal, {
 
 	/* Still running, and the failure surfaced as a return value. */
 	return total < 0;
+});
+
+
+/* ------------------------------------------------------------------------- */
+/* Failures that arrive without a return value                                */
+/*                                                                            */
+/* A constructor cannot report that the descriptor was never created, so the   */
+/* state carries it and listen() refuses. A readiness notification that turns  */
+/* out to have nothing behind it is not an error either, and must not reach    */
+/* the handler as one.                                                        */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(sockets_server_without_an_address_family_is_not_created, {
+	/* An unset address has no family, so socket() cannot be asked for one. */
+	Samurai::IO::Net::InetAddress unset_addr;
+	Samurai::IO::Net::InetSocketAddress unset(unset_addr, (uint16_t) 0);
+	std::shared_ptr<Samurai::IO::Net::ServerSocket> server =
+		Samurai::IO::Net::ServerSocket::create(
+			(Samurai::IO::Net::ServerSocketEventHandler*) nullptr, unset);
+
+	/* A constructor cannot return a failure, so the factory does it. */
+	return server == nullptr;
+});
+
+EXO_TEST(sockets_datagram_read_with_nothing_pending_is_not_an_error, {
+	std::shared_ptr<Samurai::IO::Net::DatagramSocket> sock =
+		Samurai::IO::Net::DatagramSocket::create(
+			(Samurai::IO::Net::DatagramEventHandler*) nullptr, (uint16_t) 0);
+	if (!sock || !sock->listen()) return false;
+
+	Samurai::IO::Net::DatagramPacket packet;
+
+	/* Nothing has been sent here, and the socket is non-blocking, so recvfrom()
+	   reports EAGAIN. That is "no datagram", not "the socket failed". */
+	return sock->read(&packet) == 0;
+});
+
+
+/* ------------------------------------------------------------------------- */
+/* A signal is not a read error                                               */
+/*                                                                            */
+/* recv() returning EINTR means the call was cut short, not that the peer or  */
+/* the descriptor is gone, so the connection stays usable and the caller is    */
+/* expected to ask again.                                                     */
+/*                                                                            */
+/* Socket::create() forwards to the descriptor-adopting constructor, so a      */
+/* socketpair() gives a connected Socket with no port, no listener and no      */
+/* timing to depend on.                                                       */
+/* ------------------------------------------------------------------------- */
+
+namespace {
+
+extern "C" void samurai_test_alarm_handler(int) { }
+
+/* Arrange for SIGALRM to arrive shortly, without SA_RESTART: the default
+   disposition would resume the call rather than fail it with EINTR. */
+static bool arm_interrupting_alarm()
+{
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = samurai_test_alarm_handler;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	if (sigaction(SIGALRM, &sa, nullptr) != 0) return false;
+
+	struct itimerval timer;
+	memset(&timer, 0, sizeof(timer));
+	timer.it_value.tv_usec = 100000;
+	return setitimer(ITIMER_REAL, &timer, nullptr) == 0;
+}
+
+}
+
+EXO_TEST(sockets_peek_interrupted_by_a_signal_keeps_the_connection, {
+	int sv[2];
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) != 0) return false;
+
+	Samurai::IO::Net::InetSocketAddress dummy((uint16_t) 0);
+	std::shared_ptr<Samurai::IO::Net::Socket> sock =
+		Samurai::IO::Net::Socket::create(sv[0], dummy);
+	if (!sock) { close(sv[0]); close(sv[1]); return false; }
+
+	if (!arm_interrupting_alarm()) { close(sv[1]); return false; }
+
+	/* Nothing has been sent, so this blocks until the alarm cuts it short. */
+	char buf[1] = { 0 };
+	if (sock->peek(buf, sizeof(buf)) != 0) { close(sv[1]); return false; }
+
+	/* The connection is still there, so a peek that has something to look at
+	   answers with it. */
+	if (::send(sv[1], "x", 1, 0) != 1) { close(sv[1]); return false; }
+
+	const ssize_t got = sock->peek(buf, sizeof(buf));
+	close(sv[1]);
+	return got == 1 && buf[0] == 'x';
 });

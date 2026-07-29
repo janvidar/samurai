@@ -194,6 +194,13 @@ int Samurai::IO::Net::DatagramSocket::read(DatagramPacket* packet) {
 	const ssize_t status = ::recvfrom(sd, (char*) data, length, 0, (sockaddr*) &sa, &sl);
 
 	if (status == -1) {
+		/* A readiness notification can be spurious and a signal can cut the
+		   call short; neither is a datagram error, and the caller reports 0 to
+		   nobody. */
+		if (Samurai::IO::Net::net_error() == EAGAIN || Samurai::IO::Net::net_error() == EWOULDBLOCK
+			|| Samurai::IO::Net::net_error() == EINTR)
+			return 0;
+
 		QERR("recvfrom err: %s", strerror(Samurai::IO::Net::net_error()));
 		return -1;
 	}
