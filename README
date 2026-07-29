@@ -11,9 +11,18 @@ Building
 
 Samurai builds with CMake (3.16 or newer):
 
+    git clone --recurse-submodules https://github.com/janvidar/samurai.git
     cmake -S . -B build
     cmake --build build -j
     ctest --test-dir build
+
+The submodule is the exotic test generator, which the automated suite is built
+through. In a clone made without it, run
+
+    git submodule update --init
+
+The library itself does not need it; without it the suite is skipped, with a
+notice at configure time.
 
 Requirements: a C++20 compiler, zlib, bzip2, and either OpenSSL 3.0 or newer or
 LibreSSL 3.5 or newer. TLS is mandatory, and the two are used through the same
@@ -89,8 +98,17 @@ The programs under test/applications are interactive tools (netcat, wget,
 dnslookup, ...). They are built, but not run by ctest.
 
 The automated suite lives in test/exotic and is written for the "exotic" test
-generator. If exotic is not on PATH those tests are skipped, with a notice at
-configure time; install it to enable them.
+framework, pinned as a submodule in third_party/exotic and built as part of the
+project. Each .tcc file is compiled as its own translation unit and the tests
+register themselves, so nothing is generated and Perl is not needed. An
+installed exotic is used instead when the submodule is absent.
+
+ctest runs the suite as a single test named autotest. The binary can also be run
+directly, which is what to do when a name is wanted rather than a pass or fail:
+
+    ./build/test/autotest --help
+    ./build/test/autotest --list-tests
+    ./build/test/autotest 'sockets_*'
 
 
 Installing
