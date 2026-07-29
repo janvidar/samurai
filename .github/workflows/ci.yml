@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch makes the running build irrelevant.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux ${{ matrix.compiler }} ${{ matrix.build_type }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        build_type: [Debug, Release]
+        include:
+          - compiler: gcc
+            cc: gcc
+            cxx: g++
+          - compiler: clang
+            cc: clang
+            cxx: clang++
+
+    steps:
+      # The exotic test generator is a submodule; without it CMake skips the
+      # whole suite and the run would pass having tested nothing.
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev zlib1g-dev libbz2-dev
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+
+      - name: Build
+        run: cmake --build build --parallel $(nproc)
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      # Catches an install rule that names a target or a header that moved.
+      - name: Install
+        run: cmake --install build --prefix "$RUNNER_TEMP/prefix"
+
+  sanitizers:
+    name: Linux ASan/UBSan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev zlib1g-dev libbz2-dev
+
+      # LeakSanitizer stops the world through ptrace, which takes minutes when
+      # ptrace_scope is not 0. Ubuntu ships it as 1.
+      - name: Allow ptrace
+        run: sudo sysctl -w kernel.yama.ptrace_scope=0
+
+      - name: Configure
+        run: |
+          cmake -S . -B build-asan \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DSAMURAI_SANITIZE=ON
+
+      - name: Build
+        run: cmake --build build-asan --parallel $(nproc)
+
+      - name: Test
+        run: ctest --test-dir build-asan --output-on-failure
+
+  macos:
+    name: macOS clang Debug
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # macOS ships LibreSSL headers too old for the TLS code, so the Homebrew
+      # OpenSSL has to be pointed at explicitly.
+      - name: Install dependencies
+        run: brew install openssl@3
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)"
+
+      - name: Build
+        run: cmake --build build --parallel $(sysctl -n hw.ncpu)
+
+      # This is the only job that runs the kqueue socket monitor.
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
