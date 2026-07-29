@@ -460,10 +460,41 @@ bool Samurai::IO::File::isWritable() const
 
 bool Samurai::IO::File::isDeleteable() const
 {
-	return false;
+#ifdef SAMURAI_UNIX
+	/* Removing a file writes to the directory holding it, not to the file, so
+	   the file's own permissions have nothing to say about it. */
+	std::filesystem::path parent = std::filesystem::path(filename).parent_path();
+	if (parent.empty()) parent = ".";
+
+	const std::string dir = parent.string();
+	if (access(dir.c_str(), W_OK | X_OK) != 0) return false;
+
+	struct stat dir_info;
+	if (stat(dir.c_str(), &dir_info) != 0) return false;
+
+	/* On a sticky directory - /tmp and friends - write permission is not
+	   enough: only the owner of the file or of the directory may remove it. */
+	if (dir_info.st_mode & S_ISVTX)
+	{
+		struct stat info;
+		if (stat(filename.c_str(), &info) != 0) return false;
+
+		const uid_t me = geteuid();
+		if (me != 0 && me != info.st_uid && me != dir_info.st_uid) return false;
+	}
+
+	return true;
+#else
+	std::error_code ec;
+	const std::filesystem::path parent = std::filesystem::path(filename).parent_path();
+	const std::filesystem::perms p =
+		std::filesystem::status(parent.empty() ? "." : parent, ec).permissions();
+	if (ec) return false;
+	return (p & std::filesystem::perms::owner_write) != std::filesystem::perms::none;
+#endif
 }
 
-bool Samurai::IO::File::isExcecutable()  const
+bool Samurai::IO::File::isExecutable() const
 {
 #ifdef SAMURAI_WINDOWS
 	/* Windows has no execute bit; the extension is what decides. Compared

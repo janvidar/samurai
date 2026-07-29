@@ -144,8 +144,13 @@ class File final {
 		
 		bool isReadable() const;
 		bool isWritable() const;
+		/**
+		 * Whether this file can be removed, which is decided by its directory
+		 * rather than by the file itself - and on a sticky directory, by who
+		 * owns it.
+		 */
 		bool isDeleteable() const;
-		bool isExcecutable() const;
+		bool isExecutable() const;
 		bool isRegular() const;
 		bool isSymlink() const;
 		bool isDirectory() const;
