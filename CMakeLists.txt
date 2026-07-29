@@ -85,10 +85,6 @@ if(NOT SAMURAI_BUILD_SHARED AND NOT SAMURAI_BUILD_STATIC)
         "SAMURAI_BUILD_STATIC.")
 endif()
 
-set(SAMURAI_DNS_PROVIDER "BLOCKING" CACHE STRING
-    "DNS resolver to use: BLOCKING or BUILTIN")
-set_property(CACHE SAMURAI_DNS_PROVIDER PROPERTY STRINGS BLOCKING BUILTIN)
-
 # ---------------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------------
@@ -142,19 +138,6 @@ else()
     endif()
 endif()
 
-if(NOT SAMURAI_DNS_PROVIDER MATCHES "^(BLOCKING|BUILTIN)$")
-    message(FATAL_ERROR
-        "Invalid SAMURAI_DNS_PROVIDER '${SAMURAI_DNS_PROVIDER}' "
-        "(expected BLOCKING or BUILTIN)")
-endif()
-
-if(NOT SAMURAI_DNS_PROVIDER STREQUAL "BLOCKING")
-    message(WARNING
-        "SAMURAI_DNS_PROVIDER=${SAMURAI_DNS_PROVIDER} selects a resolver that "
-        "is not wired into the socket monitor and will not deliver results "
-        "asynchronously. BLOCKING is the only working backend.")
-endif()
-
 # ---------------------------------------------------------------------------
 # Library
 # ---------------------------------------------------------------------------
@@ -191,15 +174,8 @@ set(SAMURAI_SOURCES
     src/io/net/tlsfactory.cpp
     src/io/net/tlsfactory-openssl.cpp
     src/io/net/url.cpp
-    src/io/net/dns/cache.cpp
-    src/io/net/dns/dnsconfig.cpp
-    src/io/net/dns/dnsmessage.cpp
-    src/io/net/dns/dnsrrs.cpp
-    src/io/net/dns/dnsutil.cpp
     src/io/net/dns/resolver.cpp
     src/io/net/dns/resolver-pool.cpp
-    src/io/net/dns/resolver-blocking.cpp
-    src/io/net/dns/resolver-builtin.cpp
     src/util/base32.cpp
     src/util/bwestimation.cpp
     src/util/format.cpp
@@ -311,8 +287,7 @@ foreach(target IN ITEMS samurai_objects ${SAMURAI_LIBRARIES})
             $<$<CONFIG:Debug>:DEBUG>
         PRIVATE
             ZLIB
-            BZIP2
-            DNS_RESOLVE_${SAMURAI_DNS_PROVIDER})
+            BZIP2)
 
     # Linking these to the object library contributes no libraries to it, but
     # does give it their include directories to compile against.
@@ -395,7 +370,7 @@ message(STATUS "  Shared library  : ${SAMURAI_BUILD_SHARED}")
 message(STATUS "  Static library  : ${SAMURAI_BUILD_STATIC}")
 message(STATUS "  TLS             : ${SAMURAI_TLS_NAME}")
 message(STATUS "  TLS versions    : 1.2 minimum, 1.3 preferred")
-message(STATUS "  DNS provider    : ${SAMURAI_DNS_PROVIDER}")
+message(STATUS "  DNS resolver    : thread pool")
 message(STATUS "  Build tests     : ${SAMURAI_BUILD_TESTS}")
 if(SAMURAI_SANITIZE)
     message(STATUS "  Sanitizers      : address, undefined")
