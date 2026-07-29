@@ -18,6 +18,7 @@
 #include <samurai/error.h>
 
 #include <initializer_list>
+#include <optional>
 #include <span>
 #include <string_view>
 
@@ -152,6 +153,18 @@ class Socket :
 		void TLSsendGoodbye();
 
 		/**
+		 * Whether TLS on this socket accepts a peer whose certificate the
+		 * system trust store cannot verify, overriding the process default.
+		 *
+		 * Call this before TLSInitialize(), which is what reads it. A protocol
+		 * that authenticates its peer by certificate fingerprint gains nothing
+		 * from a chain the peer was never issued one for, and would lose the
+		 * connection during the handshake, before there is a certificate to
+		 * take a fingerprint of.
+		 */
+		void TLSsetAllowUntrusted(bool toggle) { allow_untrusted = toggle; }
+
+		/**
 		 * The SHA-256 fingerprint of the certificate the peer presented, as
 		 * TlsFactory::getPeerCertificateSHA256() defines it. False if this is
 		 * not a TLS connection, or the peer sent no certificate.
@@ -190,6 +203,9 @@ class Socket :
 		void internal_tls_handshake();
 		void internal_tls_bye();
 		std::unique_ptr<TlsFactory> tls;
+		/* Nothing unless TLSsetAllowUntrusted() was called, so a socket that
+		   says nothing keeps the process default. */
+		std::optional<bool> allow_untrusted;
 
 		bool checkConnectTimeout();
 
