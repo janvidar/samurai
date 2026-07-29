@@ -528,3 +528,49 @@ EXO_TEST(inet_addr_ipv6_compare_8,
 	Samurai::IO::Net::InetAddress addr2("::ffff:0f10:121f");
 	return addr1 == addr2;
 });
+
+/* ------------------------------------------------------------------------- */
+/* Assigning a string                                                         */
+/*                                                                            */
+/* An assignment replaces the address outright: the text it was written as is  */
+/* kept as the hostname whether or not it parsed, and nothing of the previous  */
+/* address survives. A TLS client verifies a certificate against that name,    */
+/* so a peer reached by address needs one just as much as a peer reached by    */
+/* name does.                                                                  */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(inet_addr_assign_ipv4_literal_keeps_the_text,
+{
+	Samurai::IO::Net::InetAddress addr;
+	addr = std::string("127.0.0.1");
+	return addr.getHostname() == "127.0.0.1" && addr.isResolved();
+});
+
+/* The brackets are URL syntax, not part of the address: an iPAddress
+   certificate SAN is matched against the bare literal. */
+EXO_TEST(inet_addr_assign_bracketed_ipv6_drops_the_brackets,
+{
+	Samurai::IO::Net::InetAddress addr;
+	addr = std::string("[::1]");
+	return addr.getHostname() == "::1";
+});
+
+EXO_TEST(inet_addr_assign_plain_ipv6_literal_keeps_the_text,
+{
+	Samurai::IO::Net::InetAddress addr;
+	addr = std::string("2001:db8::1");
+	return addr.getHostname() == "2001:db8::1";
+});
+
+/* NOTE: that a name assigned over a literal is left Unresolved has no assertion
+   here. isResolved() also tests isValid(), which is false once the version is
+   Unspecified, so the state is invisible through the public API; only a
+   resolver-driven test would see it. */
+
+EXO_TEST(inet_addr_assign_literal_over_name_clears_the_name,
+{
+	Samurai::IO::Net::InetAddress addr;
+	addr = std::string("example.com");
+	addr = std::string("1.2.3.4");
+	return addr.getHostname() == "1.2.3.4" && addr.isResolved();
+});

@@ -379,15 +379,20 @@ Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const st
 {
 	data.reset();
 	resolver.reset();
-	
+
+	hostname.clear();
+	resolveState = ResolveState::Unresolved;
+
 	version = Version::Unspecified;
 	data = std::make_unique<Samurai::IO::Net::__InternalAddress>();
 	memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
-	
+
 	if (address == "") return *this;
 	int ret;
 
-	
+	// The address as text; for the bracketed form, without the brackets.
+	std::string literal = address;
+
 	ret = net_string_to_address(AF_INET, address.c_str(), (void*) &data->internal.in);
 	if (ret > 0) {
 		version = Version::IPv4;
@@ -405,12 +410,13 @@ Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const st
 				ret = net_string_to_address(AF_INET6, addr2.c_str(), (void*) &data->internal.in6);
 				if (ret > 0) {
 					version = Version::IPv6;
+					literal = addr2;
 				}
 			}
 		}
-		
+
 	}
-	
+
 	if (ret <= 0) {
 		// error in string, or this is not an IP address.
 		// let's try to resolve it
@@ -418,9 +424,11 @@ Samurai::IO::Net::InetAddress& Samurai::IO::Net::InetAddress::operator=(const st
 		memset(data.get(), 0, sizeof(struct Samurai::IO::Net::__InternalAddress));
 		version = Version::Unspecified;
 	} else {
+		// A literal is a peer name too: TLS matches it against an iPAddress SAN.
+		hostname = literal;
 		resolveState = ResolveState::Resolved;
 	}
-	
+
 	return *this;
 }
 
