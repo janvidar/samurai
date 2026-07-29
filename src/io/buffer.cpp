@@ -11,6 +11,7 @@
 #include <bit>
 #include <array>
 #include <concepts>
+#include <stdint.h>
 #include <stdlib.h>
 #include <new>
 
@@ -66,7 +67,11 @@ Samurai::IO::Buffer::~Buffer() {
 }
 
 void Samurai::IO::Buffer::append(const char* data, size_t len_) {
-	if (len + len_ > buf.size() && !resize(len_)) {
+	/* Tested before the comparison below, which would otherwise wrap and read
+	   as "it already fits" - taking the memcpy with an unbounded length. */
+	const bool overflows = len_ > SIZE_MAX - len;
+
+	if (overflows || (len + len_ > buf.size() && !resize(len_))) {
 		QERR("Buffer::append: unable to grow buffer, dropping %lu bytes", (unsigned long) len_);
 		return;
 	}
@@ -207,6 +212,12 @@ bool Samurai::IO::Buffer::resize(size_t needed) {
 		}
 		nsize = next;
 	}
+
+	/* Past what the allocator can even represent, vector::resize() throws
+	   length_error rather than bad_alloc, and that is not a failure this
+	   promises to absorb - it escaped through append(), which documents itself
+	   as dropping the data instead. */
+	if (nsize > buf.max_size()) return false;
 
 	try {
 		buf.resize(nsize);
