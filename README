@@ -111,6 +111,23 @@ directly, which is what to do when a name is wanted rather than a pass or fail:
     ./build/test/autotest 'sockets_*'
 
 
+Continuous integration
+----------------------
+
+.github/workflows/ci.yml builds and runs the suite on every push to master and
+every pull request:
+
+    Linux gcc and clang, Debug and Release   plus an install into a temporary
+                                             prefix, which is what catches an
+                                             install rule naming something that
+                                             moved
+    Linux ASan/UBSan                         Debug, with LeakSanitizer
+    macOS clang                              Debug, and the only job that runs
+                                             the kqueue socket monitor
+
+Windows is not covered: nothing compiles or runs this on Windows yet.
+
+
 Installing
 ----------
 
