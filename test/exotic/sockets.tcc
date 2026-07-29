@@ -203,6 +203,11 @@ class SocketVariables
 			magic = 0xdeadbeef;
 			listener = new SocketListener();
 			monitor = Samurai::IO::Net::SocketMonitor::getInstance();
+
+			/* The monitor is a process-wide singleton and other subsystems
+			   register with it too, so what these cases can assert is how many
+			   sockets they added, not how many exist. */
+			monitor_baseline = monitor->size();
 			server_address = 0;
 			server.reset();
 			mh = Samurai::MessageHandler::getInstance();
@@ -229,6 +234,7 @@ class SocketVariables
 		std::shared_ptr<Samurai::IO::Net::DatagramSocket> client_udp;
 		Samurai::IO::Net::SocketMonitor* monitor;
 		Samurai::MessageHandler* mh;
+		size_t monitor_baseline = 0;
 		
 };
 
@@ -253,7 +259,7 @@ EXO_TEST(sockets_create_monitor, {
 	SocketVariables* vars = socket_tests_create();
 	if (!vars) return false;
 	
-	return vars->monitor && vars->monitor->size() == 0;
+	return vars->monitor && vars->monitor->size() == vars->monitor_baseline;
 });
 
 
@@ -278,7 +284,7 @@ EXO_TEST(sockets_server_listen, {
 EXO_TEST(sockets_monitor_count_1, {
 	SocketVariables* vars = socket_tests_create();
 	if (!vars) return false;
-	return vars->monitor->size() == 1;
+	return vars->monitor->size() == vars->monitor_baseline + 1;
 });
 
 EXO_TEST(sockets_client_create, {
@@ -289,22 +295,33 @@ EXO_TEST(sockets_client_create, {
 	return vars->client != 0;
 });
 
+/* connect() on a name starts a lookup and returns; the descriptor appears once
+   the resolver reports back through the monitor, so the loop has to run for it
+   to exist at all. */
 EXO_TEST(sockets_client_connect_1, {
 	SocketVariables* vars = socket_tests_create();
 	if (!vars) return false;
 	vars->client->connect();
+
+	for (size_t n = 0; n < 400 && vars->client->getFD() == -1; n++)
+		vars->monitor->wait(5);
+
 	return vars->client->getFD() != -1;
 });
 
 EXO_TEST(sockets_monitor_count_2, {
 	SocketVariables* vars = socket_tests_create();
 	if (!vars) return false;
-	return vars->monitor->size() == 2;
+	return vars->monitor->size() == vars->monitor_baseline + 2;
 });
 
 EXO_TEST(sockets_client_connect_2, {
 	SocketVariables* vars = socket_tests_create();
 	if (!vars) return false;
+
+	for (size_t n = 0; n < 400 && !vars->listener->flag_host_found; n++)
+		vars->monitor->wait(5);
+
 	bool ok = vars->listener->flag_host_lookup && vars->listener->flag_host_found && (vars->listener->flag_connecting || vars->listener->flag_connected);
 	
 	printf("ok=%d, flag_host_lookup=%d, flag_host_found=%d, flag_connecting=%d, flag_connected=%d\n", ok, vars->listener->flag_host_lookup, vars->listener->flag_host_found, vars->listener->flag_connecting, vars->listener->flag_connected);
@@ -413,7 +430,7 @@ EXO_TEST(sockets_monitor_count_3, {
 	SocketVariables* vars = socket_tests_create();
 	if (!vars) return false;
 	
-	return vars->monitor->size() == 3;
+	return vars->monitor->size() == vars->monitor_baseline + 3;
 });
 
 EXO_TEST(sockets_client_udp_create, {
@@ -428,7 +445,7 @@ EXO_TEST(sockets_monitor_count_4, {
 	SocketVariables* vars = socket_tests_create();
 	if (!vars) return false;
 	
-	return vars->monitor->size() == 4;
+	return vars->monitor->size() == vars->monitor_baseline + 4;
 });
 
 
@@ -449,7 +466,7 @@ EXO_TEST(sockets_monitor_count_5, {
 	vars->client.reset();
 	vars->listener->reset_flags();
 	vars->monitor->wait(25);
-	return vars->monitor->size() == 3;
+	return vars->monitor->size() == vars->monitor_baseline + 3;
 });
 
 EXO_TEST(sockets_client_udp_write, {
@@ -485,7 +502,7 @@ EXO_TEST(sockets_monitor_count_6, {
 	vars->listener->reset_flags();
 	
 	vars->monitor->wait(25);
-	return vars->monitor->size() == 2;
+	return vars->monitor->size() == vars->monitor_baseline + 2;
 });
 
 
@@ -498,7 +515,7 @@ EXO_TEST(sockets_monitor_count_7, {
 	vars->listener->reset_flags();
 	
 	vars->monitor->wait(25);
-	return vars->monitor->size() == 1;
+	return vars->monitor->size() == vars->monitor_baseline + 1;
 });
 
 
@@ -511,7 +528,7 @@ EXO_TEST(sockets_monitor_count_8, {
 	vars->listener->reset_flags();
 	
 	vars->monitor->wait(25);
-	return vars->monitor->size() == 0;
+	return vars->monitor->size() == vars->monitor_baseline;
 });
 
 

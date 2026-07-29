@@ -197,6 +197,7 @@ set(SAMURAI_SOURCES
     src/io/net/dns/dnsrrs.cpp
     src/io/net/dns/dnsutil.cpp
     src/io/net/dns/resolver.cpp
+    src/io/net/dns/resolver-pool.cpp
     src/io/net/dns/resolver-blocking.cpp
     src/io/net/dns/resolver-builtin.cpp
     src/util/base32.cpp

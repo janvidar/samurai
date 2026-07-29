@@ -9,6 +9,7 @@
 #include <memory>
 #include <samurai/io/net/dns/resolver-blocking.h>
 #include <samurai/io/net/dns/resolver-builtin.h>
+#include <samurai/io/net/dns/resolver-pool.h>
 #include <samurai/io/net/socketevent.h>
 #include <samurai/io/net/inetaddress.h>
 
@@ -26,12 +27,7 @@ Samurai::IO::Net::DNS::Resolver::~Resolver()
 /* static */
 std::unique_ptr<Samurai::IO::Net::DNS::Resolver> Samurai::IO::Net::DNS::Resolver::getHostByName(Samurai::IO::Net::ResolveEventHandler* eh, const char* name)
 {
-#ifdef DNS_RESOLVE_BUILTIN
-	auto resolver = std::make_unique<Samurai::IO::Net::DNS::BuiltinResolver>(eh);
-#else
-	auto resolver = std::make_unique<Samurai::IO::Net::DNS::BlockingResolver>(eh);
-#endif
-
+	auto resolver = std::make_unique<Samurai::IO::Net::DNS::PooledResolver>(eh);
 	resolver->lookup(name);
 	return resolver;
 }
