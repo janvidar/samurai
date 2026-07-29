@@ -98,7 +98,17 @@ namespace Samurai {
 					bool isResolved() const;
 
 					std::string getHostname() const { return hostname; }
-				
+
+					/**
+					 * Attach the name this address answers to.
+					 *
+					 * The address itself is left alone: a reverse lookup adds a
+					 * name to an address that is already known, it does not
+					 * replace it.
+					 */
+					void setHostname(const std::string& name) { hostname = name; }
+
+
 					/**
 					 * Start lookup hostname
 					 */

@@ -53,7 +53,10 @@ namespace DNS {
  */
 class ResolverPool {
 	public:
+		enum class Kind { Forward, Reverse };
+
 		struct Request {
+			Kind kind = Kind::Forward;
 			std::string query;
 
 			/* Written by a worker before the request reaches the completed
@@ -61,6 +64,7 @@ class ResolverPool {
 			   under the mutex is what orders the two. */
 			bool ok = false;
 			Samurai::IO::Net::InetAddress address;
+			std::string name;
 			Resolver::Error error = Resolver::Error::Unknown;
 
 			/* Loop thread only. */
@@ -134,6 +138,9 @@ class PooledResolver final : public Resolver {
 		~PooledResolver() override;
 
 		void lookup(const char* name) override;
+
+		/** Reverse lookup: report the name this address answers to. */
+		void lookupAddress(const Samurai::IO::Net::InetAddress& address);
 
 	private:
 		std::shared_ptr<ResolverPool::Request> request;
