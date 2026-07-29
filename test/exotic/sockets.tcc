@@ -1,8 +1,7 @@
-#include <memory>
-#include <signal.h>
-#include <string.h>
-#include <sys/time.h>
-#include <unistd.h>
+/*
+ * Copyright (C) 2001-2008 Jan Vidar Krey, janvidar@extatic.org
+ * See the file "COPYING" for licensing details.
+ */
 
 #include <samurai/messagehandler.h>
 #include <samurai/io/net/socketbase.h>
@@ -12,629 +11,957 @@
 #include <samurai/io/net/socketmonitor.h>
 #include <samurai/io/net/socketaddress.h>
 #include <samurai/io/net/inetaddress.h>
+#include <samurai/io/buffer.h>
 
+#include "testkeys.h"
 
-#define LOCALPORT 65500
+#include <chrono>
+#include <memory>
+#include <string>
 
-// Samurai::IO::Net::Socket* socket = new Samurai::IO::Net::Socket(0, 0);
-class SocketListener :
-	public Samurai::IO::Net::ServerSocketEventHandler,
-	public Samurai::IO::Net::DatagramEventHandler,
-	public Samurai::IO::Net::SocketEventHandler
-{
+#include <signal.h>
+#include <string.h>
+#include <sys/time.h>
+#include <unistd.h>
 
-	public:
-		bool flag_accept_error;
-		const char* accept_error;
-		bool flag_accept_socket;
-		bool flag_host_lookup;
-		bool flag_host_found;
-		bool flag_connecting;
-		bool flag_connected;
-		bool flag_timeout;
-		bool flag_disconnected;
-		bool flag_data_available;
-		bool flag_can_write;
-		bool flag_tls_connected;
-		bool flag_tls_disconnected;
-		bool flag_error;
-		bool flag_udp_msg;
-		bool flag_udp_error;
-		char* udp_msg;
-		char* udp_error;
-		const char* client_error;
-		std::shared_ptr<Samurai::IO::Net::Socket> accepted;
-		char* message;
-		bool debug_enabled;
-
-	public:
-		SocketListener() {
-			reset_flags();
-			accepted.reset();
-			message = 0;
-			debug_enabled = false;
-		}
-		
-		void reset_flags()
-		{
-			flag_accept_error = false;
-			flag_accept_socket = false;
-			flag_host_lookup = false;
-			flag_host_found = false;
-			flag_connecting = false;
-			flag_connected = false;
-			flag_timeout = false;
-			flag_disconnected = false;
-			flag_data_available = false;
-			flag_can_write = false;
-			flag_tls_connected = false;
-			flag_tls_disconnected = false;
-			flag_error = false;
-			client_error = 0;
-			accept_error = 0;
-			flag_error = false;
-			flag_udp_msg = false;
-			flag_udp_error = false;
-			udp_msg = 0;
-			udp_error = 0;
-		}
-
-	public:
-		void EventAcceptError(const Samurai::IO::Net::ServerSocket*, const char* msg)
-		{
-			(void) msg;
-			accept_error = msg;
-			flag_accept_error = true;
-			debug(__PRETTY_FUNCTION__);
-		}
-		
-		void EventAcceptSocket(const Samurai::IO::Net::ServerSocket*, std::shared_ptr<Samurai::IO::Net::Socket> socket)
-		{
-			flag_accept_socket = true;
-			accepted = socket;
-			debug(__PRETTY_FUNCTION__);
-		}
-		
-		void EventHostLookup(const Samurai::IO::Net::Socket*) {
-			flag_host_lookup = true;
-			debug(__PRETTY_FUNCTION__);
-		}
-		
-		void EventHostFound(const Samurai::IO::Net::Socket*) {
-			flag_host_found = true;
-			debug(__PRETTY_FUNCTION__);
-		}
-		
-		void EventConnecting(const Samurai::IO::Net::Socket*) {
-			flag_connecting = true;
-			debug(__PRETTY_FUNCTION__);
-		}
-		
-		void EventConnected(const Samurai::IO::Net::Socket*) {
-			flag_connected = true;
-			debug(__PRETTY_FUNCTION__);
-		}
-		
-		void EventTimeout(const Samurai::IO::Net::Socket*) {
-			flag_timeout = true;
-			debug(__PRETTY_FUNCTION__);
-		}
-		
-		void EventDisconnected(const Samurai::IO::Net::Socket*) {
-			flag_disconnected = true;
-			debug(__PRETTY_FUNCTION__);
-		}
-		
-		void EventDataAvailable(const Samurai::IO::Net::Socket*) {
-			flag_data_available = true;
-			debug(__PRETTY_FUNCTION__);
-		}
-		
-		void EventCanWrite(const Samurai::IO::Net::Socket*) {
-			flag_can_write = true;
-			debug(__PRETTY_FUNCTION__);
-		}
-		
-		void EventTLSConnected(const Samurai::IO::Net::Socket*) {
-			flag_tls_connected = true;
-			debug(__PRETTY_FUNCTION__);
-		}
-		
-		void EventTLSDisconnected(const Samurai::IO::Net::Socket*) {
-			flag_tls_disconnected = true;
-			debug(__PRETTY_FUNCTION__);
-		}
-		
-		void EventError(const Samurai::IO::Net::Socket*, Samurai::IO::Net::SocketError error, const char* msg) {
-			(void) error;
-			(void) msg;
-			flag_error = true;
-			client_error = msg;
-			debug(__PRETTY_FUNCTION__);
-		}
-		
-		void EventGotDatagram(Samurai::IO::Net::DatagramSocket*, Samurai::IO::Net::DatagramPacket* packet)
-		{
-			(void) packet;
-			flag_udp_msg = true;
-			/* udp_msg = packet */
-			debug(__PRETTY_FUNCTION__);
-		}
-		
-		void EventDatagramError(const Samurai::IO::Net::DatagramSocket*, const char* msg)
-		{
-			flag_udp_error = false;
-			udp_error = (char*) msg;
-			debug(__PRETTY_FUNCTION__);
-		}
-		
-		void debug(const char* str)
-		{
-			if (debug_enabled)
-			{
-				puts(str);
-			}
-		}
-		
-		void debugEnable()
-		{
-			debug_enabled = true;
-		}
-		
-		void debugDisable()
-		{
-			debug_enabled = false;
-		}
-		
-};
-
-class SocketVariables
-{
-	public:
-		SocketVariables() :
-			magic(0),
-			listener(0),
-			server_address(0),
-			server_udp(0),
-			client_udp(0),
-			monitor(0),
-			mh(0)
-		{
-			magic = 0xdeadbeef;
-			listener = new SocketListener();
-			monitor = Samurai::IO::Net::SocketMonitor::getInstance();
-
-			/* The monitor is a process-wide singleton and other subsystems
-			   register with it too, so what these cases can assert is how many
-			   sockets they added, not how many exist. */
-			monitor_baseline = monitor->size();
-			server_address = 0;
-			server.reset();
-			mh = Samurai::MessageHandler::getInstance();
-		}
-		
-		~SocketVariables()
-		{
-			/*
-			 * Only the listener is ours. The message handler and the socket
-			 * monitor are singletons owned by the library, and releasing them
-			 * here left its static pointer dangling.
-			 */
-			delete listener;
-		}
-		
-	public:
-		int magic;
-		SocketListener* listener;
-		Samurai::IO::Net::SocketAddress* server_address;
-		
-		std::shared_ptr<Samurai::IO::Net::Socket> client;
-		std::shared_ptr<Samurai::IO::Net::ServerSocket> server;
-		std::shared_ptr<Samurai::IO::Net::DatagramSocket> server_udp;
-		std::shared_ptr<Samurai::IO::Net::DatagramSocket> client_udp;
-		Samurai::IO::Net::SocketMonitor* monitor;
-		Samurai::MessageHandler* mh;
-		size_t monitor_baseline = 0;
-		
-};
-
-static SocketVariables* g_socket_test_vars = 0;
-
-
-SocketVariables* socket_tests_create()
-{
-	if (!g_socket_test_vars)
-		g_socket_test_vars = new SocketVariables();
-		
-	return g_socket_test_vars;
-}
-
-void socket_tests_destroy()
-{
-	delete g_socket_test_vars;
-	g_socket_test_vars = 0;
-}
-
-EXO_TEST(sockets_create_monitor, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	
-	return vars->monitor && vars->monitor->size() == vars->monitor_baseline;
-});
-
-
-
-
-
-
-EXO_TEST(sockets_create_server, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	vars->server_address = new Samurai::IO::Net::InetSocketAddress(LOCALPORT);
-	vars->server = Samurai::IO::Net::ServerSocket::create(vars->listener, *vars->server_address);
-	return vars->server->getFD() != -1;
-});
-
-EXO_TEST(sockets_server_listen, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	return vars->server->listen();
-});
-
-EXO_TEST(sockets_monitor_count_1, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	return vars->monitor->size() == vars->monitor_baseline + 1;
-});
-
-EXO_TEST(sockets_client_create, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	vars->client = Samurai::IO::Net::Socket::create((Samurai::IO::Net::SocketEventHandler*) 0, std::string("localhost"), (uint16_t) LOCALPORT);
-	vars->client->setEventHandler(vars->listener);
-	return vars->client != 0;
-});
-
-/* connect() on a name starts a lookup and returns; the descriptor appears once
-   the resolver reports back through the monitor, so the loop has to run for it
-   to exist at all. */
-EXO_TEST(sockets_client_connect_1, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	vars->client->connect();
-
-	for (size_t n = 0; n < 400 && vars->client->getFD() == -1; n++)
-		vars->monitor->wait(5);
-
-	return vars->client->getFD() != -1;
-});
-
-EXO_TEST(sockets_monitor_count_2, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	return vars->monitor->size() == vars->monitor_baseline + 2;
-});
-
-EXO_TEST(sockets_client_connect_2, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-
-	for (size_t n = 0; n < 400 && !vars->listener->flag_host_found; n++)
-		vars->monitor->wait(5);
-
-	bool ok = vars->listener->flag_host_lookup && vars->listener->flag_host_found && (vars->listener->flag_connecting || vars->listener->flag_connected);
-	
-	printf("ok=%d, flag_host_lookup=%d, flag_host_found=%d, flag_connecting=%d, flag_connected=%d\n", ok, vars->listener->flag_host_lookup, vars->listener->flag_host_found, vars->listener->flag_connecting, vars->listener->flag_connected);
-	
-	bool immediate = vars->listener->flag_connected;
-	vars->listener->reset_flags();
-	
-	
-	if (immediate)
-	{
-		/* In case the socket was immediately connected, set the connected
-		   flag to true.
-		   This happens on FreeBSD, at least.
-		 */
-		vars->listener->flag_connected = true;
-	}
-	return ok;
-});
-
-EXO_TEST(sockets_monitor_poll_1, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	
-	for (int i = 0; i < 10; i++)
-		vars->monitor->wait(25);
-	printf("flag_connected=%d, flag_accept_socket=%d\n",  vars->listener->flag_connected, vars->listener->flag_accept_socket);
-	bool ok = vars->listener->flag_connected && vars->listener->flag_accept_socket;
-	return ok;
-});
-
-EXO_TEST(sockets_client_write_1, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	
-	vars->listener->message = (char*) "Hello, there!\n";
-	ssize_t n = vars->client->write(vars->listener->message, strlen(vars->listener->message));
-	printf("n=%d\n", (int) n);
-	return n == (ssize_t) strlen(vars->listener->message);
-});
-
-EXO_TEST(sockets_client_read_1, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	
-	vars->monitor->wait(25);
-	
-	char buf[64];
-	if (!vars->listener->accepted) return false;
-	ssize_t n = vars->listener->accepted->read(buf, 64);
-	return n == (ssize_t) strlen(vars->listener->message) && strncmp(buf, vars->listener->message, n) == 0;
-});
-
-EXO_TEST(sockets_client_write_2, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	
-	vars->listener->message = (char*) "Reply from the other end\n";
-	
-	if (!vars->listener->accepted) return false;
-	ssize_t n = vars->listener->accepted->write(vars->listener->message, strlen(vars->listener->message));
-	return n == (ssize_t) strlen(vars->listener->message);
-});
-
-
-EXO_TEST(sockets_client_read_2, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	
-	vars->monitor->wait(25);
-	
-	char buf[64];
-	ssize_t n = vars->client->read(buf, 64);
-	return n == (ssize_t) strlen(vars->listener->message) && strncmp(buf, vars->listener->message, n) == 0;
-});
-
-EXO_TEST(sockets_client_write_vectored, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-
-	vars->listener->message = (char*) "GET /index.html HTTP/1.0\r\n\r\n";
-
-	ssize_t n = vars->client->write({"GET /index.html", " HTTP/1.0\r\n", "", "\r\n"});
-	return n == (ssize_t) strlen(vars->listener->message);
-});
-
-EXO_TEST(sockets_client_read_vectored, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-
-	vars->monitor->wait(25);
-
-	char buf[64];
-	if (!vars->listener->accepted) return false;
-	ssize_t n = vars->listener->accepted->read(buf, 64);
-	return n == (ssize_t) strlen(vars->listener->message) && strncmp(buf, vars->listener->message, n) == 0;
-});
-
-EXO_TEST(sockets_server_udp_create, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	vars->server_udp = Samurai::IO::Net::DatagramSocket::create(vars->listener, (uint16_t) LOCALPORT);
-	return vars->server_udp && vars->server_udp->listen();
-});
-
-EXO_TEST(sockets_monitor_count_3, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	
-	return vars->monitor->size() == vars->monitor_baseline + 3;
-});
-
-EXO_TEST(sockets_client_udp_create, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	vars->client_udp = Samurai::IO::Net::DatagramSocket::create(vars->listener, Samurai::IO::Net::InetAddress::Version::IPv4);
-	return vars->client_udp != 0;
-});
-
-
-EXO_TEST(sockets_monitor_count_4, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	
-	return vars->monitor->size() == vars->monitor_baseline + 4;
-});
-
-
-EXO_TEST(sockets_client_disconnect, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	vars->listener->accepted.reset();
-	vars->listener->accepted.reset();
-	vars->listener->reset_flags();
-	vars->monitor->wait(25);
-	return vars->listener->flag_disconnected;
-});
-
-EXO_TEST(sockets_monitor_count_5, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	vars->client.reset();
-	vars->client.reset();
-	vars->listener->reset_flags();
-	vars->monitor->wait(25);
-	return vars->monitor->size() == vars->monitor_baseline + 3;
-});
-
-EXO_TEST(sockets_client_udp_write, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	
-	vars->listener->message = (char*) "Hello, there!\n";
-	Samurai::IO::Net::DatagramPacket packet((uint8_t*) vars->listener->message, strlen(vars->listener->message));
-	Samurai::IO::Net::InetSocketAddress target(std::string("127.0.0.1"), LOCALPORT);
-	packet.setAddress(&target);
-	
-	int n = vars->client_udp->send(&packet);
-	return n == (ssize_t) strlen(vars->listener->message);
-});
-
-EXO_TEST(sockets_monitor_poll_2, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	vars->monitor->wait(25);
-	bool ok = vars->listener->flag_udp_msg;
-	return ok;
-});
-
-
-EXO_TEST(sockets_monitor_count_6, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	
-	vars->server.reset();
-	delete vars->server_address;
-	vars->server.reset();
-	vars->server_address = 0;
-	vars->listener->reset_flags();
-	
-	vars->monitor->wait(25);
-	return vars->monitor->size() == vars->monitor_baseline + 2;
-});
-
-
-EXO_TEST(sockets_monitor_count_7, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	
-	vars->server_udp.reset();
-	vars->server_udp = 0;
-	vars->listener->reset_flags();
-	
-	vars->monitor->wait(25);
-	return vars->monitor->size() == vars->monitor_baseline + 1;
-});
-
-
-EXO_TEST(sockets_monitor_count_8, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	
-	vars->client_udp.reset();
-	vars->client_udp = 0;
-	vars->listener->reset_flags();
-	
-	vars->monitor->wait(25);
-	return vars->monitor->size() == vars->monitor_baseline;
-});
-
-
-EXO_TEST(sockets_monitor_poll_3, {
-	SocketVariables* vars = socket_tests_create();
-	if (!vars) return false;
-	vars->monitor->wait(25);
-	return 1;
-});
-
-
-EXO_TEST(sockets_monitor_shutdown, {
-	socket_tests_destroy();
-	return !g_socket_test_vars;
-});
-
-
-/* ------------------------------------------------------------------------- */
-/* A refused connect leaves the socket reusable                               */
-/*                                                                            */
-/* A connection that was refused or timed out is one that can be attempted     */
-/* again, so the socket ends up Disconnected: a state connect() accepts, and   */
-/* one the Error trigger recognises as already handled, so a single failure    */
-/* is reported once.                                                          */
-/* ------------------------------------------------------------------------- */
+/*
+ * Socket, ServerSocket and DatagramSocket driven through the real event loop.
+ *
+ * This was one ordered scenario over a single shared fixture: twenty-eight
+ * cases that had to run in sequence, where a failure in the third made every
+ * assertion after it meaningless, and no case could be read without reading
+ * the ones before it. Each case now builds what it needs and gives it back.
+ *
+ * Two things make that possible. Binding to port 0 lets the kernel choose, so
+ * cases neither collide with each other nor with whatever else on the machine
+ * holds a fixed port. And nothing asserts the monitor's absolute size: it is a
+ * process-wide singleton shared with every other suite in this binary, so a
+ * fixture records what it was on the way in and asserts only its own delta.
+ */
 
 namespace {
 
-/* Nothing listens on port 1 of the loopback interface without privileges, so a
-   connect there is refused immediately rather than left to time out. */
-const uint16_t REFUSED_PORT = 1;
+using Samurai::IO::Net::InetAddress;
+using Samurai::IO::Net::InetSocketAddress;
+using Samurai::IO::Net::Socket;
+using Samurai::IO::Net::SocketMonitor;
 
-class ConnectFailureListener : public Samurai::IO::Net::SocketEventHandler
+/* Long enough that a loaded machine does not fail; only reached when broken. */
+static const int SOCKET_TEST_TIMEOUT_MS = 5000;
+
+/*
+ * Records the callbacks a socket made, so a case can wait for one and then
+ * assert on what arrived.
+ */
+class SocketRecorder :
+	public Samurai::IO::Net::ServerSocketEventHandler,
+	public Samurai::IO::Net::SocketEventHandler,
+	public Samurai::IO::Net::DatagramEventHandler
 {
 	public:
-		size_t errors = 0;
-		size_t connects = 0;
-		size_t disconnects = 0;
+		bool accept_error = false;
+		bool host_lookup = false;
+		bool host_found = false;
+		bool connecting = false;
+		bool connected = false;
+		bool timeout = false;
+		bool disconnected = false;
+		bool data_available = false;
+		bool can_write = false;
+		bool tls_connected = false;
+		bool tls_disconnected = false;
+		bool error = false;
+		bool datagram = false;
+		bool datagram_error = false;
 
-		void EventConnected(const Samurai::IO::Net::Socket*) { connects++; }
-		void EventDisconnected(const Samurai::IO::Net::Socket*) { disconnects++; }
-		void EventError(const Samurai::IO::Net::Socket*, Samurai::IO::Net::SocketError, const char*) { errors++; }
+		int accept_count = 0;
+		int data_available_count = 0;
+		int error_count = 0;
+
+		std::string datagram_payload;
+		std::shared_ptr<Socket> accepted;
+
+		void reset()
+		{
+			accept_error = false;
+			host_lookup = false;
+			host_found = false;
+			connecting = false;
+			connected = false;
+			timeout = false;
+			disconnected = false;
+			data_available = false;
+			can_write = false;
+			tls_connected = false;
+			tls_disconnected = false;
+			error = false;
+			datagram = false;
+			datagram_error = false;
+			accept_count = 0;
+			data_available_count = 0;
+			error_count = 0;
+			datagram_payload.clear();
+		}
+
+		void EventAcceptError(const Samurai::IO::Net::ServerSocket*, const char*) override
+		{ accept_error = true; }
+
+		void EventAcceptSocket(const Samurai::IO::Net::ServerSocket*,
+			std::shared_ptr<Socket> socket) override
+		{
+			accepted = socket;
+			accept_count++;
+		}
+
+		void EventHostLookup(const Socket*) override { host_lookup = true; }
+		void EventHostFound(const Socket*) override { host_found = true; }
+		void EventConnecting(const Socket*) override { connecting = true; }
+		void EventConnected(const Socket*) override { connected = true; }
+		void EventTimeout(const Socket*) override { timeout = true; }
+		void EventDisconnected(const Socket*) override { disconnected = true; }
+
+		void EventDataAvailable(const Socket*) override
+		{
+			data_available = true;
+			data_available_count++;
+		}
+
+		void EventCanWrite(const Socket*) override { can_write = true; }
+		void EventTLSConnected(const Socket*) override { tls_connected = true; }
+		void EventTLSDisconnected(const Socket*) override { tls_disconnected = true; }
+
+		void EventError(const Socket*, Samurai::IO::Net::SocketError, const char*) override
+		{
+			error = true;
+			error_count++;
+		}
+
+		void EventGotDatagram(Samurai::IO::Net::DatagramSocket*,
+			Samurai::IO::Net::DatagramPacket* packet) override
+		{
+			datagram = true;
+			if (packet && packet->getBuffer())
+			{
+				Samurai::IO::Buffer* buf = packet->getBuffer();
+				datagram_payload = buf->copyRange(0, buf->size());
+			}
+		}
+
+		void EventDatagramError(const Samurai::IO::Net::DatagramSocket*, const char*) override
+		{ datagram_error = true; }
 };
 
-/* Drive the monitor until the handler has seen an error, or the budget runs
-   out. The refusal arrives on the first or second pass in practice. */
-static bool pump_until_error(ConnectFailureListener& listener)
+/* Runs the event loop until the condition holds, or gives up. */
+template<typename Fn>
+static bool pump(Fn done, int timeout_ms = SOCKET_TEST_TIMEOUT_MS)
 {
-	Samurai::IO::Net::SocketMonitor* monitor = Samurai::IO::Net::SocketMonitor::getInstance();
-	for (int n = 0; n < 40 && listener.errors == 0; n++)
-		monitor->wait(25);
-	return listener.errors > 0;
+	SocketMonitor* monitor = SocketMonitor::getInstance();
+	const auto deadline = std::chrono::steady_clock::now()
+		+ std::chrono::milliseconds(timeout_ms);
+
+	while (!done())
+	{
+		if (std::chrono::steady_clock::now() > deadline)
+			return done();
+		monitor->wait(10);
+	}
+	return true;
 }
 
+/*
+ * A listening server and a client connected to it over the loopback, plus the
+ * socket the server accepted - three registrations in the monitor.
+ */
+struct TcpFixture
+{
+	SocketRecorder server_events;
+	SocketRecorder client_events;
+	std::shared_ptr<Samurai::IO::Net::ServerSocket> server;
+	std::shared_ptr<Socket> client;
+	SocketMonitor* monitor;
+	size_t baseline;
+	uint16_t port = 0;
+	bool ready = false;
+
+	TcpFixture()
+		: monitor(SocketMonitor::getInstance())
+		, baseline(monitor->size())
+	{
+		InetSocketAddress any((uint16_t) 0);
+		server = Samurai::IO::Net::ServerSocket::create(&server_events, any);
+		if (!server || server->getFD() == -1) return;
+		if (!server->listen()) return;
+
+		port = server->getLocalPort();
+		if (!port) return;
+
+		client = Socket::create(&client_events, std::string("127.0.0.1"), port);
+		if (!client) return;
+		client->connect();
+
+		if (!pump([&] { return client_events.connected && server_events.accepted; }))
+			return;
+
+		/* An accepted socket arrives with no handler and outside the monitor.
+		   Giving it one is how the application adopts it. */
+		server_events.accepted->setEventHandler(&server_events);
+		ready = true;
+	}
+
+	~TcpFixture()
+	{
+		server_events.accepted.reset();
+		client.reset();
+		server.reset();
+
+		/* Releasing a socket deregisters it, but the monitor is only asked to
+		   forget it on its next pass. */
+		pump([&] { return monitor->size() <= baseline; }, 1000);
+	}
+
+	TcpFixture(const TcpFixture&) = delete;
+	TcpFixture& operator=(const TcpFixture&) = delete;
+
+	Socket* accepted() { return server_events.accepted.get(); }
+
+	/* How many registrations this fixture added to the shared monitor. */
+	size_t added() const
+	{
+		const size_t now = monitor->size();
+		return (now > baseline) ? now - baseline : 0;
+	}
+
+	/* Sends from one end and waits for the other to be told about it. */
+	bool send(Socket* from, SocketRecorder& to_events, const std::string& text)
+	{
+		to_events.data_available = false;
+		const ssize_t n = from->write(text.data(), text.size());
+		if (n != (ssize_t) text.size()) return false;
+		return pump([&] { return to_events.data_available; });
+	}
+};
+
+/*
+ * The same pair, with TLS negotiated over it through the event loop.
+ *
+ * tls.tcc drives the factory directly over a socketpair(); what is exercised
+ * here is Socket's half - the TlsStatus switch that turns WantRead and
+ * WantWrite into write-notifier changes and drives the handshake from
+ * internal_canRead() and internal_canWrite(), which only the loop can reach.
+ */
+struct TlsFixture
+{
+	TcpFixture tcp;
+	bool ready = false;
+
+	TlsFixture()
+	{
+		if (!tcp.ready || !tls_test_keys().ready) return;
+
+		/* The certificate is self-signed and names "localhost", so it cannot
+		   be verified against a loopback address. A Socket keeps its Tls to
+		   itself, so the process default is what these two ends can be given,
+		   and initialize() is what reads it - putting it back afterwards leaves
+		   nothing behind for the cases that follow. */
+		const bool untrusted =
+			Samurai::IO::Net::TlsFactory::defaultAllowUntrusted();
+		Samurai::IO::Net::TlsFactory::setDefaultAllowUntrusted(true);
+
+		const bool initialized = tcp.accepted()->TLSInitialize(true)
+			&& tcp.client->TLSInitialize(false);
+
+		Samurai::IO::Net::TlsFactory::setDefaultAllowUntrusted(untrusted);
+		if (!initialized) return;
+
+		/* Neither end can finish alone; the loop carries each one's records to
+		   the other until both report the handshake complete. */
+		tcp.accepted()->TLSsendHandshake();
+		tcp.client->TLSsendHandshake();
+
+		ready = pump([&] {
+			return tcp.server_events.tls_connected && tcp.client_events.tls_connected;
+		});
+	}
+
+	Socket* client() { return tcp.client.get(); }
+	Socket* server() { return tcp.accepted(); }
+};
+
+/* Reads whatever is waiting, having first let the loop notice it. */
+static std::string drain(Socket* socket, size_t limit = 512)
+{
+	std::string out;
+	char buf[512];
+	if (limit > sizeof(buf)) limit = sizeof(buf);
+
+	size_t got = 0;
+	std::error_code ec;
+	if (socket->read(buf, limit, got, ec) == Samurai::IO::ReadResult::Ok)
+		out.assign(buf, got);
+	return out;
 }
 
-EXO_TEST(sockets_refused_connect_reports_one_error, {
-	ConnectFailureListener listener;
-	std::shared_ptr<Samurai::IO::Net::Socket> sock =
-		Samurai::IO::Net::Socket::create(&listener, std::string("127.0.0.1"), REFUSED_PORT);
-	if (!sock) return false;
+/*
+ * A port nothing listens on: bound, so the kernel picked one that was free, and
+ * then dropped again. A connect there is refused rather than left to time out.
+ */
+static uint16_t find_dead_port()
+{
+	SocketMonitor* monitor = SocketMonitor::getInstance();
+	const size_t baseline = monitor->size();
+	uint16_t port = 0;
 
-	sock->connect();
-	if (!pump_until_error(listener)) return false;
+	{
+		SocketRecorder events;
+		InetSocketAddress any((uint16_t) 0);
+		auto server = Samurai::IO::Net::ServerSocket::create(&events, any);
+		if (server && server->listen())
+			port = server->getLocalPort();
+	}
 
-	/* The Write and Error triggers arrive together for a refused connect, so
-	   pump once more: one refusal is still one error. */
-	Samurai::IO::Net::SocketMonitor::getInstance()->wait(25);
-	return listener.errors == 1 && listener.connects == 0;
-});
+	pump([&] { return monitor->size() <= baseline; }, 1000);
+	return port;
+}
 
-EXO_TEST(sockets_refused_connect_can_be_retried, {
-	ConnectFailureListener listener;
-	std::shared_ptr<Samurai::IO::Net::Socket> sock =
-		Samurai::IO::Net::Socket::create(&listener, std::string("127.0.0.1"), REFUSED_PORT);
-	if (!sock) return false;
-
-	sock->connect();
-	if (!pump_until_error(listener)) return false;
-
-	/* The failed attempt released the descriptor, so a retry that is really
-	   made allocates a new one. */
-	sock->connect();
-	return sock->getFD() != INVALID_SOCKET;
-});
-
-/* NOTE: that disconnect() stays quiet for a connection which never came up has
-   no assertion here. A refused connect reaches Disconnected, which disconnect()
-   ignores for the same reason Invalid is ignored, so the two are
-   indistinguishable from outside. Only the connect timeout separates them, and
-   that needs an address which blackholes rather than refuses. */
+} // namespace
 
 
 /* ------------------------------------------------------------------------- */
-/* Writing to a peer that has gone away                                       */
-/*                                                                            */
-/* A platform with no MSG_NOSIGNAL relies on SO_NOSIGPIPE being set on the     */
-/* descriptor, without which this write raises the signal instead of failing.  */
-/* Reaching the assertion at all is the test.                                  */
+/* Setting a connection up                                                   */
 /* ------------------------------------------------------------------------- */
 
-EXO_TEST(sockets_write_to_closed_peer_returns_an_error_not_a_signal, {
+EXO_TEST(sockets_server_binds_an_ephemeral_port,
+{
+	SocketRecorder events;
+	InetSocketAddress any((uint16_t) 0);
+
+	auto server = Samurai::IO::Net::ServerSocket::create(&events, any);
+	if (!server || server->getFD() == -1) return false;
+	if (!server->listen()) return false;
+
+	/* Port 0 asks the kernel to choose; it has to say which it chose. */
+	return server->getLocalPort() != 0;
+});
+
+EXO_TEST(sockets_server_registers_once,
+{
+	SocketMonitor* monitor = SocketMonitor::getInstance();
+	const size_t baseline = monitor->size();
+
+	{
+		SocketRecorder events;
+		InetSocketAddress any((uint16_t) 0);
+		auto server = Samurai::IO::Net::ServerSocket::create(&events, any);
+		if (!server->listen()) return false;
+		if (monitor->size() != baseline + 1) return false;
+	}
+
+	pump([&] { return monitor->size() <= baseline; }, 1000);
+	return monitor->size() == baseline;
+});
+
+/*
+ * A constructor cannot report that the descriptor was never created, so the
+ * factory answers with nothing rather than handing back a server that can never
+ * be listened on. An unset address has no family, so socket() cannot be asked
+ * for one.
+ */
+EXO_TEST(sockets_a_server_without_an_address_family_is_not_created,
+{
+	InetAddress unset_addr;
+	InetSocketAddress unset(unset_addr, (uint16_t) 0);
+
+	auto server = Samurai::IO::Net::ServerSocket::create(
+		(Samurai::IO::Net::ServerSocketEventHandler*) nullptr, unset);
+
+	return server == nullptr;
+});
+
+EXO_TEST(sockets_client_connects,
+{
+	TcpFixture fix;
+	return fix.ready;
+});
+
+EXO_TEST(sockets_connect_reports_its_progress,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	/* A connection that came up cannot have skipped the lookup. */
+	return fix.client_events.host_lookup
+		&& fix.client_events.host_found
+		&& fix.client_events.connected
+		&& !fix.client_events.error
+		&& !fix.client_events.timeout;
+});
+
+EXO_TEST(sockets_server_accepts_exactly_one,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	return fix.accepted() != 0
+		&& fix.server_events.accept_count == 1
+		&& !fix.server_events.accept_error;
+});
+
+EXO_TEST(sockets_a_connection_costs_three_registrations,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	/* The listener, the client and the accepted socket. */
+	return fix.added() == 3;
+});
+
+/*
+ * An accepted socket is handed over with no event handler and outside the
+ * monitor, so a server that only holds on to it hears nothing further. Giving
+ * it a handler is what adopts it.
+ */
+EXO_TEST(sockets_an_accepted_socket_joins_the_monitor_when_adopted,
+{
+	SocketMonitor* monitor = SocketMonitor::getInstance();
+	const size_t baseline = monitor->size();
+
+	SocketRecorder server_events;
+	SocketRecorder client_events;
+
+	InetSocketAddress any((uint16_t) 0);
+	auto server = Samurai::IO::Net::ServerSocket::create(&server_events, any);
+	if (!server->listen()) return false;
+
+	auto client = Socket::create(&client_events,
+		std::string("127.0.0.1"), server->getLocalPort());
+	client->connect();
+
+	if (!pump([&] { return client_events.connected && server_events.accepted; }))
+		return false;
+
+	/* The listener and the client, but not yet what was accepted. */
+	if (monitor->size() != baseline + 2) return false;
+	if (server_events.accepted->getEventHandler() != 0) return false;
+
+	server_events.accepted->setEventHandler(&server_events);
+	const bool joined = (monitor->size() == baseline + 3);
+
+	server_events.accepted.reset();
+	client.reset();
+	server.reset();
+	pump([&] { return monitor->size() <= baseline; }, 1000);
+
+	return joined;
+});
+
+EXO_TEST(sockets_releasing_gives_every_registration_back,
+{
+	SocketMonitor* monitor = SocketMonitor::getInstance();
+	const size_t baseline = monitor->size();
+
+	{
+		TcpFixture fix;
+		if (!fix.ready) return false;
+	}
+
+	return monitor->size() == baseline;
+});
+
+EXO_TEST(sockets_repeated_connections_do_not_accumulate,
+{
+	SocketMonitor* monitor = SocketMonitor::getInstance();
+	const size_t baseline = monitor->size();
+
+	for (int n = 0; n < 5; n++)
+	{
+		TcpFixture fix;
+		if (!fix.ready) return false;
+	}
+
+	return monitor->size() == baseline;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Moving data                                                               */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(sockets_client_to_server,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	const std::string message = "Hello, there!\n";
+	if (!fix.send(fix.client.get(), fix.server_events, message)) return false;
+
+	return drain(fix.accepted()) == message;
+});
+
+EXO_TEST(sockets_server_to_client,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	const std::string message = "Reply from the other end\n";
+	if (!fix.send(fix.accepted(), fix.client_events, message)) return false;
+
+	return drain(fix.client.get()) == message;
+});
+
+EXO_TEST(sockets_both_directions_at_once,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	const std::string out = "from the client";
+	const std::string back = "from the server";
+
+	if (!fix.send(fix.client.get(), fix.server_events, out)) return false;
+	if (!fix.send(fix.accepted(), fix.client_events, back)) return false;
+
+	return drain(fix.accepted()) == out && drain(fix.client.get()) == back;
+});
+
+EXO_TEST(sockets_write_reports_what_it_took,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	const std::string message = "counted";
+	std::error_code ec;
+	const ssize_t n = fix.client->write(message.data(), message.size(), ec);
+
+	return n == (ssize_t) message.size() && !ec;
+});
+
+EXO_TEST(sockets_vectored_write_joins_the_buffers,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	const std::string expect = "GET /index.html HTTP/1.0\r\n\r\n";
+
+	fix.server_events.data_available = false;
+	const ssize_t n = fix.client->write({"GET /index.html", " HTTP/1.0\r\n", "\r\n"});
+	if (n != (ssize_t) expect.size()) return false;
+
+	if (!pump([&] { return fix.server_events.data_available; })) return false;
+	return drain(fix.accepted()) == expect;
+});
+
+/* An empty buffer contributes nothing and does not end the write. */
+EXO_TEST(sockets_vectored_write_skips_empty_buffers,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	const std::string expect = "abcd";
+
+	fix.server_events.data_available = false;
+	const ssize_t n = fix.client->write({"", "ab", "", "cd", ""});
+	if (n != (ssize_t) expect.size()) return false;
+
+	if (!pump([&] { return fix.server_events.data_available; })) return false;
+	return drain(fix.accepted()) == expect;
+});
+
+EXO_TEST(sockets_peek_does_not_consume,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	const std::string message = "peek at me";
+	if (!fix.send(fix.client.get(), fix.server_events, message)) return false;
+
+	char buf[64];
+	size_t got = 0;
+	std::error_code ec;
+
+	if (fix.accepted()->peek(buf, sizeof(buf), got, ec) != Samurai::IO::ReadResult::Ok)
+		return false;
+	if (std::string(buf, got) != message) return false;
+
+	/* Still there for the read that follows. */
+	return drain(fix.accepted()) == message;
+});
+
+/*
+ * The three-way result is the reason the ssize_t overloads are discouraged:
+ * nothing-yet, peer-closed and failed all answer 0 there.
+ */
+EXO_TEST(sockets_read_reports_would_block_when_idle,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	char buf[16];
+	size_t got = 0;
+	std::error_code ec;
+
+	const Samurai::IO::ReadResult res = fix.accepted()->read(buf, sizeof(buf), got, ec);
+	return res == Samurai::IO::ReadResult::WouldBlock && got == 0 && !ec;
+});
+
+EXO_TEST(sockets_read_reports_end_of_file_when_the_peer_goes,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	fix.client->disconnect();
+
+	char buf[16];
+	size_t got = 0;
+	std::error_code ec;
+	Samurai::IO::ReadResult res = Samurai::IO::ReadResult::WouldBlock;
+
+	pump([&] {
+		res = fix.accepted()->read(buf, sizeof(buf), got, ec);
+		return res != Samurai::IO::ReadResult::WouldBlock;
+	});
+
+	return res == Samurai::IO::ReadResult::EndOfFile && got == 0;
+});
+
+EXO_TEST(sockets_data_available_fires_once_per_arrival,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	fix.server_events.data_available_count = 0;
+
+	if (!fix.send(fix.client.get(), fix.server_events, "first")) return false;
+	if (drain(fix.accepted()).empty()) return false;
+
+	const int after_first = fix.server_events.data_available_count;
+
+	if (!fix.send(fix.client.get(), fix.server_events, "second")) return false;
+	if (drain(fix.accepted()).empty()) return false;
+
+	return after_first >= 1 && fix.server_events.data_available_count > after_first;
+});
+
+/* Bigger than a single segment, so it arrives in pieces. */
+EXO_TEST(sockets_a_large_transfer_arrives_whole,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	const std::string message(64 * 1024, 'x');
+
+	size_t sent = 0;
+	std::string received;
+
+	const bool done = pump([&] {
+		if (sent < message.size())
+		{
+			std::error_code ec;
+			const ssize_t n = fix.client->write(&message[sent], message.size() - sent, ec);
+			if (n > 0) sent += (size_t) n;
+			else if (n < 0) return true;
+		}
+
+		std::string chunk = drain(fix.accepted());
+		received += chunk;
+		return received.size() >= message.size();
+	});
+
+	return done && received == message;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Addresses                                                                 */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(sockets_a_connected_pair_knows_its_ports,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	/* The client dialled the port the server was given. */
+	if (fix.client->getPort() != fix.port) return false;
+
+	/* And the accepted socket is on the server's end of the same pair. */
+	if (fix.accepted()->getLocalPort() != fix.port) return false;
+
+	return fix.client->getLocalPort() != 0
+		&& fix.client->getLocalPort() != fix.port;
+});
+
+EXO_TEST(sockets_a_connected_pair_knows_its_addresses,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	const InetAddress* remote = fix.client->getAddress();
+	const InetAddress* local = fix.client->getLocalAddress();
+
+	return remote && local && remote->isLoopback() && local->isLoopback();
+});
+
+/* ------------------------------------------------------------------------- */
+/* Shutting down                                                             */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(sockets_the_server_side_notices_the_client_leaving,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	fix.server_events.reset();
+	fix.client->disconnect();
+
+	return pump([&] { return fix.server_events.disconnected; });
+});
+
+EXO_TEST(sockets_the_client_notices_the_server_side_leaving,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	fix.client_events.reset();
+	fix.accepted()->disconnect();
+
+	return pump([&] { return fix.client_events.disconnected; });
+});
+
+EXO_TEST(sockets_releasing_the_accepted_socket_closes_the_connection,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	fix.client_events.reset();
+	fix.server_events.accepted.reset();
+
+	return pump([&] { return fix.client_events.disconnected; });
+});
+
+/* Nothing that follows a disconnect may reach through a closed descriptor. */
+EXO_TEST(sockets_disconnecting_twice_is_harmless,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	fix.client->disconnect();
+	fix.client->disconnect();
+	return true;
+});
+
+EXO_TEST(sockets_a_refused_connection_is_reported,
+{
+	SocketMonitor* monitor = SocketMonitor::getInstance();
+	const size_t baseline = monitor->size();
+
+	const uint16_t dead_port = find_dead_port();
+	if (!dead_port) return false;
+
+	bool settled = false;
+	{
+		SocketRecorder events;
+		auto client = Socket::create(&events, std::string("127.0.0.1"), dead_port);
+		client->connect();
+
+		/* Refused, or - if something else grabbed the port meanwhile -
+		   connected. Either is an answer; hanging is not. */
+		settled = pump([&] {
+			return events.error || events.disconnected || events.connected;
+		});
+	}
+
+	pump([&] { return monitor->size() <= baseline; }, 1000);
+	return settled && monitor->size() == baseline;
+});
+
+/*
+ * A refusal is one failure, and reaches the handler once. The Write and Error
+ * triggers arrive together for a refused connect, so the loop is given another
+ * pass to prove it does not report the same refusal twice.
+ */
+EXO_TEST(sockets_a_refused_connection_is_reported_once,
+{
+	const uint16_t dead_port = find_dead_port();
+	if (!dead_port) return false;
+
+	SocketRecorder events;
+	auto client = Socket::create(&events, std::string("127.0.0.1"), dead_port);
+	if (!client) return false;
+
+	client->connect();
+	if (!pump([&] { return events.error_count > 0; })) return false;
+
+	SocketMonitor::getInstance()->wait(25);
+	return events.error_count == 1 && !events.connected;
+});
+
+/*
+ * A connection that was refused is one that can be attempted again, so it ends
+ * up Disconnected rather than Connecting: a state connect() accepts. The failed
+ * attempt released the descriptor, so a retry that is really made takes a new
+ * one.
+ */
+EXO_TEST(sockets_a_refused_connection_can_be_retried,
+{
+	const uint16_t dead_port = find_dead_port();
+	if (!dead_port) return false;
+
+	SocketRecorder events;
+	auto client = Socket::create(&events, std::string("127.0.0.1"), dead_port);
+	if (!client) return false;
+
+	client->connect();
+	if (!pump([&] { return events.error_count > 0; })) return false;
+
+	client->connect();
+	return pump([&] { return client->getFD() != INVALID_SOCKET; });
+});
+
+EXO_TEST(sockets_an_unresolvable_host_is_reported,
+{
+	SocketMonitor* monitor = SocketMonitor::getInstance();
+	const size_t baseline = monitor->size();
+
+	bool settled = false;
+	{
+		SocketRecorder events;
+		auto client = Socket::create(&events,
+			std::string("no-such-host.invalid"), (uint16_t) 80);
+		client->connect();
+
+		settled = pump([&] {
+			return events.error || events.disconnected;
+		});
+	}
+
+	pump([&] { return monitor->size() <= baseline; }, 1000);
+	return settled && monitor->size() == baseline;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Datagrams                                                                 */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(sockets_datagram_socket_listens,
+{
+	SocketMonitor* monitor = SocketMonitor::getInstance();
+	const size_t baseline = monitor->size();
+
+	{
+		SocketRecorder events;
+		auto server = Samurai::IO::Net::DatagramSocket::create(&events, (uint16_t) 0);
+		if (!server || !server->listen()) return false;
+		if (server->getLocalPort() == 0) return false;
+		if (monitor->size() != baseline + 1) return false;
+	}
+
+	pump([&] { return monitor->size() <= baseline; }, 1000);
+	return monitor->size() == baseline;
+});
+
+/*
+ * Nothing has been sent here, and the socket is non-blocking, so recvfrom()
+ * reports EAGAIN. That is "no datagram", not "the socket failed", and a
+ * readiness notification with nothing behind it must not reach the handler as
+ * an error.
+ */
+EXO_TEST(sockets_a_datagram_read_with_nothing_pending_is_not_an_error,
+{
+	SocketRecorder events;
+	auto socket = Samurai::IO::Net::DatagramSocket::create(&events, (uint16_t) 0);
+	if (!socket || !socket->listen()) return false;
+
+	Samurai::IO::Net::DatagramPacket packet;
+	return socket->read(&packet) == 0 && !events.datagram_error;
+});
+
+EXO_TEST(sockets_a_datagram_arrives,
+{
+	SocketRecorder server_events;
+	SocketRecorder client_events;
+
+	auto server = Samurai::IO::Net::DatagramSocket::create(&server_events, (uint16_t) 0);
+	if (!server || !server->listen()) return false;
+
+	const uint16_t port = server->getLocalPort();
+	if (!port) return false;
+
+	auto client = Samurai::IO::Net::DatagramSocket::create(&client_events,
+		InetAddress::Version::IPv4);
+	if (!client) return false;
+
+	const std::string message = "Hello, there!\n";
+	Samurai::IO::Net::DatagramPacket packet(
+		(uint8_t*) message.data(), message.size());
+	InetSocketAddress target(std::string("127.0.0.1"), port);
+	packet.setAddress(&target);
+
+	if (client->send(&packet) != (int) message.size()) return false;
+
+	if (!pump([&] { return server_events.datagram; })) return false;
+	return server_events.datagram_payload == message;
+});
+
+EXO_TEST(sockets_datagram_payloads_are_kept_apart,
+{
+	SocketRecorder server_events;
+	SocketRecorder client_events;
+
+	auto server = Samurai::IO::Net::DatagramSocket::create(&server_events, (uint16_t) 0);
+	if (!server || !server->listen()) return false;
+
+	const uint16_t port = server->getLocalPort();
+	if (!port) return false;
+
+	auto client = Samurai::IO::Net::DatagramSocket::create(&client_events,
+		InetAddress::Version::IPv4);
+	if (!client) return false;
+
+	InetSocketAddress target(std::string("127.0.0.1"), port);
+
+	const std::string first = "first datagram";
+	const std::string second = "the second one, which is longer";
+
+	{
+		Samurai::IO::Net::DatagramPacket packet((uint8_t*) first.data(), first.size());
+		packet.setAddress(&target);
+		if (client->send(&packet) != (int) first.size()) return false;
+	}
+
+	if (!pump([&] { return server_events.datagram; })) return false;
+	if (server_events.datagram_payload != first) return false;
+
+	server_events.datagram = false;
+	server_events.datagram_payload.clear();
+
+	{
+		Samurai::IO::Net::DatagramPacket packet((uint8_t*) second.data(), second.size());
+		packet.setAddress(&target);
+		if (client->send(&packet) != (int) second.size()) return false;
+	}
+
+	if (!pump([&] { return server_events.datagram; })) return false;
+
+	/* A datagram is a message, not a stream: the second must not carry any
+	   of the first along with it. */
+	return server_events.datagram_payload == second;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Signals, and a peer that has gone away                                    */
+/*                                                                           */
+/* A socketpair() gives a connected pair with no port, no listener and no     */
+/* timing to depend on, which is what these two need: the descriptor itself,  */
+/* not the loop around it.                                                   */
+/* ------------------------------------------------------------------------- */
+
+/*
+ * A platform with no MSG_NOSIGNAL relies on SO_NOSIGPIPE being set on the
+ * descriptor, without which this write raises the signal instead of failing.
+ * Reaching the assertion at all is the test.
+ */
+EXO_TEST(sockets_writing_to_a_closed_peer_returns_an_error_not_a_signal,
+{
 	int sv[2];
 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) != 0) return false;
 
-	/* Close the reader, so the first or second write to sv[0] gets EPIPE. */
+	/* Close the reader, so a write to the other end gets EPIPE. */
 	Samurai::IO::Net::socket_close(sv[1]);
 
 	ssize_t total = 0;
@@ -651,60 +978,12 @@ EXO_TEST(sockets_write_to_closed_peer_returns_an_error_not_a_signal, {
 	return total < 0;
 });
 
-
-/* ------------------------------------------------------------------------- */
-/* Failures that arrive without a return value                                */
-/*                                                                            */
-/* A constructor cannot report that the descriptor was never created, so the   */
-/* state carries it and listen() refuses. A readiness notification that turns  */
-/* out to have nothing behind it is not an error either, and must not reach    */
-/* the handler as one.                                                        */
-/* ------------------------------------------------------------------------- */
-
-EXO_TEST(sockets_server_without_an_address_family_is_not_created, {
-	/* An unset address has no family, so socket() cannot be asked for one. */
-	Samurai::IO::Net::InetAddress unset_addr;
-	Samurai::IO::Net::InetSocketAddress unset(unset_addr, (uint16_t) 0);
-	std::shared_ptr<Samurai::IO::Net::ServerSocket> server =
-		Samurai::IO::Net::ServerSocket::create(
-			(Samurai::IO::Net::ServerSocketEventHandler*) nullptr, unset);
-
-	/* A constructor cannot return a failure, so the factory does it. */
-	return server == nullptr;
-});
-
-EXO_TEST(sockets_datagram_read_with_nothing_pending_is_not_an_error, {
-	std::shared_ptr<Samurai::IO::Net::DatagramSocket> sock =
-		Samurai::IO::Net::DatagramSocket::create(
-			(Samurai::IO::Net::DatagramEventHandler*) nullptr, (uint16_t) 0);
-	if (!sock || !sock->listen()) return false;
-
-	Samurai::IO::Net::DatagramPacket packet;
-
-	/* Nothing has been sent here, and the socket is non-blocking, so recvfrom()
-	   reports EAGAIN. That is "no datagram", not "the socket failed". */
-	return sock->read(&packet) == 0;
-});
-
-
-/* ------------------------------------------------------------------------- */
-/* A signal is not a read error                                               */
-/*                                                                            */
-/* recv() returning EINTR means the call was cut short, not that the peer or  */
-/* the descriptor is gone, so the connection stays usable and the caller is    */
-/* expected to ask again.                                                     */
-/*                                                                            */
-/* Socket::create() forwards to the descriptor-adopting constructor, so a      */
-/* socketpair() gives a connected Socket with no port, no listener and no      */
-/* timing to depend on.                                                       */
-/* ------------------------------------------------------------------------- */
-
 namespace {
 
 extern "C" void samurai_test_alarm_handler(int) { }
 
 /* Arrange for SIGALRM to arrive shortly, without SA_RESTART: the default
-   disposition would resume the call rather than fail it with EINTR. */
+   disposition would resume the interrupted call rather than fail it. */
 static bool arm_interrupting_alarm()
 {
 	struct sigaction sa;
@@ -722,26 +1001,216 @@ static bool arm_interrupting_alarm()
 
 }
 
-EXO_TEST(sockets_peek_interrupted_by_a_signal_keeps_the_connection, {
+/*
+ * recv() returning EINTR means the call was cut short, not that the peer or the
+ * descriptor is gone, so the connection stays usable and the caller is expected
+ * to ask again.
+ */
+EXO_TEST(sockets_a_peek_interrupted_by_a_signal_keeps_the_connection,
+{
 	int sv[2];
 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) != 0) return false;
 
-	Samurai::IO::Net::InetSocketAddress dummy((uint16_t) 0);
-	std::shared_ptr<Samurai::IO::Net::Socket> sock =
-		Samurai::IO::Net::Socket::create(sv[0], dummy);
-	if (!sock) { close(sv[0]); close(sv[1]); return false; }
+	InetSocketAddress dummy((uint16_t) 0);
+	auto socket = Socket::create(sv[0], dummy);
+	if (!socket) { close(sv[0]); close(sv[1]); return false; }
 
 	if (!arm_interrupting_alarm()) { close(sv[1]); return false; }
 
 	/* Nothing has been sent, so this blocks until the alarm cuts it short. */
 	char buf[1] = { 0 };
-	if (sock->peek(buf, sizeof(buf)) != 0) { close(sv[1]); return false; }
+	if (socket->peek(buf, sizeof(buf)) != 0) { close(sv[1]); return false; }
 
 	/* The connection is still there, so a peek that has something to look at
 	   answers with it. */
 	if (::send(sv[1], "x", 1, 0) != 1) { close(sv[1]); return false; }
 
-	const ssize_t got = sock->peek(buf, sizeof(buf));
+	const ssize_t got = socket->peek(buf, sizeof(buf));
 	close(sv[1]);
 	return got == 1 && buf[0] == 'x';
+});
+
+/* ------------------------------------------------------------------------- */
+/* TLS through Socket and the event loop                                     */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(sockets_tls_handshake_completes,
+{
+	TlsFixture fix;
+	return fix.ready;
+});
+
+EXO_TEST(sockets_tls_reports_both_ends_connected,
+{
+	TlsFixture fix;
+	if (!fix.ready) return false;
+
+	return fix.tcp.client_events.tls_connected
+		&& fix.tcp.server_events.tls_connected
+		&& !fix.tcp.client_events.error
+		&& !fix.tcp.server_events.error;
+});
+
+EXO_TEST(sockets_tls_initialize_twice_is_refused,
+{
+	TlsFixture fix;
+	if (!fix.ready) return false;
+
+	/* One factory per socket; the second would leak the first. */
+	return !fix.client()->TLSInitialize(false);
+});
+
+EXO_TEST(sockets_tls_carries_data_client_to_server,
+{
+	TlsFixture fix;
+	if (!fix.ready) return false;
+
+	const std::string message = "encrypted, going out";
+
+	fix.tcp.server_events.data_available = false;
+	if (fix.client()->write(message.data(), message.size()) != (ssize_t) message.size())
+		return false;
+
+	if (!pump([&] { return fix.tcp.server_events.data_available; })) return false;
+	return drain(fix.server()) == message;
+});
+
+EXO_TEST(sockets_tls_carries_data_server_to_client,
+{
+	TlsFixture fix;
+	if (!fix.ready) return false;
+
+	const std::string message = "encrypted, coming back";
+
+	fix.tcp.client_events.data_available = false;
+	if (fix.server()->write(message.data(), message.size()) != (ssize_t) message.size())
+		return false;
+
+	if (!pump([&] { return fix.tcp.client_events.data_available; })) return false;
+	return drain(fix.client()) == message;
+});
+
+EXO_TEST(sockets_tls_peek_does_not_consume,
+{
+	TlsFixture fix;
+	if (!fix.ready) return false;
+
+	const std::string message = "peek through TLS";
+
+	fix.tcp.server_events.data_available = false;
+	if (fix.client()->write(message.data(), message.size()) != (ssize_t) message.size())
+		return false;
+	if (!pump([&] { return fix.tcp.server_events.data_available; })) return false;
+
+	char buf[64];
+	size_t got = 0;
+	std::error_code ec;
+	if (fix.server()->peek(buf, sizeof(buf), got, ec) != Samurai::IO::ReadResult::Ok)
+		return false;
+	if (std::string(buf, got) != message) return false;
+
+	return drain(fix.server()) == message;
+});
+
+/*
+ * Reading one TLS record takes all of it off the descriptor, so a caller who
+ * asked for less than the record held leaves the rest inside the TLS layer -
+ * where a further read still finds it, in order, with nothing lost.
+ */
+EXO_TEST(sockets_tls_a_partial_read_leaves_the_rest_available,
+{
+	TlsFixture fix;
+	if (!fix.ready) return false;
+
+	const std::string message = "0123456789abcdefghij";
+
+	fix.tcp.server_events.data_available = false;
+	if (fix.client()->write(message.data(), message.size()) != (ssize_t) message.size())
+		return false;
+	if (!pump([&] { return fix.tcp.server_events.data_available; })) return false;
+
+	char head[4];
+	size_t got = 0;
+	std::error_code ec;
+	if (fix.server()->read(head, sizeof(head), got, ec) != Samurai::IO::ReadResult::Ok)
+		return false;
+	if (got != sizeof(head)) return false;
+
+	const std::string rest = drain(fix.server());
+	return std::string(head, sizeof(head)) + rest == message;
+});
+
+/*
+ * The monitor must keep serving a socket whose descriptor has nothing left to
+ * report but whose TLS layer still holds data, or the remainder is never
+ * delivered.
+ */
+EXO_TEST(sockets_tls_the_loop_notices_data_the_descriptor_cannot_report,
+{
+	TlsFixture fix;
+	if (!fix.ready) return false;
+
+	const std::string message = "0123456789abcdefghij";
+
+	fix.tcp.server_events.data_available = false;
+	if (fix.client()->write(message.data(), message.size()) != (ssize_t) message.size())
+		return false;
+	if (!pump([&] { return fix.tcp.server_events.data_available; })) return false;
+
+	char head[4];
+	size_t got = 0;
+	std::error_code ec;
+	if (fix.server()->read(head, sizeof(head), got, ec) != Samurai::IO::ReadResult::Ok)
+		return false;
+
+	/* Nothing further arrives on the wire from here on. */
+	fix.tcp.server_events.data_available = false;
+	if (!pump([&] { return fix.tcp.server_events.data_available; }, 1000)) return false;
+
+	return drain(fix.server()) == message.substr(sizeof(head));
+});
+
+EXO_TEST(sockets_tls_goodbye_is_reported,
+{
+	TlsFixture fix;
+	if (!fix.ready) return false;
+
+	fix.client()->TLSsendGoodbye();
+
+	return pump([&] { return fix.tcp.client_events.tls_disconnected; });
+});
+
+EXO_TEST(sockets_tls_peer_certificate_is_the_one_we_configured,
+{
+	TlsFixture fix;
+	if (!fix.ready) return false;
+
+	/* The client saw the server's certificate, which is the one testkeys.h
+	   generated - the same one the library reports as its own. */
+	const auto peer = fix.client()->TLSgetPeerCertificateSHA256();
+	const auto own = Samurai::IO::Net::TlsFactory::getOwnCertificateSHA256();
+
+	return peer.has_value() && own.has_value() && *peer == *own;
+});
+
+/* Without TLS there is no peer certificate to report. */
+EXO_TEST(sockets_no_peer_certificate_without_tls,
+{
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	return !fix.client->TLSgetPeerCertificateSHA256().has_value();
+});
+
+EXO_TEST(sockets_tls_releases_its_registrations,
+{
+	SocketMonitor* monitor = SocketMonitor::getInstance();
+	const size_t baseline = monitor->size();
+
+	{
+		TlsFixture fix;
+		if (!fix.ready) return false;
+	}
+
+	return monitor->size() == baseline;
 });

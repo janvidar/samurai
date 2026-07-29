@@ -779,6 +779,33 @@ Samurai::IO::ReadResult Samurai::IO::Net::Socket::peek(char* data, size_t length
 		return Samurai::IO::ReadResult::Error;
 	}
 
+	if (state == SocketState::SSLConnected && tls)
+	{
+		Samurai::IO::Net::TlsFactory::TlsStatus status;
+		ssize_t tls_ret = tls->peek(data, length, status);
+
+		switch (status) {
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Ok:
+				if (tls_ret > 0) { transferred = (size_t) tls_ret; return Samurai::IO::ReadResult::Ok; }
+				return Samurai::IO::ReadResult::EndOfFile;
+
+			case Samurai::IO::Net::TlsFactory::TlsStatus::WantWrite:
+				toggleWriteNotifier(true);
+				return Samurai::IO::ReadResult::WouldBlock;
+
+			case Samurai::IO::Net::TlsFactory::TlsStatus::WantRead:
+				return Samurai::IO::ReadResult::WouldBlock;
+
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Closed:
+				return Samurai::IO::ReadResult::EndOfFile;
+
+			case Samurai::IO::Net::TlsFactory::TlsStatus::Error:
+				ec = Samurai::system_error(EPROTO);
+				return Samurai::IO::ReadResult::Error;
+		}
+		return Samurai::IO::ReadResult::WouldBlock;
+	}
+
 	ssize_t ret = ::recv(sd, data, length, MSG_PEEK);
 
 	if (ret > 0) { transferred = (size_t) ret; return Samurai::IO::ReadResult::Ok; }
