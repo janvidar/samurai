@@ -1,0 +1,3 @@
+[submodule "third_party/exotic"]
+	path = third_party/exotic
+	url = https://github.com/janvidar/exotic.git
