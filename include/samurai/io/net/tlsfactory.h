@@ -116,8 +116,27 @@ class TlsFactory {
 		 */
 		static std::optional<Sha256Digest> getOwnCertificateSHA256();
 
+		/**
+		 * Whether a peer whose certificate cannot be verified is accepted.
+		 *
+		 * False by default: a client checks the server's chain against the
+		 * system trust store and its name against the certificate, and refuses
+		 * the connection if either fails. Turning this on gives an
+		 * unauthenticated channel, which is worth having only where the peer is
+		 * authenticated some other way.
+		 */
 		static bool allowUntrustedConnections();
 		static void setAllowUntrustedConnections(bool toggle);
+
+		/**
+		 * Whether a server asks its clients for a certificate - mutual TLS.
+		 *
+		 * False by default. A server that demands one rejects every client that
+		 * has none, which is most of them, so this is not implied by verifying
+		 * connections.
+		 */
+		static bool requireClientCertificate();
+		static void setRequireClientCertificate(bool toggle);
 		
 		
 
@@ -149,6 +168,7 @@ class TlsFactory {
 		static std::unique_ptr<Samurai::IO::File> pem_key;
 		static std::unique_ptr<Samurai::IO::File> pem_cert;
 		static bool allow_untrusted;
+		static bool require_client_cert;
 		
 		static void priv_init();
 		static void priv_fini();

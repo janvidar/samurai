@@ -135,6 +135,7 @@ Samurai::IO::Net::OpenSSL::OpenSSL()
 {
 	ssl = nullptr;
 	ctx = nullptr;
+	verify_peer = false;
 }
 
 Samurai::IO::Net::OpenSSL::~OpenSSL()
@@ -179,11 +180,26 @@ Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initialize(
 	SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
 	SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
 
-	const bool verify = !TlsFactory::allowUntrustedConnections();
+	const bool client = (mode == Samurai::IO::Net::TlsFactory::TlsOperation::Client);
 
-	if (verify)
+	/*
+	 * A client always wants the server's certificate. A server only wants the
+	 * client's for mutual TLS, and demanding one otherwise rejects every client
+	 * that has none - which is nearly all of them, and would make verifying
+	 * connections unusable for a server.
+	 */
+	verify_peer = !TlsFactory::allowUntrustedConnections()
+		&& (client || TlsFactory::requireClientCertificate());
+
+	if (verify_peer)
 	{
-		SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
+		/* SSL_VERIFY_FAIL_IF_NO_PEER_CERT is a server-side flag; OpenSSL
+		   ignores it for a client, which fails the handshake on a missing
+		   certificate regardless. */
+		int flags = SSL_VERIFY_PEER;
+		if (!client) flags |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
+
+		SSL_CTX_set_verify(ctx, flags, nullptr);
 
 		/* Without a trust store SSL_VERIFY_PEER can never succeed. */
 		if (SSL_CTX_set_default_verify_paths(ctx) != 1)
@@ -260,7 +276,7 @@ Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initialize(
 			SSL_set_tlsext_host_name(ssl, peer_name.c_str());
 		}
 	}
-	else if (mode == Samurai::IO::Net::TlsFactory::TlsOperation::Client && verify)
+	else if (client && verify_peer)
 	{
 		QERR("No peer name set - the certificate name cannot be verified. "
 		     "Call TlsFactory::setPeerName() before initialize().");
@@ -327,8 +343,6 @@ Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendHandshake
 
 	QDBG("Handshake OK");
 
-	const bool verify = !TlsFactory::allowUntrustedConnections();
-
 	/*
 	 * With SSL_VERIFY_PEER a failed chain aborts the handshake above, so this
 	 * is a second line of defence rather than the primary check. It is the
@@ -337,7 +351,7 @@ Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendHandshake
 	long status = SSL_get_verify_result(ssl);
 	if (status != X509_V_OK)
 	{
-		if (verify)
+		if (verify_peer)
 		{
 			QERR("Certificate verification failed: %s",
 				X509_verify_cert_error_string(status));
@@ -352,7 +366,7 @@ Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::sendHandshake
 	{
 		X509_free(cert);
 	}
-	else if (verify)
+	else if (verify_peer)
 	{
 		QERR("Peer presented no certificate");
 		return Samurai::IO::Net::TlsFactory::TlsStatus::Error;

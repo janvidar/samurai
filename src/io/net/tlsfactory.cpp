@@ -10,7 +10,8 @@
 
 std::unique_ptr<Samurai::IO::File> Samurai::IO::Net::TlsFactory::pem_key;
 std::unique_ptr<Samurai::IO::File> Samurai::IO::Net::TlsFactory::pem_cert;
-bool Samurai::IO::Net::TlsFactory::allow_untrusted = true;
+bool Samurai::IO::Net::TlsFactory::allow_untrusted = false;
+bool Samurai::IO::Net::TlsFactory::require_client_cert = false;
 
 void Samurai::IO::Net::TlsFactory::priv_init()
 {
@@ -30,6 +31,16 @@ bool Samurai::IO::Net::TlsFactory::allowUntrustedConnections()
 void Samurai::IO::Net::TlsFactory::setAllowUntrustedConnections(bool toggle)
 {
 	allow_untrusted = toggle;
+}
+
+bool Samurai::IO::Net::TlsFactory::requireClientCertificate()
+{
+	return require_client_cert;
+}
+
+void Samurai::IO::Net::TlsFactory::setRequireClientCertificate(bool toggle)
+{
+	require_client_cert = toggle;
 }
 
 
