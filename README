@@ -35,22 +35,25 @@ Configuration
     -DSAMURAI_BUILD_STATIC=ON|OFF         Build libsamurai.a. Default ON.
                                           Both flavours share one compile pass.
     -DSAMURAI_BUILD_TESTS=ON|OFF          Build the test programs. Default ON.
-    -DSAMURAI_DNS_PROVIDER=BLOCKING|FORKED|BUILTIN
-                                          DNS resolver. Default BLOCKING,
-                                          which is the only working backend.
     -DSAMURAI_SANITIZE=ON|OFF             Build with AddressSanitizer and
                                           UndefinedBehaviorSanitizer. Default
                                           OFF. Needs GCC or Clang. The flags
                                           are a usage requirement, so anything
                                           linking the library is instrumented
                                           too.
-    -DSAMURAI_SANITIZE_LEAKS=ON|OFF       Also enable LeakSanitizer. Default
-                                          OFF, because the library has known
-                                          leaks and one of them is reached by
-                                          the test suite. Note that
-                                          LeakSanitizer stops the world through
-                                          ptrace, so it stalls for minutes on
-                                          hosts where
+    -DSAMURAI_SANITIZE_THREAD=ON|OFF      Build with ThreadSanitizer. Default
+                                          OFF. Cannot be combined with
+                                          SAMURAI_SANITIZE, since the two
+                                          cannot instrument the same build;
+                                          use a second build directory.
+    -DSAMURAI_SANITIZE_LEAKS=ON|OFF       Also enable LeakSanitizer, which
+                                          requires SAMURAI_SANITIZE. Default
+                                          ON, except on macOS, which has no
+                                          LeakSanitizer at all: asking for it
+                                          there aborts the run before the first
+                                          test. Note that LeakSanitizer stops
+                                          the world through ptrace, so it
+                                          stalls for minutes on hosts where
                                           /proc/sys/kernel/yama/ptrace_scope is
                                           not 0.
 
