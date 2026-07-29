@@ -9,6 +9,7 @@
 #include <samurai/io/net/notifier.h>
 #include <samurai/io/net/socketevent.h>
 #include <samurai/io/net/inetaddress.h>
+#include <samurai/io/net/socketaddress.h>
 
 #include <atomic>
 #include <string.h>
@@ -78,6 +79,38 @@ void resolveForward(ResolverPool::Request& request)
 
 	request.ok = found;
 	if (!found) request.error = Error::NoAddress;
+}
+
+/*
+ * NI_NAMEREQD, so an address with no name is an error rather than the address
+ * written back out as its own answer.
+ */
+void resolveReverse(ResolverPool::Request& request)
+{
+	Samurai::IO::Net::InetSocketAddress sa(request.address, 0);
+
+	struct sockaddr* raw = sa.getSockAddr();
+	if (!raw)
+	{
+		request.error = Error::NotFound;
+		request.ok = false;
+		return;
+	}
+
+	char host[NI_MAXHOST];
+	host[0] = '\0';
+
+	const int rc = ::getnameinfo(raw, (socklen_t) sa.getSockAddrSize(),
+	                             host, sizeof(host), nullptr, 0, NI_NAMEREQD);
+	if (rc != 0)
+	{
+		request.error = mapResolveError(rc);
+		request.ok = false;
+		return;
+	}
+
+	request.name = host;
+	request.ok = true;
 }
 
 }
@@ -301,7 +334,10 @@ void Samurai::IO::Net::DNS::ResolverPool::work(Worker* self)
 			busy_workers++;
 		}
 
-		resolveForward(*request);
+		if (request->kind == Kind::Forward)
+			resolveForward(*request);
+		else
+			resolveReverse(*request);
 
 		{
 			std::lock_guard<std::mutex> lock(m);
@@ -334,10 +370,18 @@ void Samurai::IO::Net::DNS::ResolverPool::drain()
 	{
 		if (request->dead || !request->handler) continue;
 
-		if (request->ok)
-			request->handler->EventHostFound(&request->address);
-		else
+		if (!request->ok)
+		{
 			request->handler->EventHostError(request->error);
+			continue;
+		}
+
+		/* A reverse result is the name the caller's own address answers to, so
+		   it travels attached to that address rather than replacing it. */
+		if (request->kind == Kind::Reverse)
+			request->address.setHostname(request->name);
+
+		request->handler->EventHostFound(&request->address);
 	}
 }
 
@@ -363,7 +407,26 @@ void Samurai::IO::Net::DNS::PooledResolver::lookup(const char* name)
 	}
 
 	request = std::make_shared<ResolverPool::Request>();
+	request->kind = ResolverPool::Kind::Forward;
 	request->query = name;
+	request->handler = eventHandler;
+
+	ResolverPool::getInstance()->submit(request);
+}
+
+void Samurai::IO::Net::DNS::PooledResolver::lookupAddress(const Samurai::IO::Net::InetAddress& address)
+{
+	if (!eventHandler) return;
+
+	if (!address.isValid())
+	{
+		eventHandler->EventHostError(Error::NotFound);
+		return;
+	}
+
+	request = std::make_shared<ResolverPool::Request>();
+	request->kind = ResolverPool::Kind::Reverse;
+	request->address = address;
 	request->handler = eventHandler;
 
 	ResolverPool::getInstance()->submit(request);

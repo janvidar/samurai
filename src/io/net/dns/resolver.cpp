@@ -33,11 +33,13 @@ std::unique_ptr<Samurai::IO::Net::DNS::Resolver> Samurai::IO::Net::DNS::Resolver
 }
 
 /* static */
-std::unique_ptr<Samurai::IO::Net::DNS::Resolver> Samurai::IO::Net::DNS::Resolver::getNameByAddress(Samurai::IO::Net::ResolveEventHandler*, InetAddress* address)
+std::unique_ptr<Samurai::IO::Net::DNS::Resolver> Samurai::IO::Net::DNS::Resolver::getNameByAddress(Samurai::IO::Net::ResolveEventHandler* eh, InetAddress* address)
 {
-	(void) address;
+	if (!address) return nullptr;
 
-	return nullptr;
+	auto resolver = std::make_unique<Samurai::IO::Net::DNS::PooledResolver>(eh);
+	resolver->lookupAddress(*address);
+	return resolver;
 }
 
 

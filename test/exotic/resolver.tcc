@@ -37,12 +37,14 @@ class Recorder : public Samurai::IO::Net::ResolveEventHandler
 		size_t errors = 0;
 		Resolver::Error last_error = Resolver::Error::Unknown;
 		std::string address;
+		std::string hostname;
 		std::thread::id ran_on;
 
 		void EventHostFound(const Samurai::IO::Net::InetAddress* addr) override
 		{
 			ran_on = std::this_thread::get_id();
 			address = addr ? addr->toString() : "";
+			hostname = addr ? addr->getHostname() : "";
 			found++;
 		}
 
@@ -252,4 +254,78 @@ EXO_TEST(resolver_pool_is_not_used_for_an_address_literal, {
 	const bool resolved = addr.isResolved();
 
 	return resolved && pool->getWorkerCount() == 0;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Reverse lookups                                                            */
+/*                                                                            */
+/* The name comes back attached to the address that was asked about, since     */
+/* that is what the handler is given. NI_NAMEREQD means an address with no     */
+/* name is an error rather than the address repeated back.                    */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(resolver_pool_reverse_resolves_the_loopback_address, {
+	Recorder recorder;
+	Samurai::IO::Net::InetAddress addr("127.0.0.1");
+
+	std::unique_ptr<Resolver> resolver = Resolver::getNameByAddress(&recorder, &addr);
+	if (!resolver) return false;
+
+	resolver_pump_until([&]() { return recorder.found || recorder.errors; });
+
+	/* Which name the loopback answers to is the host's business, so what is
+	   asserted is that one came back and the address survived. */
+	return (recorder.found == 1 && !recorder.hostname.empty()
+	        && recorder.address == "127.0.0.1")
+	    || (recorder.errors == 1 && recorder.found == 0);
+});
+
+EXO_TEST(resolver_pool_reverse_reports_on_the_loop_thread, {
+	Recorder recorder;
+	Samurai::IO::Net::InetAddress addr("127.0.0.1");
+	const std::thread::id loop_thread = std::this_thread::get_id();
+
+	std::unique_ptr<Resolver> resolver = Resolver::getNameByAddress(&recorder, &addr);
+	if (!resolver) return false;
+
+	resolver_pump_until([&]() { return recorder.found || recorder.errors; });
+
+	return (recorder.found || recorder.errors) && recorder.ran_on == loop_thread;
+});
+
+/* An address nobody has a name for. TEST-NET-1, reserved by RFC 5737. */
+EXO_TEST(resolver_pool_reverse_reports_an_address_with_no_name, {
+	Recorder recorder;
+	Samurai::IO::Net::InetAddress addr("192.0.2.1");
+
+	std::unique_ptr<Resolver> resolver = Resolver::getNameByAddress(&recorder, &addr);
+	if (!resolver) return false;
+
+	resolver_pump_until([&]() { return recorder.found || recorder.errors; });
+
+	return recorder.errors == 1 && recorder.found == 0;
+});
+
+EXO_TEST(resolver_pool_reverse_rejects_an_unset_address, {
+	Recorder recorder;
+	Samurai::IO::Net::InetAddress addr;
+
+	std::unique_ptr<Resolver> resolver = Resolver::getNameByAddress(&recorder, &addr);
+	if (!resolver) return false;
+
+	return recorder.errors == 1 && recorder.last_error == Resolver::Error::NotFound;
+});
+
+EXO_TEST(resolver_pool_reverse_can_be_cancelled, {
+	Recorder recorder;
+	Samurai::IO::Net::InetAddress addr("127.0.0.1");
+
+	{
+		std::unique_ptr<Resolver> resolver = Resolver::getNameByAddress(&recorder, &addr);
+		if (!resolver) return false;
+	}
+
+	resolver_pump(40);
+
+	return recorder.found == 0 && recorder.errors == 0;
 });
