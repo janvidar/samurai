@@ -36,7 +36,11 @@ Samurai::IO::Net::ServerSocket::ServerSocket(ServerSocketEventHandler* eh, uint1
 
 void Samurai::IO::Net::ServerSocket::internal_create()
 {
-	createDescriptor(addr->getSockAddrFamily());
+	/* The state carries the failure a constructor cannot return; create()
+	   turns it into a null shared_ptr for anyone using the factory, and
+	   listen() below refuses for anyone reaching the constructor directly. */
+	if (!createDescriptor(addr->getSockAddrFamily()))
+		state = SocketState::Invalid;
 }
 
 Samurai::IO::Net::ServerSocket::~ServerSocket()
@@ -54,6 +58,7 @@ bool Samurai::IO::Net::ServerSocket::listen(size_t backlog, std::error_code& ec)
 	ec.clear();
 
 	if (!addr) { ec = Samurai::system_error(EDESTADDRREQ); return false; }
+	if (sd == INVALID_SOCKET) { ec = Samurai::system_error(EBADF); return false; }
 	if (!setReuseAddress(true)) { ec = Samurai::system_error(Samurai::IO::Net::net_error()); return false; }
 	if (!setNonBlocking(true, ec)) return false;
 	if (!bind(addr.get(), ec)) return false;

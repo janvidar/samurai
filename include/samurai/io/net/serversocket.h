@@ -29,12 +29,16 @@ class ServerSocket final : public SocketBase {
 		 * Construct a ServerSocket owned by a shared_ptr. The constructors are
 		 * protected: the socket monitor holds weak references, which requires
 		 * that every socket be owned by a shared_ptr from the start.
+		 *
+		 * @return null if no descriptor could be created, which a constructor
+		 *         has no way of reporting.
 		 */
 		template<typename... Args>
 		static std::shared_ptr<ServerSocket> create(Args&&... args)
 		{
 			std::shared_ptr<ServerSocket> self(new ServerSocket(std::forward<Args>(args)...));
 			self->initialize();
+			if (self->getFD() == INVALID_SOCKET) return nullptr;
 			return self;
 		}
 
