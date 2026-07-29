@@ -7,8 +7,6 @@
 #include <stdio.h>
 #include <samurai/io/net/dns/resolver.h>
 #include <memory>
-#include <samurai/io/net/dns/resolver-blocking.h>
-#include <samurai/io/net/dns/resolver-builtin.h>
 #include <samurai/io/net/dns/resolver-pool.h>
 #include <samurai/io/net/socketevent.h>
 #include <samurai/io/net/inetaddress.h>
