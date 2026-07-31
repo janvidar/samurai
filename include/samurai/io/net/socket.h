@@ -171,6 +171,17 @@ class Socket :
 		 */
 		std::optional<TlsFactory::Sha256Digest> TLSgetPeerCertificateSHA256();
 
+		/**
+		 * Whether traffic on this socket is encrypted, right now.
+		 *
+		 * Answered from the socket rather than remembered from the handshake, so
+		 * that it stays true for as long as the connection does and is false the
+		 * moment it is not - a caller that tracked the transitions instead would
+		 * have to see every one of them to stay right.
+		 */
+		bool isSecure() const
+		{ return tls && state == SocketState::SSLConnected; }
+
 	protected:
 		std::unique_ptr<InetAddress> address;
 		uint16_t port;
