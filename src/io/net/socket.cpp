@@ -246,25 +246,75 @@ void Samurai::IO::Net::Socket::internal_canWrite()
 	}
 }
 
-void Samurai::IO::Net::Socket::internal_error(int socket_error) {
-	state = SocketState::Invalid;
-	const char* message = "Unknown socket error.";
+/**
+ * What kind of failure an errno is, and what to call it.
+ *
+ * Both halves matter and the class is the half that was being thrown away: every
+ * error out of internal_error() was reported as SocketUnknown with a message that
+ * did name the cause, so a caller could show "No route to host" and had no way to
+ * tell it from any other failure - which is no use to anything deciding whether
+ * the failure is worth retrying.
+ */
+static Samurai::IO::Net::SocketError classify_socket_error(int socket_error,
+                                                          const char*& message)
+{
+	using Samurai::IO::Net::SocketError;
+
 	switch (socket_error)
 	{
-		case EOPNOTSUPP:    message = "Operation not supported"; break;
-		case EAFNOSUPPORT:  message = "Address family not supported"; break;
-		case EADDRINUSE:    message = "Address is in use"; break;
-		case EADDRNOTAVAIL: message = "Address is not available"; break;
-		case ENETDOWN:      message = "Network is down"; break;
-		case ENETUNREACH:   message = "Network is unreachable"; break;
-		case ENETRESET:     message = "Network dropped connection because of reset"; break;
-		case ECONNABORTED:  message = "Software caused connection abort"; break;
-		case ECONNRESET:    message = "Connection reset by peer"; break;
-		case EHOSTDOWN:     message = "Host is down"; break;
-		case EHOSTUNREACH:  message = "No route to host"; break;
+		case ETIMEDOUT:
+			message = "Connection timed out";
+			return SocketError::ConnectionTimeout;
+		case ECONNREFUSED:
+			message = "Connection refused";
+			return SocketError::ConnectionRefused;
+		case EHOSTUNREACH:
+			message = "No route to host";
+			return SocketError::HostUnreachable;
+		case EHOSTDOWN:
+			message = "Host is down";
+			return SocketError::HostDown;
+		case ENETDOWN:
+			message = "Network is down";
+			return SocketError::NetDown;
+		case ENETUNREACH:
+			message = "Network is unreachable";
+			return SocketError::NetUnreachable;
+		case ENETRESET:
+			message = "Network dropped connection because of reset";
+			return SocketError::SocketUnknown;
+		case ECONNRESET:
+			message = "Connection reset by peer";
+			return SocketError::SocketUnknown;
+		case ECONNABORTED:
+			message = "Software caused connection abort";
+			return SocketError::SocketUnknown;
+		case EOPNOTSUPP:
+			message = "Operation not supported";
+			return SocketError::SocketUnknown;
+		case EAFNOSUPPORT:
+			message = "Address family not supported";
+			return SocketError::SocketUnknown;
+		case EADDRINUSE:
+			message = "Address is in use";
+			return SocketError::SocketUnknown;
+		case EADDRNOTAVAIL:
+			message = "Address is not available";
+			return SocketError::SocketUnknown;
 	}
 
-	if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, message);
+	message = "Unknown socket error.";
+	return SocketError::SocketUnknown;
+}
+
+void Samurai::IO::Net::Socket::internal_error(int socket_error) {
+	state = SocketState::Invalid;
+
+	const char* message = 0;
+	const Samurai::IO::Net::SocketError classified =
+		classify_socket_error(socket_error, message);
+
+	if (eventHandler) eventHandler->EventError(this, classified, message);
 	disableMonitor();
 }
 
@@ -280,19 +330,12 @@ void Samurai::IO::Net::Socket::internal_connected() {
 	socklen_t valsize = sizeof(value);
 	int ret = getsockopt(sd, SOL_SOCKET, SO_ERROR, &value, &valsize);
 	if (ret != 0 || value != 0) {
-		Samurai::IO::Net::SocketError sockErr;
-		const char* error = strerror(value);
-		switch (value) {
-			case ECONNREFUSED:   sockErr = Samurai::IO::Net::SocketError::ConnectionRefused; break;
-			case EHOSTDOWN:      sockErr = Samurai::IO::Net::SocketError::HostDown;          break;
-			case EHOSTUNREACH:   sockErr = Samurai::IO::Net::SocketError::HostUnreachable;   break;
-			case ENETDOWN:       sockErr = Samurai::IO::Net::SocketError::NetDown;           break;
-			case ENETUNREACH:    sockErr = Samurai::IO::Net::SocketError::NetUnreachable;    break;
-			case ENETRESET:
-			case ECONNRESET:
-			default:
-				sockErr = Samurai::IO::Net::SocketError::ConnectionRefused;
-		}
+		/* Classified the same way as any other failure; see classify_socket_error. */
+		const char* classified = 0;
+		Samurai::IO::Net::SocketError sockErr =
+			classify_socket_error(value, classified);
+
+		const char* error = (value != 0) ? strerror(value) : classified;
 		state = SocketState::Disconnected;
 		close();
 		if (eventHandler) eventHandler->EventError(this, sockErr, error);
