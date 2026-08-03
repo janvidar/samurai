@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <samurai/io/net/socketbase.h>
 #include <samurai/io/net/datagram.h>
+#include <samurai/io/net/inetaddress.h>
 #include <samurai/io/net/socketevent.h>
 #include <samurai/io/net/interface.h>
 
@@ -60,9 +61,36 @@ namespace Samurai {
 					virtual ~MulticastSocket();
 
 					/**
-					 * Set the interface to be used for multicast.
+					 * Choose the interface outbound multicast leaves by, and
+					 * that a later join() joins on.
+					 *
+					 * Without this, multicast follows the default route - which
+					 * on a host with a VPN, a container bridge or a second
+					 * adapter is very often not the interface the group is on,
+					 * and is the most common reason a search finds nothing.
+					 *
+					 * @return false if the interface cannot be selected for this
+					 *         socket's address family. On the BSDs and on
+					 *         Windows an Version::IPv4 multicast interface is
+					 *         named by its own address, so one without an
+					 *         Version::IPv4 address cannot be selected at all;
+					 *         that is reported rather than passed over.
 					 */
-					void setInterface(NetworkInterface* iface);
+					bool setInterface(const NetworkInterface& iface);
+
+					/** Go back to whichever interface the route table picks. */
+					void clearInterface();
+
+					/**
+					 * The hop limit for outbound multicast datagrams.
+					 *
+					 * This is not SocketBase::setTimeToLive(), which sets IP_TTL
+					 * or the unicast hop limit and has no effect whatsoever on a
+					 * multicast datagram. The default is 1: one link, and no
+					 * router will forward it.
+					 */
+					bool setMulticastTimeToLive(uint8_t ttl);
+					uint8_t getMulticastTimeToLive() const;
 
 					/**
 					 * Toggle loopback mode (ie. recive what you send yourself).
@@ -88,10 +116,17 @@ namespace Samurai {
 					 * recorded in 'joined'. */
 					bool dropMembership(InetSocketAddress& group);
 
+					/* Add or drop a membership, for whichever family the group
+					 * belongs to, on the interface setInterface() chose. */
+					bool changeMembership(InetSocketAddress& group, bool join_it);
+
 					/* The groups this socket has joined and not yet left, held
 					 * by value so the destructor can leave them all. */
 					std::vector<InetSocketAddress> joined;
 					interface_t netif;
+					/* The chosen interface's own Version::IPv4 address, which is
+					 * how every platform but Linux names one. */
+					InetAddress netif_addr;
 			
 				friend class SocketMonitor;
 				friend class PollSocketMonitor;

@@ -362,6 +362,55 @@ std::unique_ptr<Samurai::IO::Net::NetworkInterface> Samurai::IO::Net::NetworkInt
 	return nullptr;
 }
 
+/*
+ * The index rather than the address, so an interface with no IPv4 address can
+ * still be named - which is what IPv6 multicast and a scope identifier need, and
+ * what getInterfaces() cannot describe.
+ */
+interface_t Samurai::IO::Net::NetworkInterface::getIndexByName(const char* name)
+{
+	if (!name || !*name) return 0;
+
+#ifdef SAMURAI_UNIX
+	return (interface_t) if_nametoindex(name);
+#endif
+
+#ifdef SAMURAI_WINDOWS
+	NET_LUID luid;
+	if (ConvertInterfaceNameToLuidA(name, &luid) != NO_ERROR) return 0;
+
+	NET_IFINDEX index = 0;
+	if (ConvertInterfaceLuidToIndex(&luid, &index) != NO_ERROR) return 0;
+	return (interface_t) index;
+#endif
+}
+
+
+std::string Samurai::IO::Net::NetworkInterface::getNameByIndex(interface_t index)
+{
+	if (!index) return std::string();
+
+#ifdef SAMURAI_UNIX
+	char name[IF_NAMESIZE];
+	memset(name, 0, sizeof(name));
+	if (!if_indextoname((unsigned int) index, name)) return std::string();
+	return std::string(name);
+#endif
+
+#ifdef SAMURAI_WINDOWS
+	NET_LUID luid;
+	if (ConvertInterfaceIndexToLuid((NET_IFINDEX) index, &luid) != NO_ERROR)
+		return std::string();
+
+	char name[256];
+	memset(name, 0, sizeof(name));
+	if (ConvertInterfaceLuidToNameA(&luid, name, sizeof(name)) != NO_ERROR)
+		return std::string();
+	return std::string(name);
+#endif
+}
+
+
 bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<std::unique_ptr<NetworkInterface>>& interfaces)
 {
 

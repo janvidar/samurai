@@ -12,9 +12,11 @@ UPnP::Worker::Worker(Samurai::IO::Net::NetworkInterface* iface, const Samurai::I
 {
 	m_socket = Samurai::IO::Net::MulticastSocket::create(this, m_addr.getPort());
 	m_socket->listen();
-	m_socket->setTimeToLive(5);
+	/* The multicast hop limit, not SocketBase::setTimeToLive(), which sets the
+	   unicast one and has no effect on a multicast datagram. */
+	m_socket->setMulticastTimeToLive(2);
 	m_socket->setLoopbackMode(true);
-	m_socket->setInterface(iface);
+	if (iface) m_socket->setInterface(*iface);
 
 	// FIXME: API: Should also accept InetSocketAddress
 	if (!m_socket->join(m_addr.getAddress(), m_addr.getPort()))

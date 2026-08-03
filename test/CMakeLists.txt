@@ -61,7 +61,7 @@ else()
     if(NOT Exotic_FOUND)
         message(STATUS
             "Samurai: exotic not found - skipping the test/exotic suite. Run "
-            "'git submodule update --init' to enable ~580 additional tests.")
+            "'git submodule update --init' to enable ~800 additional tests.")
         return()
     endif()
 endif()
