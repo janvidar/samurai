@@ -8,11 +8,28 @@
 #include <algorithm>
 #include <chrono>
 
+namespace {
+
+/*
+ * Handed out once per Timer ever constructed. The manager's heap refers to
+ * timers by pointer, and the allocator reuses an address as soon as a timer is
+ * destroyed, so the pointer alone cannot say whether an entry still belongs to
+ * the timer it was made for.
+ */
+uint64_t next_serial()
+{
+	static uint64_t counter = 0;
+	return ++counter;
+}
+
+}
+
 Samurai::Timer::Timer(Samurai::TimerListener* listener, time_t timeout_seconds, bool singleShot)
 	: callback(listener)
 	, single_shot(singleShot)
 	, interval(std::chrono::seconds(timeout_seconds))
 	, due(clock::now() + std::chrono::seconds(timeout_seconds))
+	, serial(next_serial())
 {
 	if (Samurai::TimerManager::getInstance())
 		Samurai::TimerManager::getInstance()->add(this);
@@ -24,6 +41,7 @@ Samurai::Timer::Timer(Samurai::TimerListener* listener, std::chrono::millisecond
 	, single_shot(singleShot)
 	, interval(timeout)
 	, due(clock::now() + timeout)
+	, serial(next_serial())
 {
 	if (Samurai::TimerManager::getInstance())
 		Samurai::TimerManager::getInstance()->add(this);
@@ -106,9 +124,25 @@ void Samurai::TimerManager::schedule(Samurai::Timer* timer)
 	Entry e;
 	e.due = timer->due;
 	e.timer = timer;
+	e.serial = timer->serial;
 
 	heap.push_back(e);
 	std::push_heap(heap.begin(), heap.end());
+}
+
+
+/*
+ * An entry goes stale in three ways: the timer was destroyed, the timer was
+ * destroyed and something else was allocated at its address, or the timer was
+ * rescheduled and this is the superseded entry. The serial is what catches the
+ * middle one - the pointer being in 'live' says only that *a* timer lives there.
+ */
+bool Samurai::TimerManager::current(const Entry& e,
+                                   const std::unordered_set<Timer*>& alive)
+{
+	if (alive.find(e.timer) == alive.end()) return false;
+	if (e.timer->serial != e.serial) return false;
+	return e.timer->due == e.due;
 }
 
 
@@ -122,10 +156,7 @@ void Samurai::TimerManager::process()
 		const Entry e = heap.back();
 		heap.pop_back();
 
-		/* Stale in one of two ways: the timer was destroyed, or it was
-		   rescheduled and this is the superseded entry. */
-		if (live.find(e.timer) == live.end()) continue;
-		if (e.timer->due != e.due) continue;
+		if (!current(e, live)) continue;
 
 		e.timer->internal_fire(now);
 	}
@@ -143,8 +174,7 @@ int Samurai::TimerManager::timeToNext() const
 	for (size_t n = 0; n < heap.size(); n++)
 	{
 		const Entry& e = heap[n];
-		if (live.find(e.timer) == live.end()) continue;
-		if (e.timer->due != e.due) continue;
+		if (!current(e, live)) continue;
 
 		if (e.due <= now) return 0;
 

@@ -6,6 +6,7 @@
 #ifndef HAVE_SAMURAI_TIMER_H
 #define HAVE_SAMURAI_TIMER_H
 
+#include <stdint.h>
 #include <time.h>
 
 #include <chrono>
@@ -65,6 +66,15 @@ class Timer {
 		std::chrono::milliseconds interval;
 		clock::time_point due;
 
+		/*
+		 * Distinguishes this timer from any other that has ever existed,
+		 * including one the allocator later places at this same address. The
+		 * manager's heap refers to timers by pointer, so without this a stale
+		 * entry left behind by a destroyed timer would appear to belong to
+		 * whatever was allocated in its place.
+		 */
+		uint64_t serial;
+
 		friend class TimerManager;
 };
 
@@ -108,9 +118,15 @@ class TimerManager {
 		struct Entry {
 			Timer::clock::time_point due;
 			Timer* timer;
+			/* Which timer this entry was made for, so an address the allocator
+			   has since handed to a different timer cannot be mistaken for it. */
+			uint64_t serial;
 			/* Greater-than, so push_heap/pop_heap give a min-heap by deadline. */
 			bool operator<(const Entry& other) const { return due > other.due; }
 		};
+
+		/** True when 'e' still refers to the timer it was made for. */
+		static bool current(const Entry& e, const std::unordered_set<Timer*>& alive);
 
 		std::vector<Entry> heap;
 		std::unordered_set<Timer*> live;
