@@ -721,3 +721,74 @@ EXO_TEST(bandwidth_manager_directions_are_independent,
 	return bandwidth_readings().manager_recv_only_send == 0
 		&& bandwidth_readings().manager_recv_only_recv == 9000 / bw_window;
 });
+
+/*
+ * Case-insensitive comparison over views. These carry a length, so they are
+ * used on ranges inside received buffers where nothing guarantees a terminator,
+ * and the folding is ASCII only so that the same bytes compare the same way
+ * whatever locale the process happens to be in.
+ */
+EXO_TEST(iequals_matches_regardless_of_case,
+{
+	return Samurai::Util::iequals("Password", "password")
+		&& Samurai::Util::iequals("PASSWORD", "password")
+		&& Samurai::Util::iequals("pAsSwOrD", "PaSsWoRd");
+});
+
+EXO_TEST(iequals_is_exact_on_length,
+{
+	return !Samurai::Util::iequals("password", "passwor")
+		&& !Samurai::Util::iequals("passwor", "password");
+});
+
+EXO_TEST(iequals_two_empty_views_match,
+{
+	return Samurai::Util::iequals("", "")
+		&& !Samurai::Util::iequals("", "a")
+		&& !Samurai::Util::iequals("a", "");
+});
+
+/* No terminator anywhere: both sides are ranges inside longer buffers. */
+EXO_TEST(iequals_does_not_read_past_the_view,
+{
+	const char haystack[] = "OPERATORxxxx";
+	return Samurai::Util::iequals(std::string_view(haystack, 8), "operator")
+		&& !Samurai::Util::iequals(std::string_view(haystack, 7), "operator");
+});
+
+/* A byte above 0x7f is left alone rather than folded through a negative index. */
+EXO_TEST(iequals_leaves_high_bytes_alone,
+{
+	const char a[] = { (char) 0xc3, (char) 0x98, 0 };   /* UTF-8 'Ø' */
+	const char b[] = { (char) 0xc3, (char) 0xb8, 0 };   /* UTF-8 'ø' */
+	return Samurai::Util::iequals(a, a) && !Samurai::Util::iequals(a, b);
+});
+
+EXO_TEST(istarts_with_folds_case,
+{
+	return Samurai::Util::istarts_with("TTHL/root", "tthl/")
+		&& Samurai::Util::istarts_with("anything", "")
+		&& !Samurai::Util::istarts_with("tth", "tthl/")
+		&& !Samurai::Util::istarts_with("xTTHL/", "tthl/");
+});
+
+EXO_TEST(ifind_reports_the_offset,
+{
+	return Samurai::Util::ifind("a Holiday Video.avi", "holiday") == 2
+		&& Samurai::Util::ifind("a Holiday Video.avi", "VIDEO") == 10
+		&& Samurai::Util::ifind("nothing here", "absent") == std::string_view::npos;
+});
+
+/* As strstr has it: everything contains the empty string, at the front. */
+EXO_TEST(ifind_of_an_empty_needle_is_the_front,
+{
+	return Samurai::Util::ifind("abc", "") == 0
+		&& Samurai::Util::ifind("", "") == 0
+		&& Samurai::Util::ifind("", "a") == std::string_view::npos;
+});
+
+EXO_TEST(icontains_answers_the_same_question,
+{
+	return Samurai::Util::icontains("Concert Video.AVI", ".avi")
+		&& !Samurai::Util::icontains("Concert Video.AVI", ".mp3");
+});
