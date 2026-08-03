@@ -238,6 +238,30 @@ void Samurai::IO::Net::KQueueSocketMonitor::internal_remove(Samurai::IO::Net::So
 	num--;
 }
 
+/*
+ * One change per call, ignoring what the kernel refuses.
+ *
+ * A refusal here is an EV_DELETE naming a descriptor whose registrations are
+ * already gone, which is the ordinary consequence of having closed it. What
+ * matters is that the changes queued alongside it are still applied.
+ */
+void Samurai::IO::Net::KQueueSocketMonitor::internal_commitOneAtATime()
+{
+	struct timespec immediately;
+	immediately.tv_sec = 0;
+	immediately.tv_nsec = 0;
+
+	for (size_t n = 0; n < numChanges; n++)
+	{
+		if (kevent(kfd, &change[n], 1, nullptr, 0, &immediately) != -1) continue;
+
+		QDBG("kqueue - change %zu rejected (sd=%d, filter=%d): %s", n,
+		     (int) change[n].ident, (int) change[n].filter,
+		     strerror(Samurai::IO::Net::net_error()));
+	}
+}
+
+
 void Samurai::IO::Net::KQueueSocketMonitor::internal_modify(Samurai::IO::Net::SocketBase* socket)
 {
 	QDBG("kqueue - mod (ptr=%p, sd=%d)", socket, socket->getFD());
@@ -250,17 +274,65 @@ void Samurai::IO::Net::KQueueSocketMonitor::internal_wait(int time_ms)
 	timeout.tv_sec  = time_ms / 1000;
 	timeout.tv_nsec = (time_ms % 1000) * 1000000;
 
+	/*
+	 * The eventlist has to have room for a rejection per change, or kevent()
+	 * cannot report which element failed and fails the whole call instead. The
+	 * changelist grows as changes are queued and the eventlist was a fixed 256,
+	 * so a burst of socket churn between two waits was enough to cross it.
+	 */
+	if (events.size() < numChanges) events.resize(numChanges);
+
 	int ret = kevent(kfd, change.data(), numChanges, events.data(), (int) events.size(), &timeout);
 	QDBG("kqueue - run changes=%zu, max=%zu, ret=%d", numChanges, max, ret);
-	numChanges = 0;
 
 	if (ret == -1)
 	{
-		if (Samurai::IO::Net::net_error() != EINTR)
+		const int failed = Samurai::IO::Net::net_error();
+
+		if (failed == EINTR)
 		{
-			QERR("kevent error: %i, %s", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
+			numChanges = 0;
+			return;
 		}
-		return;
+
+		QERR("kevent error: %i, %s", failed, strerror(failed));
+
+		/*
+		 * NOTE: the changelist was not committed, and discarding it here is what
+		 * used to make this a lost registration rather than a logged nuisance.
+		 *
+		 * kevent() abandons the rest of a changelist as soon as one element
+		 * fails, and returns -1 rather than an EV_ERROR entry when it cannot
+		 * report which one. A rejection is ordinary - closing a descriptor
+		 * removes its knotes, so the EV_DELETE queued when a socket was released
+		 * is answered with ENOENT on the next pass - so one of those was taking
+		 * every EV_ADD queued behind it with it. The socket that lost its
+		 * registration then never heard about readiness again and sat until
+		 * something timed it out.
+		 *
+		 * Resubmitted one at a time, so a rejection costs only itself.
+		 */
+		internal_commitOneAtATime();
+		numChanges = 0;
+
+		/* Nothing was waited for or collected above, so do that now that the
+		   changes are in. */
+		ret = kevent(kfd, nullptr, 0, events.data(), (int) events.size(), &timeout);
+		QDBG("kqueue - rerun after individual commit ret=%d", ret);
+
+		if (ret == -1)
+		{
+			if (Samurai::IO::Net::net_error() != EINTR)
+			{
+				QERR("kevent error: %i, %s", Samurai::IO::Net::net_error(),
+				     strerror(Samurai::IO::Net::net_error()));
+			}
+			return;
+		}
+	}
+	else
+	{
+		numChanges = 0;
 	}
 
 	/*

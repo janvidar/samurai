@@ -111,6 +111,16 @@ class KQueueSocketMonitor final : public SocketMonitor
 		struct kevent* getChangeEventSlot();
 		void internal_set(SocketBase* socket);
 
+		/**
+		 * Submit the queued changes one per call.
+		 *
+		 * For when submitting them together failed outright: kevent() abandons
+		 * the rest of a changelist as soon as one element fails and it has
+		 * nowhere to report which, so a single rejected change would otherwise
+		 * take every registration queued behind it.
+		 */
+		void internal_commitOneAtATime();
+
 	private:
 		std::vector<SocketBase*> sockets;
 		std::vector<struct kevent> events;
