@@ -89,6 +89,7 @@ exotic_add_tests(autotest
         exotic/timer.tcc
         exotic/tls.tcc
         exotic/url.tcc
+        exotic/xml.tcc
     LIBRARIES samurai::samurai
     INCLUDE_DIRECTORIES
         ${CMAKE_CURRENT_SOURCE_DIR}/exotic   # testkeys.h is included by name

@@ -162,6 +162,7 @@ set(SAMURAI_SOURCES
     src/io/dir.cpp
     src/io/file.cpp
     src/io/unicode.cpp
+    src/io/xml.cpp
     src/io/net/bandwidth.cpp
     src/io/net/datagram.cpp
     src/io/net/hardwareaddress.cpp
