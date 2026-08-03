@@ -71,7 +71,13 @@ struct Reply
 	/** From CACHE-CONTROL: max-age, or 0 when it said nothing. */
 	unsigned maxAge = 0;
 
-	/** What identifies the device, for discarding a repeat of it. */
+	/**
+	 * What identifies this reply, for discarding a repeat of it.
+	 *
+	 * The location: it is the description that would be fetched, and a device
+	 * answers once per search target it matches under a USN that carries the
+	 * target with it - so the USN cannot collapse them.
+	 */
 	std::string key() const;
 };
 

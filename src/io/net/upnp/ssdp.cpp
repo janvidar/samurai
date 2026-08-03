@@ -80,12 +80,21 @@ std::string Samurai::IO::Net::UPnP::Ssdp::buildSearch(std::string_view host,
 }
 
 
+/*
+ * The location, not the USN.
+ *
+ * What this is for is not fetching and parsing the same description twice, and
+ * the location is exactly the thing that would be fetched - so two replies
+ * naming one description are one candidate however they identify themselves.
+ *
+ * The USN cannot do that job. A device answers once per search target it
+ * matches, and the USN carries the target with it, so one gateway replying to
+ * all four targets produces four distinct USNs. MiniUPnPd goes further and uses
+ * one UUID for its device announcements and another for its service ones, so
+ * even the UUID inside the USN does not collapse them.
+ */
 std::string Samurai::IO::Net::UPnP::Ssdp::Reply::key() const
 {
-	/* The USN identifies the device. A few send an empty one, so the location
-	   stands in rather than letting every such reply look like the same
-	   device. */
-	if (!usn.empty()) return usn;
 	return location.toString();
 }
 

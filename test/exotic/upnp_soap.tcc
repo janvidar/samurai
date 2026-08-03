@@ -12,6 +12,7 @@
 #include "io/net/upnp/ssdp.h"
 
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -878,15 +879,74 @@ EXO_TEST(upnp_ssdp_reply_from_the_wrong_source_is_refused,
 	return Ssdp::parseReply(reply_text(), elsewhere, false, reply);
 });
 
-EXO_TEST(upnp_ssdp_reply_key_is_the_usn,
+/*
+ * The key is the location, not the USN.
+ *
+ * A device answers once per search target it matches, and its USN carries the
+ * target with it, so keying on the USN would make one gateway look like four.
+ * The location is what would be fetched, which is what the deduplication is
+ * there to avoid doing twice.
+ */
+EXO_TEST(upnp_ssdp_reply_key_is_the_location,
 {
 	Ssdp::Reply reply;
 	if (!Ssdp::parseReply(reply_text(), SOURCE, true, reply)) return false;
-	return reply.key() == reply.usn;
+	return reply.key() == "http://192.168.1.1:5000/desc.xml"
+		&& reply.key() != reply.usn;
 });
 
-/* A device with an empty USN would otherwise look like every other such device. */
-EXO_TEST(upnp_ssdp_reply_key_falls_back_to_the_location,
+/*
+ * The shape a real gateway sends, taken from a UniFi Dream Machine running
+ * MiniUPnPd 2.3.8: four replies to the four search targets, under USNs that
+ * differ - and under two different UUIDs, one for the device announcements and
+ * another for the service ones, so not even the UUID inside the USN collapses
+ * them. All four name one description, and so are one candidate.
+ */
+EXO_TEST(upnp_ssdp_one_device_answering_every_target_is_one_candidate,
+{
+	const char* usns[] = {
+		"uuid:d24ea61f-52a3-46f5-81cf-b4012f1ca284::"
+			"urn:schemas-upnp-org:device:InternetGatewayDevice:2",
+		"uuid:d24ea61f-52a3-46f5-81cf-b4012f1ca284::"
+			"urn:schemas-upnp-org:device:InternetGatewayDevice:1",
+		"uuid:d24ea61f-52a3-46f5-81cf-b4012f1ca286::"
+			"urn:schemas-upnp-org:service:WANIPConnection:1",
+		"uuid:d24ea61f-52a3-46f5-81cf-b4012f1ca286::"
+			"urn:schemas-upnp-org:service:WANPPPConnection:1" };
+
+	std::set<std::string> keys;
+	for (const char* usn : usns)
+	{
+		std::string text = "HTTP/1.1 200 OK\r\n";
+		text += "LOCATION: http://192.168.1.1:45141/rootDesc.xml\r\n";
+		text += std::string("USN: ") + usn + "\r\n";
+		text += "SERVER: Linux/5.4 UPnP/1.1 MiniUPnPd/2.3.8\r\n\r\n";
+
+		Ssdp::Reply reply;
+		if (!Ssdp::parseReply(text, SOURCE, false, reply)) return false;
+		keys.insert(reply.key());
+	}
+
+	return keys.size() == 1;
+});
+
+/* Two genuinely different gateways stay two candidates. */
+EXO_TEST(upnp_ssdp_two_devices_are_two_candidates,
+{
+	Ssdp::Reply first;
+	Ssdp::Reply second;
+
+	if (!Ssdp::parseReply(reply_text("", "http://192.168.1.1:5000/desc.xml"),
+	                      SOURCE, false, first)) return false;
+	if (!Ssdp::parseReply(reply_text("", "http://192.168.1.2:5000/desc.xml"),
+	                      SOURCE, false, second)) return false;
+
+	return first.key() != second.key();
+});
+
+/* A device sending an empty USN is still identified, because the location does
+   the identifying. */
+EXO_TEST(upnp_ssdp_reply_with_an_empty_usn_is_still_keyed,
 {
 	std::string text = "HTTP/1.1 200 OK\r\n";
 	text += "LOCATION: http://192.168.1.1:5000/desc.xml\r\n";
