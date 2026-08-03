@@ -850,6 +850,12 @@ EXO_TEST(sockets_a_refused_connection_is_reported,
  * A refusal is one failure, and reaches the handler once. The Write and Error
  * triggers arrive together for a refused connect, so the loop is given another
  * pass to prove it does not report the same refusal twice.
+ *
+ * NOTE: which callback carries the refusal is the platform's choice, and it is
+ * not always EventError. On Darwin the readable side of a refused connect is
+ * noticed first, so it arrives as EventDisconnected instead - which is why the
+ * case above waits on either. What has to hold is that it is reported once,
+ * whichever of the two it came through.
  */
 EXO_TEST(sockets_a_refused_connection_is_reported_once,
 {
@@ -861,10 +867,20 @@ EXO_TEST(sockets_a_refused_connection_is_reported_once,
 	if (!client) return false;
 
 	client->connect();
-	if (!pump([&] { return events.error_count > 0; })) return false;
+
+	/* find_dead_port() reuses a port it has just released, so something else on
+	   the machine can take it in between. A connection that succeeded has no
+	   refusal to report once. */
+	if (!pump([&] {
+		return events.error_count > 0 || events.disconnected || events.connected;
+	})) return false;
+
+	if (events.connected) return true;
 
 	SocketMonitor::getInstance()->wait(25);
-	return events.error_count == 1 && !events.connected;
+
+	const int reports = events.error_count + (events.disconnected ? 1 : 0);
+	return reports == 1 && !events.connected;
 });
 
 /*
@@ -883,7 +899,15 @@ EXO_TEST(sockets_a_refused_connection_can_be_retried,
 	if (!client) return false;
 
 	client->connect();
-	if (!pump([&] { return events.error_count > 0; })) return false;
+
+	/* As above, on both counts: the refusal may arrive as a disconnect rather
+	   than an error, and a port taken in the meantime connects instead - leaving
+	   no refused connection to retry. */
+	if (!pump([&] {
+		return events.error_count > 0 || events.disconnected || events.connected;
+	})) return false;
+
+	if (events.connected) return true;
 
 	client->connect();
 	return pump([&] { return client->getFD() != INVALID_SOCKET; });
