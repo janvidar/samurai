@@ -2,7 +2,7 @@
 *~
 
 # CMake build directories (out-of-source builds)
-/build/
+/build*/
 /out*/
 CMakeCache.txt
 CMakeFiles/
