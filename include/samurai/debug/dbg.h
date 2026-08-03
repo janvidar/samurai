@@ -21,26 +21,32 @@
 #include <stdio.h>
 #include <string.h>
 
+/*
+ * __VA_OPT__ rather than the ", ## __VA_ARGS__" that does the same job: pasting
+ * away the comma is a GNU extension, and these headers are compiled with
+ * extensions off. C++20 standardised the construct, so the macros no longer
+ * depend on one.
+ */
 #if defined(DEBUG)
 
 #if !defined(QDBG)
-#define QDBG(format, ...)  do { samurai_debug(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0)
+#define QDBG(format, ...)  do { samurai_debug(__PRETTY_FUNCTION__, __FILE__, __LINE__, format __VA_OPT__(,) __VA_ARGS__); } while(0)
 #endif
 
 #if !defined(QERR)
-#define QERR(format, ...)  do { samurai_error(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0)
+#define QERR(format, ...)  do { samurai_error(__PRETTY_FUNCTION__, __FILE__, __LINE__, format __VA_OPT__(,) __VA_ARGS__); } while(0)
 #endif
 
 #if !defined(QNET)
-#define QNET(format, ...)  do { samurai_net(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0)
+#define QNET(format, ...)  do { samurai_net(__PRETTY_FUNCTION__, __FILE__, __LINE__, format __VA_OPT__(,) __VA_ARGS__); } while(0)
 #endif
 
 #if !defined(QSEARCH)
-#define QSEARCH(format, ...)  do { samurai_search(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0)
+#define QSEARCH(format, ...)  do { samurai_search(__PRETTY_FUNCTION__, __FILE__, __LINE__, format __VA_OPT__(,) __VA_ARGS__); } while(0)
 #endif
 
 #if !defined(QHUB)
-#define QHUB(format, ...)  do { samurai_hub(__PRETTY_FUNCTION__, __FILE__, __LINE__, format, ## __VA_ARGS__); } while(0)
+#define QHUB(format, ...)  do { samurai_hub(__PRETTY_FUNCTION__, __FILE__, __LINE__, format __VA_OPT__(,) __VA_ARGS__); } while(0)
 #endif
 
 #if !defined(QDBG_INIT)
@@ -82,7 +88,7 @@ void samurai_hub(const char* func, const char* file, int line, const char *forma
 #endif
 
 #if !defined(QERR)
-#define QERR(format, ...) do { fprintf(stderr, "ERROR: "); fprintf(stderr, format, ## __VA_ARGS__); fprintf(stderr, "\n"); } while(0)
+#define QERR(format, ...) do { fprintf(stderr, "ERROR: "); fprintf(stderr, format __VA_OPT__(,) __VA_ARGS__); fprintf(stderr, "\n"); } while(0)
 #endif
 
 #if !defined(QNET)
