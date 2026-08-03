@@ -35,6 +35,7 @@ Samurai::IO::Net::Socket::Socket(Samurai::IO::Net::SocketEventHandler* eh, const
 	autoConnectAfterLookup(false),
 	eventHandler(eh),
 	timer(nullptr),
+	connect_timeout(std::chrono::seconds(CONNECT_TIMEOUT)),
 	outbound(true),
 	readable(0),
 	writable(false)
@@ -50,6 +51,7 @@ Samurai::IO::Net::Socket::Socket(SocketEventHandler* eh, const InetAddress& addr
 	autoConnectAfterLookup(false),
 	eventHandler(eh),
 	timer(nullptr),
+	connect_timeout(std::chrono::seconds(CONNECT_TIMEOUT)),
 	outbound(false),
 	readable(0),
 	writable(false)
@@ -65,6 +67,7 @@ Samurai::IO::Net::Socket::Socket(socket_t sd_, const Samurai::IO::Net::SocketAdd
 	autoConnectAfterLookup(false),
 	eventHandler(nullptr),
 	timer(nullptr),
+	connect_timeout(std::chrono::seconds(CONNECT_TIMEOUT)),
 	outbound(false),
 	readable(0),
 	writable(false)
@@ -87,6 +90,11 @@ void Samurai::IO::Net::Socket::setEventHandler(Samurai::IO::Net::SocketEventHand
 		setMonitor(Samurai::IO::Net::SocketMonitor::Triggers::Read);
 	}
 	eventHandler = eh;
+}
+
+void Samurai::IO::Net::Socket::setConnectTimeout(std::chrono::milliseconds timeout)
+{
+	connect_timeout = timeout;
 }
 
 void Samurai::IO::Net::Socket::lookup() {
@@ -386,7 +394,7 @@ void Samurai::IO::Net::Socket::connect()
 	timer.reset();
 
 	int ret = ::connect(sd, addr->getSockAddr(), addr->getSockAddrSize());
-	timer = std::make_unique<Samurai::Timer>(this, CONNECT_TIMEOUT, true);
+	timer = std::make_unique<Samurai::Timer>(this, connect_timeout, true);
 	if (ret == -1) {
 		if (Samurai::IO::Net::net_error() == EINPROGRESS) {
 			state = SocketState::Connecting;
@@ -615,12 +623,20 @@ void Samurai::IO::Net::Socket::EventHostError(Samurai::IO::Net::DNS::Resolver::E
 }
 
 
+/*
+ * NOTE: the timer is released before the handler runs, not after.
+ * internal_timeout() reports to the application, which is entitled to drop the
+ * last reference to this socket - and unlike a monitor dispatch, which locks a
+ * weak reference for the duration of the callback, a timer callback holds
+ * nothing to keep the object alive. Touching a member afterwards is therefore a
+ * use after free.
+ */
 void Samurai::IO::Net::Socket::EventTimeout(Samurai::Timer*) {
-	if (state == SocketState::Connecting) {
-		internal_timeout();
-	}
+	const bool connecting = (state == SocketState::Connecting);
 
 	timer.reset();
+
+	if (connecting) internal_timeout();
 }
 
 

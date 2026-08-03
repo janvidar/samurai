@@ -75,6 +75,15 @@ class Socket :
 		void connect();
 		void disconnect();
 
+		/**
+		 * How long connect() waits for the peer before reporting
+		 * SocketError::ConnectionTimeout. The default is CONNECT_TIMEOUT.
+		 *
+		 * Has to be set before connect(), which is where the timer is armed.
+		 */
+		void setConnectTimeout(std::chrono::milliseconds timeout);
+		std::chrono::milliseconds getConnectTimeout() const { return connect_timeout; }
+
 		void setEventHandler(SocketEventHandler* eh);
 		SocketEventHandler* getEventHandler() const { return eventHandler; }
 
@@ -191,6 +200,7 @@ class Socket :
 		bool autoConnectAfterLookup;
 		SocketEventHandler* eventHandler;
 		std::unique_ptr<Samurai::Timer> timer;
+		std::chrono::milliseconds connect_timeout;
 		bool outbound;
 		
 		int readable;
@@ -217,8 +227,6 @@ class Socket :
 		/* Nothing unless TLSsetAllowUntrusted() was called, so a socket that
 		   says nothing keeps the process default. */
 		std::optional<bool> allow_untrusted;
-
-		bool checkConnectTimeout();
 
 		void EventHostFound(const InetAddress* addr) override;
 		void EventHostError(Samurai::IO::Net::DNS::Resolver::Error error) override;

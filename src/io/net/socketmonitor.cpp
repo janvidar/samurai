@@ -12,6 +12,7 @@
 #include <samurai/io/net/socketmonitor.h>
 #include <memory>
 #include <samurai/io/net/datagram.h>
+#include <samurai/timer.h>
 
 #include "socketmonitor-backend.h"
 
@@ -99,8 +100,23 @@ void Samurai::IO::Net::SocketMonitor::wait(int time_ms)
 	   would delay it by that much for no reason, so the poll only collects
 	   whatever the descriptors have to add. */
 	const bool buffered = haveBufferedInput();
+	int timeout = buffered ? 0 : time_ms;
 
-	internal_wait(buffered ? 0 : time_ms);
+	/* A deadline that falls before the caller's timeout has to cut the poll
+	   short, or the timer fires late by however much the caller asked for -
+	   and callers ask for whole seconds. */
+	if (!buffered)
+	{
+		const int next = Samurai::TimerManager::getInstance()->timeToNext();
+		if (next >= 0 && (timeout < 0 || next < timeout)) timeout = next;
+	}
+
+	internal_wait(timeout);
+
+	/* After the poll has dispatched, so a timer callback acts on the freshest
+	   socket state, and unconditionally, so a deadline is still met on a pass
+	   where no descriptor had anything to report. */
+	Samurai::TimerManager::getInstance()->process();
 
 	/* Rescanned rather than reusing the list gathered above: the poll just
 	   dispatched, and a handler may have consumed the buffered data, closed the

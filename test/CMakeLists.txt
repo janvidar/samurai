@@ -85,6 +85,8 @@ exotic_add_tests(autotest
         exotic/resolver.tcc
         exotic/socketmonitor.tcc
         exotic/sockets.tcc
+        exotic/string.tcc
+        exotic/timer.tcc
         exotic/tls.tcc
         exotic/url.tcc
     LIBRARIES samurai::samurai
