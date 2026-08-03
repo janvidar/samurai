@@ -60,8 +60,10 @@ class RequestEventHandler : public Samurai::IO::Net::EventHandler
  * Otherwise the scope is what a UPnP gateway needs and no more. Not supported,
  * each for a reason:
  *
- *  - Redirects. Following a Location: from an unauthenticated device on the LAN
- *    is a request-forgery primitive; a 3xx is reported with its body instead.
+ *  - Redirects, unless Options::maxRedirects says otherwise. Following a
+ *    Location: from an unauthenticated device on the LAN is a request-forgery
+ *    primitive, so not following is the default and a 3xx is reported with its
+ *    body instead.
  *  - Connection reuse and pipelining. Every request sends Connection: close. A
  *    port mapping is two requests, so reuse buys nothing and costs a class of
  *    stale-connection faults.
@@ -97,6 +99,18 @@ class Client final
 			 * authenticates the peer by fingerprint instead.
 			 */
 			bool allowUntrustedCertificate = false;
+
+			/**
+			 * How many redirects to follow. Zero does not follow any, which is
+			 * what a UPnP gateway wants: chasing a Location: from an
+			 * unauthenticated device on the local network is a request-forgery
+			 * primitive, so a 3xx is handed back with its body instead.
+			 *
+			 * A client fetching from a named server on the internet is the other
+			 * case, and five is the conventional bound. An https response is
+			 * never followed to a plain http target whatever this says.
+			 */
+			unsigned maxRedirects = 0;
 		};
 
 		explicit Client(RequestEventHandler* eh);
@@ -185,6 +199,27 @@ class Client final
 		   and arrives as a plain socket error, so this is what tells a refused
 		   certificate apart from a host that never answered. */
 		bool handshaking = false;
+
+		/*
+		 * The request as it was asked for, kept so that a redirect can be
+		 * re-issued against a new URL without the caller being involved.
+		 */
+		Method current_method = Method::Get;
+		/* URL has no default constructor; an empty one is not valid, which is
+		   the right state before a request has been made. */
+		URL current_url{ "" };
+		Headers current_extra;
+		std::string current_body;
+		unsigned redirects_followed = 0;
+
+		/** Everything request() does once it has decided it may proceed. */
+		void internal_start();
+
+		/**
+		 * @return true when the response was a redirect this followed, in which
+		 *         case nothing has been reported and a new request is in flight.
+		 */
+		bool internal_follow_redirect();
 
 	friend class Socket;
 };

@@ -125,6 +125,25 @@ void Samurai::IO::Net::HTTP::Client::request(Method method, const URL& url,
 {
 	if (busy) { internal_fail(Status::Aborted, "a request is already in flight"); return; }
 
+	/* Held so that a redirect can be re-issued against a new URL without the
+	   caller being asked to do it again. */
+	current_method = method;
+	current_url = url;
+	current_extra = extra;
+	current_body.assign(body);
+	redirects_followed = 0;
+
+	internal_start();
+}
+
+
+void Samurai::IO::Net::HTTP::Client::internal_start()
+{
+	const Method method = current_method;
+	const URL& url = current_url;
+	const Headers& extra = current_extra;
+	const std::string_view body(current_body);
+
 	internal_teardown();
 	parser.reset();
 	incoming.clear();
@@ -233,6 +252,11 @@ void Samurai::IO::Net::HTTP::Client::internal_fail(Status why, const char* msg)
 void Samurai::IO::Net::HTTP::Client::internal_complete()
 {
 	if (reported) return;
+
+	/* A followed redirect is not an outcome: a new request is in flight and this
+	   one has nothing to report. */
+	if (internal_follow_redirect()) return;
+
 	reported = true;
 
 	/* Copied out before the socket goes: the handler is entitled to start
@@ -241,6 +265,72 @@ void Samurai::IO::Net::HTTP::Client::internal_complete()
 	internal_teardown();
 
 	if (eventHandler) eventHandler->EventHttpResponse(this, answer);
+}
+
+
+/*
+ * 3xx handling. A redirect with nothing usable to go on is not an error - the
+ * response is handed back as it stands, since its body may say what happened -
+ * but exhausting the budget, or being sent somewhere unusable, is.
+ */
+bool Samurai::IO::Net::HTTP::Client::internal_follow_redirect()
+{
+	if (!options.maxRedirects) return false;
+
+	const Response& answer = parser.getResponse();
+	const uint16_t code = answer.getStatusCode();
+
+	if (code < 300 || code > 399) return false;
+
+	const std::optional<std::string_view> location = answer.getHeaders().get("Location");
+	if (!location || location->empty()) return false;
+
+	if (redirects_followed >= options.maxRedirects)
+	{
+		internal_fail(Status::TooManyRedirects, "too many redirects");
+		return true;
+	}
+
+	const URL next = current_url.resolve(*location);
+	if (!next.isValid() || next.getHostname().empty())
+	{
+		internal_fail(Status::InvalidUrl, "the redirect named a URL that cannot be used");
+		return true;
+	}
+
+	/*
+	 * Never downgrade. Having verified a certificate, following the same server
+	 * to plain http hands the rest of the exchange to anyone on the path, and
+	 * the caller asked for https precisely so that would not happen.
+	 */
+	if (Samurai::Util::iequals(current_url.getScheme(), "https")
+		&& !Samurai::Util::iequals(next.getScheme(), "https"))
+	{
+		internal_fail(Status::InsecureRedirect, "redirected from https to http");
+		return true;
+	}
+
+	/*
+	 * 303 says to fetch the result with GET whatever the original method was,
+	 * and 301 and 302 are treated the same way for POST because that is what
+	 * every client does and what servers therefore expect. 307 and 308 exist to
+	 * say "again, exactly as before", so those keep the method and the body.
+	 */
+	if (code == 303 || ((code == 301 || code == 302) && current_method == Method::Post))
+	{
+		current_method = Method::Get;
+		current_body.clear();
+		/* Dropped rather than emptied: a bodiless request carrying a
+		   Content-Type describes a body that is not there. */
+		current_extra.remove("Content-Type");
+	}
+
+	current_url = next;
+	redirects_followed++;
+
+	/* internal_start() tears the old request down, which is what clears busy. */
+	internal_start();
+	return true;
 }
 
 

@@ -44,6 +44,8 @@ enum class Status
 	MalformedResponse,
 	ResponseTooLarge,
 	TlsFailed,          /**< the TLS handshake failed, or the certificate was refused */
+	TooManyRedirects,   /**< the chain was longer than Options::maxRedirects */
+	InsecureRedirect,   /**< an https response redirected to plain http */
 	Aborted
 };
 
@@ -62,6 +64,13 @@ class Headers final
 
 		/** Replace every field with this name, or add one if there is none. */
 		void set(std::string_view name, std::string_view value);
+
+		/**
+		 * Drop every field with this name.
+		 *
+		 * @return how many were removed.
+		 */
+		size_t remove(std::string_view name);
 
 		/** The first field with this name. */
 		std::optional<std::string_view> get(std::string_view name) const;

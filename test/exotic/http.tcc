@@ -19,6 +19,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 /*
  * Most of this drives ResponseParser directly, which needs no socket: it is
@@ -237,6 +238,96 @@ class CannedServer
 	private:
 		std::shared_ptr<Samurai::IO::Net::ServerSocket> server;
 		std::shared_ptr<Samurai::IO::Net::Socket> accepted;
+		uint16_t port = 0;
+};
+
+/*
+ * Answers each connection with the next reply in a list, so a redirect chain can
+ * be laid out in the order the client will walk it. The last reply is repeated
+ * once the list runs out, which is what makes a chain longer than the follow
+ * limit easy to write.
+ */
+class SequenceServer
+	: public Samurai::IO::Net::ServerSocketEventHandler
+	, public Samurai::IO::Net::SocketEventHandler
+{
+	public:
+		std::vector<std::string> replies;
+		/* Every request line seen, in order, so a case can assert the path and
+		   the method the client used after a redirect. */
+		std::vector<std::string> requests;
+
+		explicit SequenceServer(std::vector<std::string> canned)
+			: replies(std::move(canned))
+		{
+			Samurai::IO::Net::InetSocketAddress any((uint16_t) 0);
+			server = Samurai::IO::Net::ServerSocket::create(this, any);
+			if (!server || server->getFD() == -1) return;
+			if (!server->listen()) return;
+			port = server->getLocalPort();
+		}
+
+		~SequenceServer() override { accepted.reset(); server.reset(); }
+
+		SequenceServer(const SequenceServer&) = delete;
+		SequenceServer& operator=(const SequenceServer&) = delete;
+
+		bool ready() const { return server && port != 0 && !replies.empty(); }
+		uint16_t getPort() const { return port; }
+
+		URL url(const char* path) const
+		{
+			return URL("http://127.0.0.1:" + std::to_string(port) + path);
+		}
+
+		/** An absolute URL back to this server, for a Location header. */
+		std::string absolute(const char* path) const
+		{
+			return "http://127.0.0.1:" + std::to_string(port) + path;
+		}
+
+	protected:
+		void EventAcceptError(const Samurai::IO::Net::ServerSocket*, const char*) override { }
+
+		void EventAcceptSocket(const Samurai::IO::Net::ServerSocket*,
+			std::shared_ptr<Samurai::IO::Net::Socket> socket) override
+		{
+			accepted = socket;
+			pending.clear();
+			accepted->setEventHandler(this);
+		}
+
+		void EventDataAvailable(const Samurai::IO::Net::Socket* which) override
+		{
+			char scratch[4096];
+			size_t got = 0;
+			std::error_code ec;
+
+			Samurai::IO::Net::Socket* socket = const_cast<Samurai::IO::Net::Socket*>(which);
+			if (socket->read(scratch, sizeof(scratch), got, ec) !=
+				Samurai::IO::ReadResult::Ok) return;
+
+			pending.append(scratch, got);
+			const size_t end = pending.find("\r\n\r\n");
+			if (end == std::string::npos) return;
+
+			requests.push_back(pending.substr(0, pending.find("\r\n")));
+
+			const size_t which_reply = (served < replies.size())
+				? served : replies.size() - 1;
+			served++;
+
+			socket->write(replies[which_reply].data(), replies[which_reply].size(), ec);
+			accepted.reset();
+		}
+
+		void EventDisconnected(const Samurai::IO::Net::Socket*) override { }
+
+	private:
+		std::shared_ptr<Samurai::IO::Net::ServerSocket> server;
+		std::shared_ptr<Samurai::IO::Net::Socket> accepted;
+		std::string pending;
+		size_t served = 0;
 		uint16_t port = 0;
 };
 
@@ -1201,4 +1292,191 @@ EXO_TEST(http_blocking_fetch_reports_a_timeout,
 	                          std::chrono::milliseconds(300));
 
 	return status == Status::RequestTimeout;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Redirects                                                                 */
+/* ------------------------------------------------------------------------- */
+
+/* Not followed unless asked for, which is what a UPnP gateway relies on. */
+EXO_TEST(http_client_does_not_follow_a_redirect_by_default,
+{
+	SequenceServer server({ "HTTP/1.1 302 Found\r\nLocation: /elsewhere\r\n"
+	                        "Content-Length: 0\r\n\r\n", LENGTH_RESPONSE });
+	if (!server.ready()) return false;
+
+	ClientRecorder events;
+	Client client(&events);
+	client.get(server.url("/start"));
+
+	http_pump([&] { return events.done; });
+
+	return events.ok
+		&& events.response.getStatusCode() == 302
+		&& server.requests.size() == 1;
+});
+
+EXO_TEST(http_client_follows_a_redirect_when_allowed,
+{
+	SequenceServer server({ "", LENGTH_RESPONSE });
+	if (!server.ready()) return false;
+	server.replies[0] = "HTTP/1.1 302 Found\r\nLocation: "
+		+ server.absolute("/final") + "\r\nContent-Length: 0\r\n\r\n";
+
+	ClientRecorder events;
+	Client::Options options;
+	options.maxRedirects = 5;
+	Client client(&events, options);
+	client.get(server.url("/start"));
+
+	http_pump([&] { return events.done; });
+
+	return events.ok
+		&& events.response.getStatusCode() == 200
+		&& events.response.getBody() == "hello world"
+		&& server.requests.size() == 2
+		&& server.requests[1].find("GET /final ") != std::string::npos;
+});
+
+/* A Location is commonly a bare path, resolved against the URL it came from. */
+EXO_TEST(http_client_resolves_a_relative_redirect,
+{
+	SequenceServer server({ "HTTP/1.1 301 Moved\r\nLocation: /moved/here\r\n"
+	                        "Content-Length: 0\r\n\r\n", LENGTH_RESPONSE });
+	if (!server.ready()) return false;
+
+	ClientRecorder events;
+	Client::Options options;
+	options.maxRedirects = 5;
+	Client client(&events, options);
+	client.get(server.url("/a/b"));
+
+	http_pump([&] { return events.done; });
+
+	return events.ok
+		&& events.response.getBody() == "hello world"
+		&& server.requests.size() == 2
+		&& server.requests[1].find("GET /moved/here ") != std::string::npos;
+});
+
+EXO_TEST(http_client_stops_after_the_redirect_limit,
+{
+	/* Every reply redirects, so the limit is the only thing that ends it. */
+	SequenceServer server({ "HTTP/1.1 302 Found\r\nLocation: /again\r\n"
+	                        "Content-Length: 0\r\n\r\n" });
+	if (!server.ready()) return false;
+
+	ClientRecorder events;
+	Client::Options options;
+	options.maxRedirects = 3;
+	Client client(&events, options);
+	client.get(server.url("/start"));
+
+	http_pump([&] { return events.done; });
+
+	return events.done && !events.ok
+		&& events.status == Status::TooManyRedirects
+		/* The first request plus the three that were followed. */
+		&& server.requests.size() == 4;
+});
+
+/* Nothing to follow: handed back as it stands, since the body may explain. */
+EXO_TEST(http_client_returns_a_redirect_with_no_location,
+{
+	SequenceServer server({ "HTTP/1.1 302 Found\r\nContent-Length: 0\r\n\r\n" });
+	if (!server.ready()) return false;
+
+	ClientRecorder events;
+	Client::Options options;
+	options.maxRedirects = 5;
+	Client client(&events, options);
+	client.get(server.url("/start"));
+
+	http_pump([&] { return events.done; });
+
+	return events.ok
+		&& events.response.getStatusCode() == 302
+		&& server.requests.size() == 1;
+});
+
+/* 303 says to fetch the result with GET whatever was sent originally. */
+EXO_TEST(http_client_turns_a_post_into_a_get_on_303,
+{
+	SequenceServer server({ "HTTP/1.1 303 See Other\r\nLocation: /result\r\n"
+	                        "Content-Length: 0\r\n\r\n", LENGTH_RESPONSE });
+	if (!server.ready()) return false;
+
+	ClientRecorder events;
+	Client::Options options;
+	options.maxRedirects = 5;
+	Client client(&events, options);
+	client.post(server.url("/submit"), "text/plain", "a body");
+
+	http_pump([&] { return events.done; });
+
+	return events.ok
+		&& server.requests.size() == 2
+		&& server.requests[0].find("POST /submit ") != std::string::npos
+		&& server.requests[1].find("GET /result ") != std::string::npos;
+});
+
+/* 307 exists to say "again, exactly as before", so the method survives. */
+EXO_TEST(http_client_keeps_the_method_on_307,
+{
+	SequenceServer server({ "HTTP/1.1 307 Temporary Redirect\r\nLocation: /again\r\n"
+	                        "Content-Length: 0\r\n\r\n", LENGTH_RESPONSE });
+	if (!server.ready()) return false;
+
+	ClientRecorder events;
+	Client::Options options;
+	options.maxRedirects = 5;
+	Client client(&events, options);
+	client.post(server.url("/submit"), "text/plain", "a body");
+
+	http_pump([&] { return events.done; });
+
+	return events.ok
+		&& server.requests.size() == 2
+		&& server.requests[1].find("POST /again ") != std::string::npos;
+});
+
+/*
+ * The one that matters most: having verified a certificate, being sent to plain
+ * http hands the rest of the exchange to anyone on the path. Refused whatever
+ * the follow limit says.
+ */
+EXO_TEST(http_client_refuses_a_redirect_from_https_to_http,
+{
+	CannedServer plain(LENGTH_RESPONSE);
+	if (!plain.ready()) return false;
+
+	TlsCannedServer secure("HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:"
+		+ std::to_string(plain.getPort()) + "/\r\nContent-Length: 0\r\n\r\n");
+	if (!secure.ready()) return false;
+
+	ClientRecorder events;
+	Client::Options options;
+	options.maxRedirects = 5;
+	options.allowUntrustedCertificate = true;
+	Client client(&events, options);
+	client.get(secure.url("/start"));
+
+	http_pump([&] { return events.done; });
+
+	return events.done && !events.ok
+		&& events.status == Status::InsecureRedirect
+		/* And it really did not go there. */
+		&& plain.connections == 0;
+});
+
+EXO_TEST(http_headers_remove_drops_every_duplicate,
+{
+	Headers headers;
+	headers.add("X-Thing", "one");
+	headers.add("Other", "keep");
+	headers.add("x-thing", "two");
+
+	const size_t dropped = headers.remove("X-THING");
+	return dropped == 2 && headers.size() == 1 && headers.has("Other")
+		&& !headers.has("X-Thing") && headers.remove("absent") == 0;
 });
