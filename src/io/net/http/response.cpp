@@ -89,6 +89,8 @@ const char* Samurai::IO::Net::HTTP::toString(Samurai::IO::Net::HTTP::Status stat
 		case Status::MalformedResponse: return "malformed response";
 		case Status::ResponseTooLarge:  return "response too large";
 		case Status::TlsFailed:         return "the TLS handshake failed";
+		case Status::TooManyRedirects:  return "too many redirects";
+		case Status::InsecureRedirect:  return "redirected from https to http";
 		case Status::Aborted:           return "abandoned";
 	}
 	return "unknown";
@@ -110,6 +112,20 @@ void Samurai::IO::Net::HTTP::Headers::set(std::string_view name, std::string_vie
 	}
 
 	add(name, value);
+}
+
+
+size_t Samurai::IO::Net::HTTP::Headers::remove(std::string_view name)
+{
+	size_t dropped = 0;
+
+	for (auto it = fields.begin(); it != fields.end(); )
+	{
+		if (iequals(it->first, name)) { it = fields.erase(it); dropped++; }
+		else ++it;
+	}
+
+	return dropped;
 }
 
 
