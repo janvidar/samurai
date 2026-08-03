@@ -4,11 +4,15 @@
  */
 
 #include <samurai/io/net/socketmonitor.h>
+#include <samurai/io/net/interface.h>
 #include <samurai/io/net/upnp/gateway.h>
+
+#include "io/net/upnp/ssdp.h"
 #include <samurai/timer.h>
 
 #include <chrono>
 #include <memory>
+#include <vector>
 
 /*
  * SSDP discovery on the wire.
@@ -48,6 +52,19 @@ class DiscoveryRecorder : public GatewayEventHandler
 		}
 		void EventGatewayCandidate(Gateway*, const Candidate&) override
 		{ candidates++; }
+};
+
+/** Counts what a search reports, for the leg-count case. */
+class SsdpCounter : public Samurai::IO::Net::UPnP::Ssdp::SearchEventHandler
+{
+	public:
+		int replies = 0;
+		bool finished = false;
+
+	protected:
+		void EventSsdpReply(const Samurai::IO::Net::UPnP::Ssdp::Reply&) override
+		{ replies++; }
+		void EventSsdpFinished() override { finished = true; }
 };
 
 template<typename Fn>
@@ -215,4 +232,60 @@ EXO_TEST(upnp_discovery_two_searches_are_independent,
 
 	return discovery_pump(
 		[&] { return first_events.settled() && second_events.settled(); }, 6000);
+});
+
+/*
+ * A search opens one socket per interface per group, and only over interfaces a
+ * gateway could actually be behind.
+ *
+ * Loopback and point-to-point links are excluded: an internet gateway announces
+ * itself on a broadcast segment. On a host with several VPN tunnels up - which is
+ * what prompted this - each tunnel is a multicast-capable point-to-point
+ * interface that would otherwise be sent a search per group.
+ */
+EXO_TEST(upnp_discovery_skips_loopback_and_point_to_point_interfaces,
+{
+	std::vector<std::unique_ptr<Samurai::IO::Net::NetworkInterface>> interfaces;
+	if (!Samurai::IO::Net::NetworkInterface::getInterfaces(interfaces)) return true;
+
+	size_t eligible = 0;
+	for (const auto& iface : interfaces)
+	{
+		if (!iface->isEnabled() || !iface->isMulticast()) continue;
+		if (iface->isLoopback() || iface->isPointToPoint()) continue;
+		eligible++;
+	}
+
+	Samurai::IO::Net::UPnP::Ssdp::Search::Options options;
+	options.timeout = std::chrono::milliseconds(300);
+
+	SocketMonitor* monitor = SocketMonitor::getInstance();
+	const size_t baseline = monitor->size();
+
+	bool ok = true;
+	{
+		SsdpCounter counter;
+		std::unique_ptr<Samurai::IO::Net::UPnP::Ssdp::Search> search =
+			Samurai::IO::Net::UPnP::Ssdp::Search::start(&counter, options);
+
+		/* No eligible interface means no search at all, which start() reports. */
+		if (!eligible) ok = !search;
+		else if (search)
+		{
+			/* At most one socket per eligible interface per group, which is what
+			   shows the excluded ones were left out. */
+			const size_t groups = Samurai::IO::Net::UPnP::Ssdp::groups().size();
+			ok = search->getLegCount() <= eligible * groups;
+		}
+	}
+
+	/*
+	 * A search opens a socket per interface per group, so leaving them for the
+	 * monitor to notice in its own time starves whatever runs next of
+	 * descriptors. Releasing deregisters them; the monitor forgets them on its
+	 * next pass, which is what this waits for.
+	 */
+	discovery_pump([&] { return monitor->size() <= baseline; }, 2000);
+
+	return ok;
 });

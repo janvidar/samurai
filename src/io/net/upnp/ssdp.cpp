@@ -222,9 +222,9 @@ Samurai::IO::Net::UPnP::Ssdp::Search::~Search()
  * One socket per interface per group, bound to an ephemeral port and joining
  * nothing: a reply comes back unicast to the port the search left from.
  *
- * Loopback is skipped - no gateway lives there - and an interface that cannot be
- * set up is passed over rather than failing the whole search, because a host
- * commonly has several of which only one is real.
+ * An interface that cannot be set up is passed over rather than failing the whole
+ * search, because a host commonly has a dozen of which only one is real. Which
+ * ones are eligible at all is decided below.
  */
 bool Samurai::IO::Net::UPnP::Ssdp::Search::internal_open()
 {
@@ -233,8 +233,17 @@ bool Samurai::IO::Net::UPnP::Ssdp::Search::internal_open()
 
 	for (const auto& iface : interfaces)
 	{
-		if (!iface->isEnabled() || !iface->isMulticast() || iface->isLoopback())
-			continue;
+		if (!iface->isEnabled() || !iface->isMulticast()) continue;
+
+		/*
+		 * Loopback and point-to-point links are skipped. An internet gateway
+		 * announces itself on a broadcast segment, so it is never behind either,
+		 * and a host with several VPN tunnels up has as many multicast-capable
+		 * point-to-point interfaces - each of which would otherwise get a socket
+		 * per group and a search sent down it, telling the tunnel's far end that
+		 * this host is here for no possible gain.
+		 */
+		if (iface->isLoopback() || iface->isPointToPoint()) continue;
 
 		for (const Group& group : groups())
 		{
@@ -282,6 +291,12 @@ bool Samurai::IO::Net::UPnP::Ssdp::Search::internal_open()
 	}
 
 	return !legs.empty();
+}
+
+
+size_t Samurai::IO::Net::UPnP::Ssdp::Search::getLegCount() const
+{
+	return legs.size();
 }
 
 
