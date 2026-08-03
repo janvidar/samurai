@@ -200,6 +200,10 @@ class CannedServer
 
 			accepted = socket;
 			accepted->setEventHandler(this);
+
+			/* Each connection is answered from the start of the reply. */
+			sent = 0;
+			sending = false;
 		}
 
 		void EventDataAvailable(const Samurai::IO::Net::Socket* which) override
@@ -226,19 +230,50 @@ class CannedServer
 
 			if (!answer) return;
 
-			socket->write(reply.data(), reply.size(), ec);
-			concurrent--;
-			/* Closing is what delimits a body with no Content-Length. */
-			accepted.reset();
+			sending = true;
+			pump_reply(socket);
+		}
+
+		void EventCanWrite(const Samurai::IO::Net::Socket* which) override
+		{
+			if (!sending) return;
+			pump_reply(const_cast<Samurai::IO::Net::Socket*>(which));
 		}
 
 		void EventDisconnected(const Samurai::IO::Net::Socket*) override
 		{ }
 
 	private:
+		/*
+		 * A reply larger than the socket buffer does not go out in one write, so
+		 * what is left is finished under the write notifier. Without this a big
+		 * body is silently truncated and the case that needed it passes or fails
+		 * for the wrong reason.
+		 */
+		void pump_reply(Samurai::IO::Net::Socket* socket)
+		{
+			while (sent < reply.size())
+			{
+				const ssize_t wrote = socket->write(reply.data() + sent, reply.size() - sent);
+				if (wrote <= 0)
+				{
+					socket->toggleWriteNotifier(true);
+					return;
+				}
+				sent += (size_t) wrote;
+			}
+
+			sending = false;
+			concurrent--;
+			/* Closing is what delimits a body with no Content-Length. */
+			accepted.reset();
+		}
+
 		std::shared_ptr<Samurai::IO::Net::ServerSocket> server;
 		std::shared_ptr<Samurai::IO::Net::Socket> accepted;
 		uint16_t port = 0;
+		size_t sent = 0;
+		bool sending = false;
 };
 
 /*
@@ -1499,6 +1534,29 @@ EXO_TEST(http_client_honours_a_lowered_body_limit,
 	http_pump([&] { return events.done; });
 
 	return events.done && !events.ok && events.status == Status::ResponseTooLarge;
+});
+
+/*
+ * And the direction that matters to a caller with something big to fetch: the
+ * parser's own default stops at a megabyte, so a raised limit only means
+ * anything if it actually reaches the parser.
+ */
+EXO_TEST(http_client_honours_a_raised_body_limit,
+{
+	const std::string body(2 * 1024 * 1024, 'x');
+	CannedServer server("HTTP/1.1 200 OK\r\nContent-Length: "
+		+ std::to_string(body.size()) + "\r\n\r\n" + body);
+	if (!server.ready()) return false;
+
+	ClientRecorder events;
+	Client::Options options;
+	options.limits.maxBody = 4 * 1024 * 1024;
+	Client client(&events, options);
+	client.get(server.url("/"));
+
+	http_pump([&] { return events.done; }, 15000);
+
+	return events.ok && events.response.getBody() == body;
 });
 
 /* setOptions between requests has to be what the next one is held to. */
