@@ -918,15 +918,22 @@ EXO_TEST(http_parse_after_an_error_stays_an_error,
 	return feed(parser, LENGTH_RESPONSE) == ResponseParser::Result::Error;
 });
 
+/*
+ * Walked over the enumerators rather than a list written out here, which a new
+ * status would not be added to - and checked against the fallback rather than
+ * against empty, since a value with no case of its own is what returns that. So
+ * this fails when a status is added and left unnamed.
+ *
+ * Aborted is last; anything inserted before it is covered by construction.
+ */
 EXO_TEST(http_tostring_names_every_status,
 {
-	const Status all[] = {
-		Status::Ok, Status::InvalidUrl, Status::ConnectFailed, Status::ConnectTimeout,
-		Status::RequestTimeout, Status::Disconnected, Status::MalformedResponse,
-		Status::ResponseTooLarge, Status::Aborted };
-
-	for (const Status status : all)
-		if (!toString(status) || !*toString(status)) return false;
+	for (int n = 0; n <= (int) Status::Aborted; n++)
+	{
+		const char* name = toString((Status) n);
+		if (!name || !*name) return false;
+		if (std::string(name) == "unknown") return false;
+	}
 
 	return toString(Method::Get) == std::string("GET")
 		&& toString(Method::Post) == std::string("POST")
