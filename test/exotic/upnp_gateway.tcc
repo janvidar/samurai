@@ -143,6 +143,8 @@ struct Answer
 	int status = 200;
 	std::string body;
 	std::string contentType = "text/xml; charset=\"utf-8\"";
+	/** Sent as Location: when set, for scripting a redirect. */
+	std::string location;
 };
 
 Answer ok(const std::string& body)
@@ -186,6 +188,8 @@ class FakeGateway
 
 		/* Faults arrive as a 200 rather than a 500 when set. */
 		bool faults_as_200 = false;
+		/** When set, a description GET answers 302 pointing here. */
+		std::string redirect_get_to;
 		bool never_answer = false;
 		bool close_early = false;
 		size_t oversize_body = 0;
@@ -315,7 +319,13 @@ class FakeGateway
 
 			if (head.compare(0, 4, "GET ") == 0)
 			{
-				if (oversize_body)
+				if (!redirect_get_to.empty())
+				{
+					answer.status = 302;
+					answer.location = redirect_get_to;
+					answer.body = "moved";
+				}
+				else if (oversize_body)
 				{
 					answer.body = std::string(oversize_body, 'x');
 				}
@@ -358,6 +368,8 @@ class FakeGateway
 			std::string reply = "HTTP/1.1 " + std::to_string(answer.status) + " "
 				+ (answer.status == 200 ? "OK" : "Error") + "\r\n";
 			reply += "Content-Type: " + answer.contentType + "\r\n";
+			if (!answer.location.empty())
+				reply += "Location: " + answer.location + "\r\n";
 			reply += "Content-Length: " + std::to_string(answer.body.size()) + "\r\n";
 			reply += "Connection: close\r\n\r\n";
 			reply += answer.body;
@@ -1623,4 +1635,35 @@ EXO_TEST(upnp_blocking_refuses_a_nested_call,
 	/* Not refused as Reentrant, because the outer call was not a blocking one -
 	   but it must not have hung or recursed, which reaching here proves. */
 	return nested.ran;
+});
+
+/*
+ * A redirect from the gateway is not followed.
+ *
+ * The description location came from a device on the local network that has not
+ * been authenticated, so honouring a Location: it returned would let it aim a
+ * request wherever it chose - which is the same thing the control URL host check
+ * refuses. Gateway asks for that explicitly rather than inheriting whatever the
+ * HTTP client happens to default to, and this is what says so.
+ *
+ * The redirect points at a second fake that would serve a perfectly good
+ * description, so following it would succeed: the failure is the assertion.
+ */
+EXO_TEST(upnp_gateway_does_not_follow_a_redirect,
+{
+	FakeGateway elsewhere(IGD1_DESCRIPTION);
+	if (!elsewhere.ready()) return false;
+
+	FakeGateway fake(IGD1_DESCRIPTION);
+	if (!fake.ready()) return false;
+	fake.redirect_get_to = elsewhere.location().toString();
+
+	GatewayRecorder events;
+	std::unique_ptr<Gateway> gateway = Gateway::describe(&events, fake.location());
+	if (!upnp_pump([&] { return events.found || events.failed; })) return false;
+
+	if (!events.failed || events.error != Error::DescriptionFailed) return false;
+
+	/* And the place it was pointed at was never asked for anything. */
+	return elsewhere.requests == 0;
 });
