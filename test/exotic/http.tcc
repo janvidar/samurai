@@ -1480,3 +1480,46 @@ EXO_TEST(http_headers_remove_drops_every_duplicate,
 	return dropped == 2 && headers.size() == 1 && headers.has("Other")
 		&& !headers.has("X-Thing") && headers.remove("absent") == 0;
 });
+
+/* ------------------------------------------------------------------------- */
+/* The client's limits                                                       */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(http_client_honours_a_lowered_body_limit,
+{
+	CannedServer server(LENGTH_RESPONSE);
+	if (!server.ready()) return false;
+
+	ClientRecorder events;
+	Client::Options options;
+	options.limits.maxBody = 4;
+	Client client(&events, options);
+	client.get(server.url("/"));
+
+	http_pump([&] { return events.done; });
+
+	return events.done && !events.ok && events.status == Status::ResponseTooLarge;
+});
+
+/* setOptions between requests has to be what the next one is held to. */
+EXO_TEST(http_client_uses_the_limits_in_force_at_request_time,
+{
+	CannedServer server(LENGTH_RESPONSE);
+	if (!server.ready()) return false;
+
+	ClientRecorder events;
+	Client client(&events);
+	client.get(server.url("/"));
+	http_pump([&] { return events.done; });
+	if (!events.ok) return false;
+
+	Client::Options tightened;
+	tightened.limits.maxBody = 4;
+	client.setOptions(tightened);
+
+	events = ClientRecorder();
+	client.get(server.url("/"));
+	http_pump([&] { return events.done; });
+
+	return events.done && !events.ok && events.status == Status::ResponseTooLarge;
+});

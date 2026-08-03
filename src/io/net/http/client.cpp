@@ -145,7 +145,11 @@ void Samurai::IO::Net::HTTP::Client::internal_start()
 	const std::string_view body(current_body);
 
 	internal_teardown();
-	parser.reset();
+
+	/* Built here rather than reset, because the limits are the caller's and
+	   setOptions may have changed them since the last request. */
+	parser = ResponseParser(options.limits);
+
 	incoming.clear();
 	outgoing.clear();
 	local_address = InetAddress();
