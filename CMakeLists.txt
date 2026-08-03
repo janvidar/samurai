@@ -184,6 +184,8 @@ set(SAMURAI_SOURCES
     src/io/net/url.cpp
     src/io/net/dns/resolver.cpp
     src/io/net/dns/resolver-pool.cpp
+    src/io/net/http/client.cpp
+    src/io/net/http/response.cpp
     src/util/base32.cpp
     src/util/bwestimation.cpp
     src/util/format.cpp

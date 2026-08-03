@@ -77,6 +77,7 @@ exotic_add_tests(autotest
         exotic/compression.tcc
         exotic/file.tcc
         exotic/hash_tiger.tcc
+        exotic/http.tcc
         exotic/inetaddress.tcc
         exotic/interface.tcc
         exotic/misc.tcc
