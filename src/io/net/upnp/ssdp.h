@@ -157,6 +157,9 @@ class Search final
 
 		bool isFinished() const { return finished; }
 
+		/** How many sockets the search is running over. */
+		size_t getLegCount() const;
+
 	private:
 		explicit Search(SearchEventHandler* eh, const Options& options);
 
