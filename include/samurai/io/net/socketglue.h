@@ -8,6 +8,7 @@
 #include <span>
 #include <errno.h>
 #include <stdint.h>
+#include <string.h>
 
 #include <samurai/samurai.h>
 
@@ -89,6 +90,182 @@ inline int set_sockopt(socket_t sd, int level, int option, const void* value, so
 #else
 	return ::setsockopt(sd, level, option, value, len);
 #endif
+}
+
+/* Older glibc spells the Version::IPv6 membership options this way. */
+#if !defined(IPV6_JOIN_GROUP) && defined(IPV6_ADD_MEMBERSHIP)
+#define IPV6_JOIN_GROUP  IPV6_ADD_MEMBERSHIP
+#define IPV6_LEAVE_GROUP IPV6_DROP_MEMBERSHIP
+#endif
+
+/*
+ * MULTICAST OPTION WIDTHS
+ *
+ * The width of a multicast socket option does not follow its address family,
+ * which is the trap here:
+ *
+ *   option                        Linux                  macOS / BSD    Winsock
+ *   IP_MULTICAST_TTL              int                    u_char         int
+ *   IP_MULTICAST_LOOP             int                    u_char         int
+ *   IP_MULTICAST_IF               in_addr or ip_mreqn    in_addr        in_addr
+ *   IP_ADD_MEMBERSHIP             ip_mreq or ip_mreqn    ip_mreq        ip_mreq
+ *   IPV6_MULTICAST_HOPS           int                    int            int
+ *   IPV6_MULTICAST_LOOP           int                    unsigned int   int
+ *   IPV6_MULTICAST_IF             unsigned (index)       unsigned       DWORD
+ *   IPV6_JOIN_GROUP               ipv6_mreq              ipv6_mreq      ipv6_mreq
+ *
+ * So the Version::IPv4 loop and hop options are a single byte on the BSDs while
+ * the Version::IPv6 ones are four bytes there. Passing an int where a u_char is
+ * wanted is refused with EINVAL on FreeBSD and OpenBSD - macOS happens to accept
+ * either, which is why doing it wrong can look correct on one BSD and fail on
+ * the next. The wrappers below are where that lives, so nothing above them has
+ * to know.
+ *
+ * Never hand a bool* to set_sockopt(): sizeof(bool) is 1, so it happens to work
+ * where a u_char is wanted and silently sets one byte of an int elsewhere.
+ */
+
+inline int set_multicast_ttl(socket_t sd, uint8_t ttl)
+{
+#ifdef SAMURAI_BSD
+	const unsigned char value = ttl;
+#else
+	const int value = ttl;
+#endif
+	return set_sockopt(sd, IPPROTO_IP, IP_MULTICAST_TTL, &value, sizeof(value));
+}
+
+inline int get_multicast_ttl(socket_t sd, uint8_t& ttl)
+{
+#ifdef SAMURAI_BSD
+	unsigned char value = 0;
+#else
+	int value = 0;
+#endif
+	socklen_t len = sizeof(value);
+	const int ret = get_sockopt(sd, IPPROTO_IP, IP_MULTICAST_TTL, &value, &len);
+	if (ret == 0) ttl = (uint8_t) value;
+	return ret;
+}
+
+inline int set_multicast_loop(socket_t sd, bool toggle)
+{
+#ifdef SAMURAI_BSD
+	const unsigned char value = toggle ? 1 : 0;
+#else
+	const int value = toggle ? 1 : 0;
+#endif
+	return set_sockopt(sd, IPPROTO_IP, IP_MULTICAST_LOOP, &value, sizeof(value));
+}
+
+inline int get_multicast_loop(socket_t sd, bool& toggle)
+{
+#ifdef SAMURAI_BSD
+	unsigned char value = 0;
+#else
+	int value = 0;
+#endif
+	socklen_t len = sizeof(value);
+	const int ret = get_sockopt(sd, IPPROTO_IP, IP_MULTICAST_LOOP, &value, &len);
+	if (ret == 0) toggle = (value != 0);
+	return ret;
+}
+
+/**
+ * Choose the interface outbound Version::IPv4 multicast leaves by.
+ *
+ * Linux takes an interface index, which is what to use where it works: an
+ * interface without an Version::IPv4 address can still be named. Everywhere else
+ * the interface is named by its own address, so one without an Version::IPv4
+ * address cannot be selected at all - which the caller has to be told rather
+ * than have it silently go out the default route.
+ */
+inline int set_multicast_if4(socket_t sd, const struct in_addr& iface_addr,
+                             [[maybe_unused]] interface_t ifindex)
+{
+#ifdef SAMURAI_OS_LINUX
+	struct ip_mreqn mreqn;
+	memset(&mreqn, 0, sizeof(mreqn));
+	mreqn.imr_address = iface_addr;
+	mreqn.imr_ifindex = (int) ifindex;
+	return set_sockopt(sd, IPPROTO_IP, IP_MULTICAST_IF, &mreqn, sizeof(mreqn));
+#else
+	return set_sockopt(sd, IPPROTO_IP, IP_MULTICAST_IF, &iface_addr, sizeof(iface_addr));
+#endif
+}
+
+inline int set_multicast_hops6(socket_t sd, uint8_t hops)
+{
+	const int value = hops;
+	return set_sockopt(sd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &value, sizeof(value));
+}
+
+inline int get_multicast_hops6(socket_t sd, uint8_t& hops)
+{
+	int value = 0;
+	socklen_t len = sizeof(value);
+	const int ret = get_sockopt(sd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &value, &len);
+	if (ret == 0) hops = (uint8_t) value;
+	return ret;
+}
+
+inline int set_multicast_loop6(socket_t sd, bool toggle)
+{
+	const int value = toggle ? 1 : 0;
+	return set_sockopt(sd, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &value, sizeof(value));
+}
+
+inline int get_multicast_loop6(socket_t sd, bool& toggle)
+{
+	int value = 0;
+	socklen_t len = sizeof(value);
+	const int ret = get_sockopt(sd, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &value, &len);
+	if (ret == 0) toggle = (value != 0);
+	return ret;
+}
+
+/** Version::IPv6 names its outbound multicast interface by index everywhere. */
+inline int set_multicast_if6(socket_t sd, interface_t ifindex)
+{
+	const unsigned int value = (unsigned int) ifindex;
+	return set_sockopt(sd, IPPROTO_IPV6, IPV6_MULTICAST_IF, &value, sizeof(value));
+}
+
+/**
+ * Join or leave an Version::IPv4 group.
+ *
+ * 'iface_addr' and 'ifindex' say which interface to join on. An unset address
+ * and a zero index mean whichever the route table picks, which is what a caller
+ * that has not chosen gets.
+ */
+inline int membership4(socket_t sd, int option, const struct in_addr& group,
+                       const struct in_addr& iface_addr,
+                       [[maybe_unused]] interface_t ifindex)
+{
+#ifdef SAMURAI_OS_LINUX
+	struct ip_mreqn mreqn;
+	memset(&mreqn, 0, sizeof(mreqn));
+	mreqn.imr_multiaddr = group;
+	mreqn.imr_address = iface_addr;
+	mreqn.imr_ifindex = (int) ifindex;
+	return set_sockopt(sd, IPPROTO_IP, option, &mreqn, sizeof(mreqn));
+#else
+	struct ip_mreq mreq;
+	memset(&mreq, 0, sizeof(mreq));
+	mreq.imr_multiaddr = group;
+	mreq.imr_interface = iface_addr;
+	return set_sockopt(sd, IPPROTO_IP, option, &mreq, sizeof(mreq));
+#endif
+}
+
+inline int membership6(socket_t sd, int option, const struct in6_addr& group,
+                       interface_t ifindex)
+{
+	struct ipv6_mreq mreq;
+	memset(&mreq, 0, sizeof(mreq));
+	mreq.ipv6mr_multiaddr = group;
+	mreq.ipv6mr_interface = (unsigned int) ifindex;
+	return set_sockopt(sd, IPPROTO_IPV6, option, &mreq, sizeof(mreq));
 }
 
 /**

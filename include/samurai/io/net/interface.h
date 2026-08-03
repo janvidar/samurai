@@ -58,7 +58,19 @@ class NetworkInterface
 		 * in-tree callers leaked every entry.
 		 */
 		static bool getInterfaces(std::vector<std::unique_ptr<NetworkInterface>>& interfaces);
-	
+
+		/**
+		 * The index of the interface with this name, or 0 if there is none.
+		 *
+		 * This is what an Version::IPv6 multicast option and a scope identifier
+		 * both name an interface by, and it works for an interface with no
+		 * Version::IPv4 address - which getInterfaces() cannot describe.
+		 */
+		static interface_t getIndexByName(const char* name);
+
+		/** The name of the interface with this index, empty if there is none. */
+		static std::string getNameByIndex(interface_t index);
+
 	public:
 		virtual ~NetworkInterface();
 
