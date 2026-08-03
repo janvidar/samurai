@@ -51,10 +51,15 @@ class RequestEventHandler : public Samurai::IO::Net::EventHandler
 /**
  * A minimal asynchronous HTTP/1.1 client: one request per connection.
  *
- * Scope is what a UPnP gateway needs and no more. Not supported, each for a
- * reason:
+ * https is supported, with the certificate verified against the trust store and
+ * the hostname checked against it - the name the URL asked for, not one derived
+ * from the connection. A server whose certificate cannot be verified is refused
+ * unless the caller sets Options::allowUntrustedCertificate, which exists for a
+ * test server and for a peer authenticated some other way, and is off.
  *
- *  - TLS. An IGD speaks plain HTTP on the local network, always.
+ * Otherwise the scope is what a UPnP gateway needs and no more. Not supported,
+ * each for a reason:
+ *
  *  - Redirects. Following a Location: from an unauthenticated device on the LAN
  *    is a request-forgery primitive; a 3xx is reported with its body instead.
  *  - Connection reuse and pipelining. Every request sends Connection: close. A
@@ -80,6 +85,18 @@ class Client final
 			ResponseParser::Limits limits;
 			/** Sent as User-Agent when set. */
 			std::string userAgent;
+
+			/**
+			 * Accept an https peer whose certificate the trust store cannot
+			 * verify.
+			 *
+			 * Off, and worth leaving off: with it on, the connection is
+			 * encrypted against a passive observer and against nobody else,
+			 * since any certificate at all will do. It is here for a test
+			 * server with a self-signed certificate, and for a protocol that
+			 * authenticates the peer by fingerprint instead.
+			 */
+			bool allowUntrustedCertificate = false;
 		};
 
 		explicit Client(RequestEventHandler* eh);
@@ -129,6 +146,7 @@ class Client final
 
 	private:
 		void EventConnected(const Socket*) override;
+		void EventTLSConnected(const Socket*) override;
 		void EventDataAvailable(const Socket*) override;
 		void EventCanWrite(const Socket*) override;
 		void EventDisconnected(const Socket*) override;
@@ -158,6 +176,15 @@ class Client final
 		InetAddress local_address;
 		bool busy = false;
 		bool reported = false;
+
+		/* Whether the request is over TLS, so that EventConnected knows to
+		   start a handshake rather than write the request straight out. */
+		bool secure = false;
+
+		/* Set while the handshake is outstanding. A failed one closes the socket
+		   and arrives as a plain socket error, so this is what tells a refused
+		   certificate apart from a host that never answered. */
+		bool handshaking = false;
 
 	friend class Socket;
 };

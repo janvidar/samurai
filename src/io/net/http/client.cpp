@@ -131,6 +131,8 @@ void Samurai::IO::Net::HTTP::Client::request(Method method, const URL& url,
 	outgoing.clear();
 	local_address = InetAddress();
 	reported = false;
+	secure = false;
+	handshaking = false;
 
 	if (!url.isValid() || url.getHostname().empty() || !url.getEffectivePort())
 	{
@@ -138,12 +140,16 @@ void Samurai::IO::Net::HTTP::Client::request(Method method, const URL& url,
 		return;
 	}
 
-	/* Only plain HTTP: see the class comment on why TLS is out of scope. */
-	if (!Samurai::Util::iequals(url.getScheme(), "http"))
+	const bool is_http  = Samurai::Util::iequals(url.getScheme(), "http");
+	const bool is_https = Samurai::Util::iequals(url.getScheme(), "https");
+
+	if (!is_http && !is_https)
 	{
-		internal_fail(Status::InvalidUrl, "only http is supported");
+		internal_fail(Status::InvalidUrl, "only http and https are supported");
 		return;
 	}
+
+	secure = is_https;
 
 	if (method == Method::Head) parser.expectNoBody();
 
@@ -249,6 +255,45 @@ void Samurai::IO::Net::HTTP::Client::EventConnected(const Socket*)
 			local_address = *local;
 	}
 
+	if (!secure)
+	{
+		internal_send();
+		return;
+	}
+
+	/*
+	 * TCP is up; nothing may be written until TLS is. The peer name comes from
+	 * the socket, which took it from the URL, so the certificate is checked
+	 * against the host that was asked for rather than whatever the connection
+	 * resolved to.
+	 */
+	if (!socket)
+	{
+		internal_fail(Status::TlsFailed, "no socket to negotiate TLS on");
+		return;
+	}
+
+	socket->TLSsetAllowUntrusted(options.allowUntrustedCertificate);
+
+	if (!socket->TLSInitialize(false))
+	{
+		internal_fail(Status::TlsFailed, "could not initialise TLS");
+		return;
+	}
+
+	handshaking = true;
+	socket->TLSsendHandshake();
+}
+
+
+/*
+ * The handshake is done and verified - a failed one closes the socket and
+ * arrives as EventError instead. This is the first point at which the request
+ * may go out.
+ */
+void Samurai::IO::Net::HTTP::Client::EventTLSConnected(const Socket*)
+{
+	handshaking = false;
 	internal_send();
 }
 
@@ -356,9 +401,19 @@ void Samurai::IO::Net::HTTP::Client::EventTimeout(const Socket*)
 void Samurai::IO::Net::HTTP::Client::EventError(const Socket*, SocketError which,
                                                 const char* msg)
 {
-	const Status why = (which == SocketError::ConnectionTimeout)
-		? Status::ConnectTimeout
-		: Status::ConnectFailed;
+	/*
+	 * A refused certificate or a failed handshake arrives here, because the
+	 * socket closes itself and reports an error rather than a TLS-specific
+	 * event. Telling it apart matters to a caller: a name that does not resolve
+	 * and a certificate that does not verify want different answers.
+	 */
+	Status why;
+	if (which == SocketError::ConnectionTimeout)
+		why = Status::ConnectTimeout;
+	else if (handshaking)
+		why = Status::TlsFailed;
+	else
+		why = Status::ConnectFailed;
 
 	internal_fail(why, msg ? msg : "socket error");
 }

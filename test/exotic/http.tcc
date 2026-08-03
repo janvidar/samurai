@@ -3,6 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include "testkeys.h"
+
 #include <samurai/io/buffer.h>
 #include <samurai/io/net/http/client.h>
 #include <samurai/io/net/http/response.h>
@@ -231,6 +233,93 @@ class CannedServer
 
 		void EventDisconnected(const Samurai::IO::Net::Socket*) override
 		{ }
+
+	private:
+		std::shared_ptr<Samurai::IO::Net::ServerSocket> server;
+		std::shared_ptr<Samurai::IO::Net::Socket> accepted;
+		uint16_t port = 0;
+};
+
+/*
+ * The same canned server over TLS, so the client's https path is exercised end
+ * to end rather than only as far as the scheme check.
+ *
+ * The certificate is self-signed and names "localhost", so no trust store can
+ * verify it against a loopback address. Both ends are therefore given the
+ * process-wide allow-untrusted default while initialize() reads it, and it is
+ * put back straight away - the point of the cases below is what the *client's*
+ * own option does, not what this default does.
+ */
+class TlsCannedServer
+	: public Samurai::IO::Net::ServerSocketEventHandler
+	, public Samurai::IO::Net::SocketEventHandler
+{
+	public:
+		std::string reply;
+		std::string request;
+
+		explicit TlsCannedServer(std::string canned) : reply(std::move(canned))
+		{
+			if (!tls_test_keys().ready) return;
+
+			Samurai::IO::Net::InetSocketAddress any((uint16_t) 0);
+			server = Samurai::IO::Net::ServerSocket::create(this, any);
+			if (!server || server->getFD() == -1) return;
+			if (!server->listen()) return;
+			port = server->getLocalPort();
+		}
+
+		~TlsCannedServer() override { accepted.reset(); server.reset(); }
+
+		TlsCannedServer(const TlsCannedServer&) = delete;
+		TlsCannedServer& operator=(const TlsCannedServer&) = delete;
+
+		bool ready() const { return server && port != 0 && tls_test_keys().ready; }
+		uint16_t getPort() const { return port; }
+
+		URL url(const char* path) const
+		{
+			return URL("https://127.0.0.1:" + std::to_string(port) + path);
+		}
+
+	protected:
+		void EventAcceptError(const Samurai::IO::Net::ServerSocket*, const char*) override { }
+
+		void EventAcceptSocket(const Samurai::IO::Net::ServerSocket*,
+			std::shared_ptr<Samurai::IO::Net::Socket> socket) override
+		{
+			accepted = socket;
+			accepted->setEventHandler(this);
+
+			const bool untrusted = Samurai::IO::Net::TlsFactory::defaultAllowUntrusted();
+			Samurai::IO::Net::TlsFactory::setDefaultAllowUntrusted(true);
+			const bool initialized = accepted->TLSInitialize(true);
+			Samurai::IO::Net::TlsFactory::setDefaultAllowUntrusted(untrusted);
+
+			if (!initialized) { accepted.reset(); return; }
+			accepted->TLSsendHandshake();
+		}
+
+		void EventTLSConnected(const Samurai::IO::Net::Socket*) override { }
+
+		void EventDataAvailable(const Samurai::IO::Net::Socket* which) override
+		{
+			char scratch[4096];
+			size_t got = 0;
+			std::error_code ec;
+
+			Samurai::IO::Net::Socket* socket = const_cast<Samurai::IO::Net::Socket*>(which);
+			if (socket->read(scratch, sizeof(scratch), got, ec) !=
+				Samurai::IO::ReadResult::Ok) return;
+
+			request.append(scratch, got);
+			if (request.find("\r\n\r\n") == std::string::npos) return;
+
+			socket->write(reply.data(), reply.size(), ec);
+			accepted.reset();
+		}
+
+		void EventDisconnected(const Samurai::IO::Net::Socket*) override { }
 
 	private:
 		std::shared_ptr<Samurai::IO::Net::ServerSocket> server;
@@ -731,13 +820,92 @@ EXO_TEST(http_client_rejects_a_bad_url,
 	return events.done && !events.ok && events.status == Status::InvalidUrl;
 });
 
+/* https is supported now; a scheme this client does not speak is not. */
 EXO_TEST(http_client_rejects_a_non_http_scheme,
 {
 	ClientRecorder events;
 	Client client(&events);
-	client.get(URL("https://example.org/"));
+	client.get(URL("ftp://example.org/"));
 
 	return events.done && events.status == Status::InvalidUrl;
+});
+
+EXO_TEST(http_client_accepts_the_https_scheme,
+{
+	/*
+	 * Refused for want of a reachable server rather than for the scheme: port 1
+	 * on the loopback interface has nothing listening, so this gets as far as
+	 * trying to connect, which a rejected scheme never would.
+	 */
+	ClientRecorder events;
+	Client client(&events);
+	client.get(URL("https://127.0.0.1:1/"));
+
+	http_pump([&] { return events.done; });
+	return events.done && events.status != Status::InvalidUrl;
+});
+
+EXO_TEST(http_client_fetches_over_tls,
+{
+	TlsCannedServer server(LENGTH_RESPONSE);
+	if (!server.ready()) return false;
+
+	ClientRecorder events;
+	Client::Options options;
+	options.allowUntrustedCertificate = true;
+	Client client(&events, options);
+	client.get(server.url("/over-tls"));
+
+	http_pump([&] { return events.done; });
+
+	return events.ok
+		&& events.status == Status::Ok
+		&& events.response.getStatusCode() == 200
+		&& events.response.getBody() == "hello world"
+		&& server.request.find("GET /over-tls ") != std::string::npos;
+});
+
+/*
+ * The one that matters: the same server, with the option left alone. A
+ * self-signed certificate is what an attacker presents, so the default has to
+ * refuse it rather than encrypt a conversation with whoever answered.
+ */
+EXO_TEST(http_client_refuses_an_unverifiable_certificate_by_default,
+{
+	TlsCannedServer server(LENGTH_RESPONSE);
+	if (!server.ready()) return false;
+
+	ClientRecorder events;
+	Client client(&events);
+	client.get(server.url("/over-tls"));
+
+	http_pump([&] { return events.done; });
+
+	return events.done && !events.ok && events.status == Status::TlsFailed;
+});
+
+/*
+ * https against a plain-HTTP port gives up on the deadline rather than failing
+ * the handshake: the server reads the ClientHello, finds no end of headers in
+ * it, and says nothing. What matters is that it neither hangs for ever nor
+ * mistakes the reply for a response - so the timeout is shortened here and the
+ * outcome asserted to be a failure with no response.
+ */
+EXO_TEST(http_client_over_https_to_a_plain_server_times_out,
+{
+	CannedServer server(LENGTH_RESPONSE);
+	if (!server.ready()) return false;
+
+	ClientRecorder events;
+	Client::Options options;
+	options.allowUntrustedCertificate = true;
+	options.timeout = std::chrono::milliseconds(300);
+	Client client(&events, options);
+	client.get(URL("https://127.0.0.1:" + std::to_string(server.getPort()) + "/"));
+
+	http_pump([&] { return events.done; });
+
+	return events.done && !events.ok && events.status == Status::RequestTimeout;
 });
 
 EXO_TEST(http_client_fetches_from_a_local_server,
