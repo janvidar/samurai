@@ -88,6 +88,7 @@ const char* Samurai::IO::Net::HTTP::toString(Samurai::IO::Net::HTTP::Status stat
 		case Status::Disconnected:      return "the peer closed early";
 		case Status::MalformedResponse: return "malformed response";
 		case Status::ResponseTooLarge:  return "response too large";
+		case Status::TlsFailed:         return "the TLS handshake failed";
 		case Status::Aborted:           return "abandoned";
 	}
 	return "unknown";

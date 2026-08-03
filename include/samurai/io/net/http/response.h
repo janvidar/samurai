@@ -43,6 +43,7 @@ enum class Status
 	Disconnected,       /**< the peer closed before the response was complete */
 	MalformedResponse,
 	ResponseTooLarge,
+	TlsFailed,          /**< the TLS handshake failed, or the certificate was refused */
 	Aborted
 };
 
