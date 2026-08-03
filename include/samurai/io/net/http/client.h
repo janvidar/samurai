@@ -57,13 +57,15 @@ class RequestEventHandler : public Samurai::IO::Net::EventHandler
  * unless the caller sets Options::allowUntrustedCertificate, which exists for a
  * test server and for a peer authenticated some other way, and is off.
  *
- * Otherwise the scope is what a UPnP gateway needs and no more. Not supported,
- * each for a reason:
+ * Following a redirect is available but off, Options::maxRedirects being zero:
+ * chasing a Location: from a device on the local network that has not been
+ * authenticated - which is what this was first written to talk to - hands that
+ * device a request-forgery primitive, so a 3xx is reported with its body instead
+ * and a caller that wants one followed says so. An https response is never
+ * followed to a plain http target whatever that option says.
  *
- *  - Redirects, unless Options::maxRedirects says otherwise. Following a
- *    Location: from an unauthenticated device on the LAN is a request-forgery
- *    primitive, so not following is the default and a 3xx is reported with its
- *    body instead.
+ * Not supported at all, each for a reason:
+ *
  *  - Connection reuse and pipelining. Every request sends Connection: close. A
  *    port mapping is two requests, so reuse buys nothing and costs a class of
  *    stale-connection faults.
