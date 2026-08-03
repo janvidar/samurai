@@ -186,6 +186,13 @@ set(SAMURAI_SOURCES
     src/io/net/dns/resolver-pool.cpp
     src/io/net/http/client.cpp
     src/io/net/http/response.cpp
+    src/io/net/upnp/description.cpp
+    src/io/net/upnp/error.cpp
+    src/io/net/upnp/gateway.cpp
+    src/io/net/upnp/portmap.cpp
+    src/io/net/upnp/portmapper.cpp
+    src/io/net/upnp/soap.cpp
+    src/io/net/upnp/ssdp.cpp
     src/util/base32.cpp
     src/util/bwestimation.cpp
     src/util/format.cpp

@@ -19,16 +19,11 @@ add_executable(netcat     applications/netcat/netcat.cpp)
 add_executable(wget       applications/wget/wget.cpp)
 add_executable(interfaces applications/net/interfaces.cpp)
 
-# NOTE: upnplist needs all three translation units. The old Makefile listed
-# only upnplist.cpp in test_SOURCES and relied on a separate variable for the
-# other two.
-add_executable(upnplist
-    applications/upnplist/upnp.cpp
-    applications/upnplist/upnpworker.cpp
-    applications/upnplist/upnplist.cpp)
+add_executable(upnplist   applications/upnplist/upnplist.cpp)
+add_executable(portmap    applications/portmap/portmap.cpp)
 
 set(SAMURAI_TEST_APPS
-    testtiger dnslookup netcat wget interfaces upnplist)
+    testtiger dnslookup netcat wget interfaces upnplist portmap)
 
 foreach(app IN LISTS SAMURAI_TEST_APPS)
     # samurai::samurai resolves to whichever library flavour is primary, so the
@@ -61,7 +56,7 @@ else()
     if(NOT Exotic_FOUND)
         message(STATUS
             "Samurai: exotic not found - skipping the test/exotic suite. Run "
-            "'git submodule update --init' to enable ~800 additional tests.")
+            "'git submodule update --init' to enable ~930 additional tests.")
         return()
     endif()
 endif()
@@ -89,6 +84,9 @@ exotic_add_tests(autotest
         exotic/string.tcc
         exotic/timer.tcc
         exotic/tls.tcc
+        exotic/upnp_discovery.tcc
+        exotic/upnp_gateway.tcc
+        exotic/upnp_soap.tcc
         exotic/url.tcc
         exotic/xml.tcc
     LIBRARIES samurai::samurai

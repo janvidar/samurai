@@ -3,8 +3,8 @@ Samurai
 
 A portable C++ platform abstraction library: buffers, files and directories,
 unicode, compression, sockets (TCP/UDP/multicast) with four socket-monitor
-backends, a DNS resolver, an XML reader, an HTTP/1.1 client, and Tiger/TigerTree
-hashing.
+backends, a DNS resolver, an XML reader, an HTTP/1.1 client, UPnP gateway port
+mapping, and Tiger/TigerTree hashing.
 
 
 Building
@@ -96,7 +96,18 @@ Tests
 -----
 
 The programs under test/applications are interactive tools (netcat, wget,
-dnslookup, ...). They are built, but not run by ctest.
+dnslookup, upnplist, portmap, ...). They are built, but not run by ctest.
+
+upnplist and portmap are the two that need a UPnP gateway on the network, which
+no automated test can assume. Both take --url to skip the search and read a
+description directly, which is also how they are exercised against a stub:
+
+    ./build/test/upnplist
+    ./build/test/portmap external
+    ./build/test/portmap --lease 1200 add 8080
+    ./build/test/portmap list
+    ./build/test/portmap del 8080
+    ./build/test/portmap --url http://192.168.1.1:5000/rootDesc.xml add 8080
 
 The automated suite lives in test/exotic and is written for the "exotic" test
 framework, pinned as a submodule in third_party/exotic and built as part of the
