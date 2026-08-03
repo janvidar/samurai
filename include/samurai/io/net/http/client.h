@@ -119,7 +119,11 @@ class Client final
 		 *
 		 * This is how a UPnP mapping learns which of its addresses faces the
 		 * gateway - NetworkInterface cannot answer it, having one address per
-		 * interface and only for Version::IPv4. Null until connected.
+		 * interface and only for Version::IPv4.
+		 *
+		 * Null until connected, and remembered afterwards: the socket is closed
+		 * before the response is delivered, so a handler asking where its answer
+		 * came from would otherwise always get nothing.
 		 */
 		const InetAddress* getLocalAddress() const;
 
@@ -150,6 +154,8 @@ class Client final
 		Samurai::IO::Buffer incoming;
 
 		ResponseParser parser;
+		/* Kept past the socket, so it survives being asked for from a handler. */
+		InetAddress local_address;
 		bool busy = false;
 		bool reported = false;
 

@@ -90,8 +90,8 @@ void Samurai::IO::Net::HTTP::Client::internal_teardown()
 const Samurai::IO::Net::InetAddress*
 Samurai::IO::Net::HTTP::Client::getLocalAddress() const
 {
-	if (!socket) return nullptr;
-	return socket->getLocalAddress();
+	if (local_address.getType() == InetAddress::Version::Unspecified) return nullptr;
+	return &local_address;
 }
 
 
@@ -129,6 +129,7 @@ void Samurai::IO::Net::HTTP::Client::request(Method method, const URL& url,
 	parser.reset();
 	incoming.clear();
 	outgoing.clear();
+	local_address = InetAddress();
 	reported = false;
 
 	if (!url.isValid() || url.getHostname().empty() || !url.getEffectivePort())
@@ -239,6 +240,15 @@ void Samurai::IO::Net::HTTP::Client::internal_complete()
 
 void Samurai::IO::Net::HTTP::Client::EventConnected(const Socket*)
 {
+	/* Taken now rather than when it is asked for: the socket is closed before
+	   the response is delivered, and this is the answer to which of the host's
+	   addresses reaches the peer. */
+	if (socket)
+	{
+		if (const InetAddress* local = socket->getLocalAddress())
+			local_address = *local;
+	}
+
 	internal_send();
 }
 
