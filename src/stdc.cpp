@@ -9,6 +9,43 @@
 #include <stdlib.h>
 #include <string.h>
 
+/*
+ * ASCII only, and taking an unsigned char: the ctype functions are defined for
+ * EOF and for unsigned char values, so handing them a plain char sign-extends
+ * every byte above 0x7f into a negative index. UTF-8 text is full of those.
+ */
+static char samurai_ascii_lower(char ch) {
+	const unsigned char c = (unsigned char) ch;
+	return (c >= 'A' && c <= 'Z') ? (char) (c - 'A' + 'a') : ch;
+}
+
+bool Samurai::Util::iequals(std::string_view a, std::string_view b) {
+	if (a.size() != b.size()) return false;
+
+	for (size_t n = 0; n < a.size(); n++)
+		if (samurai_ascii_lower(a[n]) != samurai_ascii_lower(b[n])) return false;
+
+	return true;
+}
+
+bool Samurai::Util::istarts_with(std::string_view str, std::string_view prefix) {
+	if (prefix.size() > str.size()) return false;
+	return Samurai::Util::iequals(str.substr(0, prefix.size()), prefix);
+}
+
+size_t Samurai::Util::ifind(std::string_view haystack, std::string_view needle) {
+	/* Everything contains the empty string, at the front - as strstr has it. */
+	if (needle.empty()) return 0;
+	if (needle.size() > haystack.size()) return std::string_view::npos;
+
+	const size_t last = haystack.size() - needle.size();
+	for (size_t at = 0; at <= last; at++)
+		if (Samurai::Util::iequals(haystack.substr(at, needle.size()), needle))
+			return at;
+
+	return std::string_view::npos;
+}
+
 static const char* samurai_skip_ws_sign(const char* value, bool* negative) {
 	*negative = false;
 	if (!value) return nullptr;

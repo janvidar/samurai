@@ -8,6 +8,7 @@
 
 #include <samurai/samurai.h>
 #include <string>
+#include <string_view>
 
 /*
  * NOTE: the C runtime has strcasecmp, strncasecmp, strdup and strcasestr under
@@ -37,6 +38,26 @@ namespace Samurai {
 namespace Util {
 
 unsigned int abs(int n);
+
+/*
+ * Case-insensitive comparison over views rather than C strings.
+ *
+ * These take a length with them, so neither side has to be NUL terminated and
+ * neither is measured by walking it - which is what makes them usable on a
+ * range inside a buffer that was received rather than built here. The folding
+ * is ASCII only and deliberately so: it is protocol keywords, file extensions
+ * and header names being compared, and a locale-sensitive tolower() would make
+ * the same input compare differently on two machines.
+ */
+bool iequals(std::string_view a, std::string_view b);
+bool istarts_with(std::string_view str, std::string_view prefix);
+
+/** @return the offset of needle in haystack, or std::string_view::npos. */
+size_t ifind(std::string_view haystack, std::string_view needle);
+
+inline bool icontains(std::string_view haystack, std::string_view needle) {
+	return ifind(haystack, needle) != std::string_view::npos;
+}
 
 /*
  * These stop at the first character that is not a digit and saturate on
