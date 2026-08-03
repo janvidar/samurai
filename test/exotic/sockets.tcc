@@ -18,6 +18,7 @@
 #include <chrono>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <signal.h>
 #include <string.h>
@@ -1366,4 +1367,68 @@ EXO_TEST(sockets_released_in_its_timeout_handler,
 
 	pump([&] { return false; }, 50);
 	return !dropper.socket;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Registrations queued behind a rejected change                             */
+/*                                                                           */
+/* The kqueue backend queues its changes and submits them together on the     */
+/* next wait. kevent() abandons the rest of a changelist as soon as one       */
+/* element fails, and a rejection is ordinary: closing a descriptor removes   */
+/* its registrations, so the EV_DELETE queued when a socket was released is   */
+/* refused on the next pass. Churning sockets without pumping in between is   */
+/* what puts a rejection in front of a live registration.                    */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(sockets_a_registration_survives_a_rejected_change_beside_it,
+{
+	SocketMonitor* monitor = SocketMonitor::getInstance();
+	const size_t baseline = monitor->size();
+
+	/*
+	 * Registered, and committed by a pass of the loop, so the kernel really
+	 * holds them.
+	 */
+	std::vector<std::shared_ptr<Samurai::IO::Net::ServerSocket>> servers;
+	SocketRecorder events;
+
+	for (int n = 0; n < 160; n++)
+	{
+		InetSocketAddress any((uint16_t) 0);
+		auto server = Samurai::IO::Net::ServerSocket::create(&events, any);
+		if (server && server->listen()) servers.push_back(server);
+	}
+	if (servers.size() < 160) return true;   /* not enough descriptors here */
+
+	monitor->wait(1);
+
+	/*
+	 * Dropped together and without another pass. Closing a descriptor already
+	 * removes its registrations, so each queued deletion will be refused - and
+	 * there are now more of them queued than the eventlist could report on,
+	 * which is what made kevent() fail the whole call rather than name the
+	 * element.
+	 */
+	servers.clear();
+
+	/*
+	 * A connection that has to work, its registration queued behind all of
+	 * those. Discarding the changelist on that failure cost it its readiness
+	 * events entirely, and it sat here until something timed it out.
+	 */
+	TcpFixture fix;
+	if (!fix.ready) return false;
+
+	std::error_code ec;
+	if (fix.client->write("ping", 4, ec) != 4) return false;
+	if (!pump([&] { return fix.server_events.data_available; })) return false;
+
+	char buf[8];
+	size_t got = 0;
+	if (fix.server_events.accepted->read(buf, sizeof(buf), got, ec)
+		!= Samurai::IO::ReadResult::Ok) return false;
+	if (got != 4 || memcmp(buf, "ping", 4) != 0) return false;
+
+	pump([&] { return monitor->size() <= baseline; }, 2000);
+	return true;
 });
