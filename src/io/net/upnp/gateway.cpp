@@ -294,6 +294,14 @@ void Samurai::IO::Net::UPnP::Gateway::internal_startDescription(const URL& locat
 	Samurai::IO::Net::HTTP::Client::Options http_options;
 	http_options.timeout = options.httpTimeout;
 	http_options.limits.maxBody = options.maxDescriptionBytes;
+	/*
+	 * Said rather than inherited. The location came from a device on the local
+	 * network that has not been authenticated, so following a Location: it
+	 * returned would let it aim a request wherever it liked - the same thing the
+	 * control URL host check downstream exists to stop. That this is the client's
+	 * default today is not something to depend on from here.
+	 */
+	http_options.maxRedirects = 0;
 	http_options.userAgent = std::string(Samurai::OS::getName()) + "/"
 		+ Samurai::OS::getVersion() + " UPnP/1.1 Samurai/1.0";
 
@@ -463,6 +471,9 @@ void Samurai::IO::Net::UPnP::Gateway::internal_sendAction(Action* action)
 
 	Samurai::IO::Net::HTTP::Client::Options http_options;
 	http_options.timeout = options.httpTimeout;
+	/* As for the description: the control URL is the device's own answer, and a
+	   redirect from it is not to be followed. */
+	http_options.maxRedirects = 0;
 	http_options.userAgent = std::string(Samurai::OS::getName()) + "/"
 		+ Samurai::OS::getVersion() + " UPnP/1.1 Samurai/1.0";
 
