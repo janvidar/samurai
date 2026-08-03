@@ -11,9 +11,65 @@
 #include <samurai/io/net/socketbase.h>
 #include <samurai/io/net/socketevent.h>
 #include <samurai/io/net/socketmonitor.h>
+#include <samurai/timer.h>
 
+#include <algorithm>
+#include <chrono>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
+
+namespace {
+
+/*
+ * The smallest listen queue a server is given, whatever it asked for.
+ *
+ * The queue holds connections the kernel has completed and this process has not
+ * accepted yet, so it is what covers a burst arriving between two turns of the
+ * event loop. A handful - which is the historical default here - drops the rest
+ * before anything in userspace can see them. The system clamps this down to its
+ * own maximum on its own.
+ */
+constexpr size_t MIN_LISTEN_BACKLOG = 128;
+
+/** How long a listener that ran out of descriptors is left alone. */
+constexpr int ACCEPT_BACKOFF_MS = 250;
+
+/*
+ * Out of file descriptors is not a fault of the connection that exposed it, and
+ * it does not go away by being reported: the connection stays queued, which keeps
+ * the listener readable, and every monitor backend here is level triggered - so
+ * returning and waiting to be told again is a busy loop at full speed. Stop
+ * watching the listener for a moment instead and pick it up afterwards, by which
+ * time whatever was holding the descriptors may have let go.
+ *
+ * Owns itself, and retires once the listener is armed again or once the listener
+ * is gone. Only one can exist at a time, because a listener that is not being
+ * watched produces no further accept attempts.
+ */
+class AcceptBackoff : public Samurai::TimerListener
+{
+	public:
+		explicit AcceptBackoff(std::weak_ptr<Samurai::IO::Net::SocketBase> listener_)
+			: listener(std::move(listener_))
+			, timer(this, std::chrono::milliseconds(ACCEPT_BACKOFF_MS), true)
+		{
+		}
+
+		void EventTimeout(Samurai::Timer*) override
+		{
+			if (std::shared_ptr<Samurai::IO::Net::SocketBase> sock = listener.lock())
+				sock->setMonitor(Samurai::IO::Net::SocketMonitor::Triggers::Read);
+
+			delete this;
+		}
+
+	private:
+		std::weak_ptr<Samurai::IO::Net::SocketBase> listener;
+		Samurai::Timer timer;
+};
+
+}
 
 Samurai::IO::Net::ServerSocket::ServerSocket() : eventHandler(nullptr) {}
 
@@ -63,8 +119,9 @@ bool Samurai::IO::Net::ServerSocket::listen(size_t backlog, std::error_code& ec)
 	if (!setNonBlocking(true, ec)) return false;
 	if (!bind(addr.get(), ec)) return false;
 
-	/* NOTE: backlog is a size_t here and an int in the syscall. */
-	if (::listen(sd, (int) backlog) == -1)
+	/* NOTE: backlog is a size_t here and an int in the syscall. The caller's
+	   figure is a request rather than a ceiling; see MIN_LISTEN_BACKLOG. */
+	if (::listen(sd, (int) std::max(backlog, MIN_LISTEN_BACKLOG)) == -1)
 	{
 		ec = Samurai::system_error(Samurai::IO::Net::net_error());
 		QERR("Unable to listen to socket: %s (%d)", strerror(Samurai::IO::Net::net_error()), Samurai::IO::Net::net_error());
@@ -98,12 +155,22 @@ void Samurai::IO::Net::ServerSocket::internal_accept() {
 	socket_t new_sd = ::accept(sd, (sockaddr*) &new_addr, &addr_size);
 
 	if (new_sd == INVALID_SOCKET) {
+		const int error = Samurai::IO::Net::net_error();
+
 		// Transient: nothing to report to the event handler.
-		if (Samurai::IO::Net::net_error() == EAGAIN || Samurai::IO::Net::net_error() == EWOULDBLOCK ||
-		    Samurai::IO::Net::net_error() == EINTR  || Samurai::IO::Net::net_error() == ECONNABORTED)
+		if (error == EAGAIN || error == EWOULDBLOCK ||
+		    error == EINTR  || error == ECONNABORTED)
 			return;
 
-		if (eventHandler) eventHandler->EventAcceptError(this, strerror(Samurai::IO::Net::net_error()));
+		/* See AcceptBackoff: reporting this and returning is a busy loop. */
+		if (error == EMFILE || error == ENFILE) {
+			QERR("Out of file descriptors accepting a connection; pausing the listener");
+			disableMonitor();
+			new AcceptBackoff(weak_from_this());
+			return;
+		}
+
+		if (eventHandler) eventHandler->EventAcceptError(this, strerror(error));
 		return;
 	}
 
