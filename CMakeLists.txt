@@ -17,8 +17,6 @@ include(CMakePackageConfigHelpers)
 # Options
 # ---------------------------------------------------------------------------
 
-# The old build defaulted to DEBUG=YES, which is what enables the QDBG/QERR
-# tracing macros. Keep that default for single-config generators.
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type" FORCE)
 endif()
@@ -26,6 +24,15 @@ set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
     Debug Release RelWithDebInfo MinSizeRel)
 
 option(SAMURAI_BUILD_TESTS "Build the test and example programs" ON)
+
+# The old build defaulted to DEBUG=YES, which is what the QDBG/QERR macros in
+# debug/dbg.h compile against. That used to be tied to a Debug build, so the
+# build type chosen for symbols and sanitizers decided whether the tracing
+# subsystem was compiled in as well - and it writes whatever it is given,
+# including a consumer's secrets, to files. The two are separate questions now,
+# and this one answers no unless asked.
+option(SAMURAI_TRACE
+    "Compile in the QDBG/QNET/QHUB tracing subsystem (writes plaintext logs)" OFF)
 
 option(SAMURAI_SANITIZE
     "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
@@ -281,10 +288,12 @@ foreach(target IN ITEMS samurai_objects ${SAMURAI_LIBRARIES})
     # NOTE: These have to be PUBLIC, not PRIVATE. _FILE_OFFSET_BITS changes
     # off_t, so a consumer compiled without it would disagree with the library
     # about object layout.
+    # DEBUG is PUBLIC because dbg.h is a public header and a consumer that
+    # disagreed about it would call sinks the library did not compile.
     target_compile_definitions(${target}
         PUBLIC
             _FILE_OFFSET_BITS=64
-            $<$<CONFIG:Debug>:DEBUG>
+            $<$<BOOL:${SAMURAI_TRACE}>:DEBUG>
         PRIVATE
             ZLIB
             BZIP2)
@@ -372,6 +381,7 @@ message(STATUS "  TLS             : ${SAMURAI_TLS_NAME}")
 message(STATUS "  TLS versions    : 1.2 minimum, 1.3 preferred")
 message(STATUS "  DNS resolver    : thread pool")
 message(STATUS "  Build tests     : ${SAMURAI_BUILD_TESTS}")
+message(STATUS "  Tracing (DEBUG) : ${SAMURAI_TRACE}")
 if(SAMURAI_SANITIZE)
     message(STATUS "  Sanitizers      : address, undefined")
     message(STATUS "  Leak detection  : ${SAMURAI_SANITIZE_LEAKS}")
