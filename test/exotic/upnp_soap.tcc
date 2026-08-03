@@ -359,42 +359,50 @@ EXO_TEST(upnp_soap_every_prefix_of_a_fault_is_answered,
 /* Error naming                                                             */
 /* ------------------------------------------------------------------------- */
 
+/*
+ * Walked over the enumerators rather than a list written out here, which a value
+ * added later would not reach, and compared against the fallback rather than
+ * against empty, since that is what a value with no case of its own returns.
+ *
+ * Device is last; anything inserted before it is covered by construction.
+ */
 EXO_TEST(upnp_error_names_every_value,
 {
-	const Error all[] = {
-		Error::None, Error::NoGateway, Error::DescriptionFailed, Error::NoService,
-		Error::Network, Error::BadResponse, Error::Unsupported, Error::Cancelled,
-		Error::Reentrant, Error::Device };
-
-	for (const Error error : all)
-		if (!toString(error) || !*toString(error)) return false;
-
+	for (int n = 0; n <= (int) Error::Device; n++)
+	{
+		const char* name = toString((Error) n);
+		if (!name || !*name) return false;
+		if (std::string(name) == "unknown error") return false;
+	}
 	return true;
 });
 
+/*
+ * DeviceError carries the protocol's own numbers, so there is no range to walk.
+ * Driven from toDeviceError() instead: every code it recognises has to have a
+ * name, which fails for an enumerator added to one and not the other.
+ */
 EXO_TEST(upnp_device_error_names_every_value,
 {
-	const DeviceError all[] = {
-		DeviceError::Unknown, DeviceError::InvalidAction, DeviceError::InvalidArgs,
-		DeviceError::ActionFailed, DeviceError::ArgumentValueInvalid,
-		DeviceError::ArgumentValueOutOfRange,
-		DeviceError::OptionalActionNotImplemented, DeviceError::OutOfMemory,
-		DeviceError::HumanInterventionRequired, DeviceError::StringArgumentTooLong,
-		DeviceError::ActionNotAuthorized, DeviceError::SignatureFailure,
-		DeviceError::SpecifiedArrayIndexInvalid, DeviceError::NoSuchEntryInArray,
-		DeviceError::WildCardNotPermittedInSrcIP,
-		DeviceError::WildCardNotPermittedInExtPort,
-		DeviceError::ConflictInMappingEntry, DeviceError::SamePortValuesRequired,
-		DeviceError::OnlyPermanentLeasesSupported,
-		DeviceError::RemoteHostOnlySupportsWildcard,
-		DeviceError::ExternalPortOnlySupportsWildcard,
-		DeviceError::NoPortMapsAvailable, DeviceError::ConflictWithOtherMechanisms,
-		DeviceError::WildCardNotPermittedInIntPort };
+	const std::string fallback = "unrecognised error code";
+	size_t named = 0;
 
-	for (const DeviceError error : all)
-		if (!toString(error) || !*toString(error)) return false;
+	for (uint32_t code = 0; code <= 0xffff; code++)
+	{
+		const DeviceError error = toDeviceError((uint16_t) code);
+		if (error == DeviceError::Unknown) continue;
 
-	return true;
+		const char* name = toString(error);
+		if (!name || !*name) return false;
+		if (std::string(name) == fallback) return false;
+		named++;
+	}
+
+	/* Unknown is the one value the fallback belongs to. */
+	if (std::string(toString(DeviceError::Unknown)) != fallback) return false;
+
+	/* And the mapping is not empty, which would make the loop above vacuous. */
+	return named >= 20;
 });
 
 EXO_TEST(upnp_device_error_maps_the_codes_it_knows,
