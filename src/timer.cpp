@@ -157,7 +157,14 @@ int Samurai::TimerManager::timeToNext() const
 
 	if (!found) return -1;
 
-	return (int) std::chrono::duration_cast<std::chrono::milliseconds>(best - now).count();
+	/*
+	 * Rounded up, because this is a poll timeout and the deadline has to have
+	 * passed by the time the poll returns. Truncating gives a wait that is
+	 * fractionally too short, so the caller finds nothing due and polls again -
+	 * spinning for the remainder of the millisecond rather than sleeping
+	 * through it.
+	 */
+	return (int) std::chrono::ceil<std::chrono::milliseconds>(best - now).count();
 }
 
 

@@ -84,6 +84,13 @@ class SocketMonitor
 		 * the given amount of milliseconds before returning.
 		 * Events are triggered automatically.
 		 *
+		 * Armed timers are fired here as well, and the poll is cut short when
+		 * one is due sooner than the given timeout. This is what drives
+		 * Samurai::Timer, so a caller that never reaches this has no working
+		 * timers - the connect timeout among them. It also means the timeout is
+		 * an upper bound and not a sleep: a caller must not count passes to
+		 * measure time.
+		 *
 		 * NOTE: readiness of the descriptor is not the whole story once TLS is
 		 * involved. Reading one TLS record takes all of it off the descriptor
 		 * and decrypts it, so a caller that asked for less than the record held

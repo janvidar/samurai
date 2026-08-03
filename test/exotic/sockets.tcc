@@ -78,6 +78,9 @@ class SocketRecorder :
 		int data_available_count = 0;
 		int error_count = 0;
 
+		/* Only meaningful once error is set. */
+		Samurai::IO::Net::SocketError last_error = Samurai::IO::Net::SocketError::SocketUnknown;
+
 		std::string datagram_payload;
 		std::shared_ptr<Socket> accepted;
 
@@ -130,10 +133,11 @@ class SocketRecorder :
 		void EventTLSConnected(const Socket*) override { tls_connected = true; }
 		void EventTLSDisconnected(const Socket*) override { tls_disconnected = true; }
 
-		void EventError(const Socket*, Samurai::IO::Net::SocketError, const char*) override
+		void EventError(const Socket*, Samurai::IO::Net::SocketError which, const char*) override
 		{
 			error = true;
 			error_count++;
+			last_error = which;
 		}
 
 		void EventGotDatagram(Samurai::IO::Net::DatagramSocket*,
@@ -1268,4 +1272,74 @@ EXO_TEST(sockets_tls_releases_its_registrations,
 	}
 
 	return monitor->size() == baseline;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Connect timeout                                                           */
+/*                                                                           */
+/* The timer connect() arms could not fire before SocketMonitor::wait() drove */
+/* TimerManager, so this reports whatever the network says on a host that     */
+/* answers, and the timeout on one that does not.                            */
+/* ------------------------------------------------------------------------- */
+
+EXO_TEST(sockets_connect_timeout_is_settable,
+{
+	SocketRecorder events;
+	auto socket = Socket::create(&events, std::string("127.0.0.1"), (uint16_t) 9);
+	if (!socket) return false;
+
+	socket->setConnectTimeout(std::chrono::milliseconds(250));
+	return socket->getConnectTimeout() == std::chrono::milliseconds(250);
+});
+
+/*
+ * 192.0.2.0/24 is RFC 5737 TEST-NET-1, which is not routed, so a connect there
+ * hangs rather than being refused. A host behind a firewall that answers with
+ * an ICMP rejection instead reports an error, which is a legitimate outcome
+ * here - what must not happen is silence.
+ */
+EXO_TEST(sockets_connect_to_a_black_hole_gives_up,
+{
+	SocketRecorder events;
+	auto socket = Socket::create(&events, std::string("192.0.2.1"), (uint16_t) 80);
+	if (!socket) return false;
+
+	socket->setConnectTimeout(std::chrono::milliseconds(300));
+	socket->connect();
+
+	if (!pump([&] { return events.error; }, 5000)) return false;
+
+	return events.last_error == Samurai::IO::Net::SocketError::ConnectionTimeout
+		|| events.last_error == Samurai::IO::Net::SocketError::HostUnreachable
+		|| events.last_error == Samurai::IO::Net::SocketError::NetUnreachable
+		|| events.last_error == Samurai::IO::Net::SocketError::SocketUnknown;
+});
+
+/* Releasing the socket from inside the timeout handler must be safe: a timer
+   callback holds no reference keeping it alive, unlike a monitor dispatch. */
+EXO_TEST(sockets_released_in_its_timeout_handler,
+{
+	struct Dropper : public Samurai::IO::Net::SocketEventHandler
+	{
+		std::shared_ptr<Socket> socket;
+		bool reported = false;
+
+		void EventError(const Socket*, Samurai::IO::Net::SocketError, const char*) override
+		{
+			reported = true;
+			socket.reset();
+		}
+	};
+
+	Dropper dropper;
+	dropper.socket = Socket::create(&dropper, std::string("192.0.2.1"), (uint16_t) 80);
+	if (!dropper.socket) return false;
+
+	dropper.socket->setConnectTimeout(std::chrono::milliseconds(200));
+	dropper.socket->connect();
+
+	if (!pump([&] { return dropper.reported; }, 5000)) return false;
+
+	pump([&] { return false; }, 50);
+	return !dropper.socket;
 });
