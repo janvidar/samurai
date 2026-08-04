@@ -1018,6 +1018,57 @@ EXO_TEST(http_client_refuses_an_unverifiable_certificate_by_default,
 });
 
 /*
+ * The case that verification exists for: a certificate that does check out, over
+ * a real handshake, with nothing relaxed.
+ *
+ * This needs the fixture's own certificate offered as a trust anchor, because it
+ * is signed by nothing the system store has heard of - and it needs the
+ * subjectAltName that testkeys.h now puts in it, since the peer name being
+ * checked is the address 127.0.0.1 rather than a hostname. The anchor is cleared
+ * again so that the case above, which requires the same certificate to be
+ * refused, does not depend on the order the two run in.
+ */
+EXO_TEST(http_client_accepts_a_verifiable_certificate,
+{
+	TlsCannedServer server(LENGTH_RESPONSE);
+	if (!server.ready()) return false;
+
+	Samurai::IO::Net::TlsFactory::clearTrustAnchors();
+	Samurai::IO::Net::TlsFactory::addTrustAnchor(
+		tls_test_keys().cert_path.c_str());
+
+	ClientRecorder events;
+	/* Default options: allowUntrustedCertificate is false. */
+	Client client(&events);
+	client.get(server.url("/verified"));
+
+	http_pump([&] { return events.done; });
+
+	Samurai::IO::Net::TlsFactory::clearTrustAnchors();
+
+	return events.ok
+		&& events.response.getStatusCode() == 200
+		&& events.response.getBody() == "hello world";
+});
+
+/* And the anchor is what did it, not the verification having been skipped. */
+EXO_TEST(http_client_still_refuses_the_same_certificate_without_the_anchor,
+{
+	TlsCannedServer server(LENGTH_RESPONSE);
+	if (!server.ready()) return false;
+
+	Samurai::IO::Net::TlsFactory::clearTrustAnchors();
+
+	ClientRecorder events;
+	Client client(&events);
+	client.get(server.url("/verified"));
+
+	http_pump([&] { return events.done; });
+
+	return events.done && !events.ok && events.status == Status::TlsFailed;
+});
+
+/*
  * https against a plain-HTTP port gives up on the deadline rather than failing
  * the handshake: the server reads the ClientHello, finds no end of headers in
  * it, and says nothing. What matters is that it neither hangs for ever nor

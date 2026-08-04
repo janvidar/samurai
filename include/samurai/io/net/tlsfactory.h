@@ -11,6 +11,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace Samurai {
 namespace IO {
@@ -120,6 +121,26 @@ class TlsFactory {
 		static std::optional<Sha256Digest> getOwnCertificateSHA256();
 
 		/**
+		 * Trust the certificates in a PEM file in addition to the system store.
+		 *
+		 * For a deployment whose peers are signed by a private authority the
+		 * system store has never heard of - which is the only way to verify such
+		 * a peer at all, short of turning verification off and getting a channel
+		 * nothing authenticates.
+		 *
+		 * Process wide and additive, and read when a connection is initialized,
+		 * so a call affects connections opened after it. Adding an anchor widens
+		 * what every later connection accepts, so it is not the way to pin one
+		 * peer - keyprint matching is.
+		 */
+		static void addTrustAnchor(const char* pem_file);
+
+		/** Go back to the system store alone. */
+		static void clearTrustAnchors();
+
+		static const std::vector<std::string>& getTrustAnchors();
+
+		/**
 		 * Whether this connection accepts a peer whose certificate cannot be
 		 * verified.
 		 *
@@ -188,6 +209,7 @@ class TlsFactory {
 		/* The process-wide defaults, and this connection's copy of them taken
 		   at construction. */
 		static bool allow_untrusted;
+		static std::vector<std::string> trust_anchors;
 		static bool require_client_cert;
 		bool allow_untrusted_conn;
 		bool require_client_cert_conn;

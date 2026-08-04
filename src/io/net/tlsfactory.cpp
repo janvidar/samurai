@@ -11,6 +11,7 @@
 std::unique_ptr<Samurai::IO::File> Samurai::IO::Net::TlsFactory::pem_key;
 std::unique_ptr<Samurai::IO::File> Samurai::IO::Net::TlsFactory::pem_cert;
 bool Samurai::IO::Net::TlsFactory::allow_untrusted = false;
+std::vector<std::string> Samurai::IO::Net::TlsFactory::trust_anchors;
 bool Samurai::IO::Net::TlsFactory::require_client_cert = false;
 
 Samurai::IO::Net::TlsFactory::TlsFactory()
@@ -81,3 +82,21 @@ Samurai::IO::File* Samurai::IO::Net::TlsFactory::getCertificate()
 	return pem_cert.get();
 }
 
+
+void Samurai::IO::Net::TlsFactory::addTrustAnchor(const char* pem_file)
+{
+	if (!pem_file || !*pem_file) return;
+	trust_anchors.push_back(pem_file);
+}
+
+
+void Samurai::IO::Net::TlsFactory::clearTrustAnchors()
+{
+	trust_anchors.clear();
+}
+
+
+const std::vector<std::string>& Samurai::IO::Net::TlsFactory::getTrustAnchors()
+{
+	return trust_anchors;
+}
