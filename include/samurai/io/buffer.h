@@ -39,24 +39,40 @@ class Buffer {
 		
 	public:
 	
-		void append(const char* data, size_t len);
-		void append(std::span<const char> data) { append(data.data(), data.size()); }
-		void append(const char* string);
-		void append(const std::string& string);
-		void append(const std::string_view string);
-		void append(char c);
-		void append(int number);
-		void append(uint64_t number);
-		void append(Buffer* buffer, size_t len);
-		void append(const Buffer& buffer);
-		void append(const Buffer& buffer, size_t len);
+		/**
+		 * Append to the buffer.
+		 *
+		 * @return false if the buffer could not be grown, in which case
+		 *         **nothing was appended** - not a part of it.
+		 *
+		 * Worth checking on any path that appends something a peer sent, because
+		 * a dropped append is otherwise indistinguishable from a short message:
+		 * the buffer is simply missing bytes, and only the log says so.
+		 *
+		 * Deliberately not [[nodiscard]]. Most of the several hundred callers are
+		 * composing a protocol command a few dozen bytes long, where failing to
+		 * allocate is not an outcome to handle separately from the process being
+		 * out of memory altogether - and requiring all of them to say so would be
+		 * noise that buries the callers where it does matter.
+		 */
+		bool append(const char* data, size_t len);
+		bool append(std::span<const char> data) { return append(data.data(), data.size()); }
+		bool append(const char* string);
+		bool append(const std::string& string);
+		bool append(const std::string_view string);
+		bool append(char c);
+		bool append(int number);
+		bool append(uint64_t number);
+		bool append(Buffer* buffer, size_t len);
+		bool append(const Buffer& buffer);
+		bool append(const Buffer& buffer, size_t len);
 		
 		/**
 		 * Append data binary as little endian
 		 */
-		void appendBinary(uint16_t number, BinaryMode endiannes = BinaryMode::NativeEndian);
-		void appendBinary(uint32_t number, BinaryMode endiannes = BinaryMode::NativeEndian);
-		void appendBinary(uint64_t number, BinaryMode endiannes = BinaryMode::NativeEndian);
+		bool appendBinary(uint16_t number, BinaryMode endiannes = BinaryMode::NativeEndian);
+		bool appendBinary(uint32_t number, BinaryMode endiannes = BinaryMode::NativeEndian);
+		bool appendBinary(uint64_t number, BinaryMode endiannes = BinaryMode::NativeEndian);
 	
 		/** Returned by the find() family when there is no match. */
 		static constexpr size_t npos = static_cast<size_t>(-1);

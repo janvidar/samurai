@@ -66,65 +66,68 @@ Samurai::IO::Buffer& Samurai::IO::Buffer::operator=(Samurai::IO::Buffer&& other)
 Samurai::IO::Buffer::~Buffer() {
 }
 
-void Samurai::IO::Buffer::append(const char* data, size_t len_) {
+bool Samurai::IO::Buffer::append(const char* data, size_t len_) {
 	/* Tested before the comparison below, which would otherwise wrap and read
 	   as "it already fits" - taking the memcpy with an unbounded length. */
 	const bool overflows = len_ > SIZE_MAX - len;
 
 	if (overflows || (len + len_ > buf.size() && !resize(len_))) {
 		QERR("Buffer::append: unable to grow buffer, dropping %lu bytes", (unsigned long) len_);
-		return;
+		return false;
 	}
 	memcpy(&buf[len], data, len_);
 	len += len_;
+	return true;
 }
 
-void Samurai::IO::Buffer::append(const std::string& string) {
+bool Samurai::IO::Buffer::append(const std::string& string) {
 	/* NOTE: Must not go via the strlen() overload - a std::string is
 	   allowed to contain embedded NUL bytes. */
-	append(string.data(), string.size());
+	return append(string.data(), string.size());
 }
 
-void Samurai::IO::Buffer::append(const std::string_view string) {
-	append(string.data(), string.size());
+bool Samurai::IO::Buffer::append(const std::string_view string) {
+	return append(string.data(), string.size());
 }
 
-void Samurai::IO::Buffer::append(const char* string) {
-	append(string, strlen(string));
+bool Samurai::IO::Buffer::append(const char* string) {
+	return append(string, strlen(string));
 }
 
-void Samurai::IO::Buffer::append(char c) {
+bool Samurai::IO::Buffer::append(char c) {
 	if (len + 1 > buf.size() && !resize(1)) {
 		QERR("Buffer::append: unable to grow buffer, dropping 1 byte");
-		return;
+		return false;
 	}
 	buf[len++] = c;
+	return true;
 }
 
-void Samurai::IO::Buffer::append(int n) {
+bool Samurai::IO::Buffer::append(int n) {
 	const std::string num = std::to_string(n);
-	append(num.data(), num.size());
+	return append(num.data(), num.size());
 }
 
-void Samurai::IO::Buffer::append(uint64_t n) {
+bool Samurai::IO::Buffer::append(uint64_t n) {
 	const std::string num = std::to_string(n);
-	append(num.data(), num.size());
+	return append(num.data(), num.size());
 }
 
-void Samurai::IO::Buffer::append(Samurai::IO::Buffer* buffer, size_t len) {
+bool Samurai::IO::Buffer::append(Samurai::IO::Buffer* buffer, size_t len) {
 	size_t mylen = (len > buffer->size()) ? buffer->size() : len;
-	if (mylen) append(&buffer->buf[buffer->head], mylen);
+	/* Nothing to copy is not a failure. */
+	return mylen ? append(&buffer->buf[buffer->head], mylen) : true;
 }
 
-void Samurai::IO::Buffer::append(const Buffer& buffer)
+bool Samurai::IO::Buffer::append(const Buffer& buffer)
 {
-	if (buffer.size()) append(&buffer.buf[buffer.head], buffer.size());
+	return buffer.size() ? append(&buffer.buf[buffer.head], buffer.size()) : true;
 }
 
-void Samurai::IO::Buffer::append(const Buffer& buffer, size_t len)
+bool Samurai::IO::Buffer::append(const Buffer& buffer, size_t len)
 {
 	size_t mylen = (len > buffer.size()) ? buffer.size() : len;
-	if (mylen) append(&buffer.buf[buffer.head], mylen);
+	return mylen ? append(&buffer.buf[buffer.head], mylen) : true;
 }
 
 
@@ -346,24 +349,24 @@ constexpr T reorder(T value, Samurai::IO::Buffer::BinaryMode mode) noexcept
 /* bit_cast rather than a cast to char*, which reads the object through an
    unrelated type. */
 template<ByteOrdered T>
-void appendValue(Samurai::IO::Buffer& target, T number, Samurai::IO::Buffer::BinaryMode mode)
+bool appendValue(Samurai::IO::Buffer& target, T number, Samurai::IO::Buffer::BinaryMode mode)
 {
 	const auto bytes = std::bit_cast<std::array<char, sizeof(T)>>(reorder(number, mode));
-	target.append(bytes.data(), bytes.size());
+	return target.append(bytes.data(), bytes.size());
 }
 
 }
 
-void Samurai::IO::Buffer::appendBinary(uint16_t number, BinaryMode endiannes) {
-	appendValue(*this, number, endiannes);
+bool Samurai::IO::Buffer::appendBinary(uint16_t number, BinaryMode endiannes) {
+	return appendValue(*this, number, endiannes);
 }
 
-void Samurai::IO::Buffer::appendBinary(uint32_t number, BinaryMode endiannes) {
-	appendValue(*this, number, endiannes);
+bool Samurai::IO::Buffer::appendBinary(uint32_t number, BinaryMode endiannes) {
+	return appendValue(*this, number, endiannes);
 }
 
-void Samurai::IO::Buffer::appendBinary(uint64_t number, BinaryMode endiannes) {
-	appendValue(*this, number, endiannes);
+bool Samurai::IO::Buffer::appendBinary(uint64_t number, BinaryMode endiannes) {
+	return appendValue(*this, number, endiannes);
 }
 
 /*

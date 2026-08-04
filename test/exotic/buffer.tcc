@@ -412,7 +412,9 @@ EXO_TEST(buffer_append_that_cannot_fit_drops_the_data,
 	Samurai::IO::Buffer buf;
 	buf.append("hello", 5);
 
-	buf.append("x", SIZE_MAX / 2);
+	/* Reported to the caller as well as to the log: a caller appending what a
+	   peer sent cannot otherwise tell a dropped append from a short message. */
+	if (buf.append("x", SIZE_MAX / 2)) return false;
 
 	return buf.size() == 5 && buf.copyRange(0, 5) == "hello";
 });
@@ -422,9 +424,30 @@ EXO_TEST(buffer_append_overflowing_size_t_drops_the_data,
 	Samurai::IO::Buffer buf;
 	buf.append("hello", 5);
 
-	buf.append("x", SIZE_MAX);
+	if (buf.append("x", SIZE_MAX)) return false;
 
 	return buf.size() == 5 && buf.copyRange(0, 5) == "hello";
+});
+
+/* And an append that did happen says so, for every overload. */
+EXO_TEST(buffer_append_reports_success,
+{
+	Samurai::IO::Buffer buf;
+	Samurai::IO::Buffer other;
+	other.append("xy", 2);
+
+	return buf.append("a", 1)
+		&& buf.append("bc")
+		&& buf.append(std::string("de"))
+		&& buf.append(std::string_view("fg"))
+		&& buf.append('h')
+		&& buf.append(9)
+		&& buf.append(static_cast<uint64_t>(10))
+		&& buf.append(other)
+		&& buf.append(other, 1)
+		&& buf.appendBinary(static_cast<uint16_t>(1))
+		/* Nothing to copy is success, not a refusal. */
+		&& buf.append(Samurai::IO::Buffer(), 0);
 });
 
 /* A refused growth must leave the buffer working, not wedged. */
