@@ -662,8 +662,13 @@ int Samurai::IO::File::rmdir(const char* dirname)
 }
 
 /**
- * This will convert any path given to the absolute path
- * and even follow symlinks.
+ * This will convert any path given to the absolute path.
+ *
+ * It does NOT follow symlinks: the work is lexical, so a path naming a link
+ * followed by '..' resolves to the link's parent rather than the target's. A
+ * caller checking that a path stays inside a directory therefore has to keep
+ * O_NOFOLLOW in mind as well - normalising a name says nothing about what the
+ * name will refer to when it is opened.
  *
  * This handles a prepending '~' as the environment variable
  * 'HOME' (or / if not set).
