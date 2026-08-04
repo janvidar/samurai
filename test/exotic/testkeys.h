@@ -24,6 +24,7 @@
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/x509.h>
+#include <openssl/x509v3.h>
 
 #include <stdio.h>
 #include <string>
@@ -64,6 +65,9 @@ static bool tls_write_keypair(const std::string& key_path, const std::string& ce
 	X509* cert = X509_new();
 	if (!cert) { EVP_PKEY_free(pkey); return false; }
 
+	/* v3, which is what carries an extension at all. */
+	X509_set_version(cert, 2);
+
 	ASN1_INTEGER_set(X509_get_serialNumber(cert), 1);
 	X509_gmtime_adj(X509_getm_notBefore(cert), 0);
 	/* Long enough that the suite never fails because a fixture aged out. */
@@ -75,7 +79,44 @@ static bool tls_write_keypair(const std::string& key_path, const std::string& ce
 		(const unsigned char*) "localhost", -1, -1, 0);
 	X509_set_issuer_name(cert, name);
 
-	bool ok = X509_sign(cert, pkey, EVP_sha256()) > 0;
+	/*
+	 * A subjectAltName, without which nothing can verify this certificate names
+	 * the host it was reached at: a bare CN has not been accepted for that in a
+	 * decade, and samurai checks 127.0.0.1 as an address rather than a name - so
+	 * the IP entry is the one that matters and the DNS entry is for a case that
+	 * connects by name.
+	 */
+	bool ok = false;
+	{
+		X509_EXTENSION* san = X509V3_EXT_conf_nid(nullptr, nullptr,
+			NID_subject_alt_name, "DNS:localhost,IP:127.0.0.1,IP:::1");
+		if (san)
+		{
+			ok = X509_add_ext(cert, san, -1) == 1;
+			X509_EXTENSION_free(san);
+		}
+	}
+
+	/*
+	 * Self signed, and offered as its own trust anchor by the cases that verify
+	 * against it, so it has to be allowed to be one.
+	 */
+	if (ok)
+	{
+		X509_EXTENSION* basic = X509V3_EXT_conf_nid(nullptr, nullptr,
+			NID_basic_constraints, "critical,CA:TRUE");
+		if (basic)
+		{
+			ok = X509_add_ext(cert, basic, -1) == 1;
+			X509_EXTENSION_free(basic);
+		}
+		else
+		{
+			ok = false;
+		}
+	}
+
+	if (ok) ok = X509_sign(cert, pkey, EVP_sha256()) > 0;
 
 	if (ok)
 	{

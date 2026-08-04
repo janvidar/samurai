@@ -208,6 +208,25 @@ Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initialize(
 			QERR("Unable to load the system certificate store: %s", msg);
 			return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 		}
+
+		/*
+		 * And whatever else was named, for a peer signed by an authority the
+		 * system store does not carry. A file that cannot be read is fatal rather
+		 * than skipped: silently carrying on would verify against the system
+		 * store alone and refuse every peer the caller added the anchor for,
+		 * which reads as the peer being untrustworthy rather than as a path being
+		 * wrong.
+		 */
+		for (const std::string& anchor : getTrustAnchors())
+		{
+			if (SSL_CTX_load_verify_locations(ctx, anchor.c_str(), nullptr) == 1)
+				continue;
+
+			char msg[SSL_ERRBUF_SIZE];
+			ssl_error_string(msg, sizeof(msg));
+			QERR("Unable to load the trust anchor '%s': %s", anchor.c_str(), msg);
+			return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
+		}
 	}
 	else
 	{
