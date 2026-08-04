@@ -317,8 +317,10 @@ foreach(target IN ITEMS samurai_objects ${SAMURAI_LIBRARIES})
         PUBLIC Threads::Threads OpenSSL::SSL OpenSSL::Crypto
         PRIVATE ZLIB::ZLIB BZip2::BZip2)
 
+    # bcrypt supplies BCryptGenRandom, which is where Util::secureRandom() gets
+    # its bytes on Windows.
     if(WIN32)
-        target_link_libraries(${target} PUBLIC ws2_32 iphlpapi)
+        target_link_libraries(${target} PUBLIC ws2_32 iphlpapi bcrypt)
     endif()
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
