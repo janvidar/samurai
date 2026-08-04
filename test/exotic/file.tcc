@@ -939,3 +939,358 @@ EXO_TEST(file_no_access_combines_with_paranoid,
 	if (ok) f.close();
 	return ok;
 });
+
+/* ------------------------------------------------------------------------- */
+/* resolvePath()                                                             */
+/*                                                                           */
+/* Every File is named by what this returns, and callers use it to decide     */
+/* whether two names are the same file and whether a name given to them by a  */
+/* peer stays inside a directory they chose. The expectations below were       */
+/* written down years ago as comments on constructions that asserted nothing;  */
+/* they are asserted here against the environment rather than against one      */
+/* person's home directory.                                                    */
+/* ------------------------------------------------------------------------- */
+
+namespace {
+
+static std::string current_directory()
+{
+	char buf[4096] = { 0 };
+	if (!getcwd(buf, sizeof(buf))) return std::string();
+	return std::string(buf);
+}
+
+/* An absolute home directory, or an empty string when the environment cannot
+   supply one and the '~' cases have nothing to assert against. */
+static std::string home_directory()
+{
+	const char* home = getenv("HOME");
+	if (!home || home[0] != '/') return std::string();
+	return std::string(home);
+}
+
+/* A leaf below a directory that may itself be the root, which already ends in a
+   separator and must not be given a second one. */
+static std::string under(const std::string& directory, const std::string& leaf)
+{
+	if (directory == "/") return "/" + leaf;
+	return directory + "/" + leaf;
+}
+
+/* Enough of them to climb past the root from any working directory, so what
+   these cases resolve to does not depend on where the suite was started. */
+static std::string many_parents(size_t count)
+{
+	std::string path = "..";
+	for (size_t n = 1; n < count; n++)
+		path += "/..";
+	return path;
+}
+
+/* Reports what it saw before failing, since the interesting part of a path case
+   is the difference between the two names. */
+static bool resolves_to(const std::string& input, const std::string& expected)
+{
+	const std::string got = Samurai::IO::File::resolvePath(input);
+	if (got == expected) return true;
+
+	printf("resolvePath(\"%s\"): expect %s, got=%s\n",
+		input.c_str(), expected.c_str(), got.c_str());
+	return false;
+}
+
+}
+
+/*
+ * A leading '~' is the home directory, and the rest of the path follows it.
+ *
+ * The note beside this case used to read "~/.jalla expecting: /home/janvidar",
+ * dropping the leaf. The code keeps it, which is the only reading that makes the
+ * expansion useful, so the comment was wrong rather than the code.
+ */
+EXO_TEST(file_resolve_tilde_expands_to_the_home_directory,
+{
+	const std::string home = home_directory();
+	if (home.empty()) EXO_SKIP("HOME is unset or not absolute");
+
+	EXO_ASSERT(resolves_to("~/.jalla", under(home, ".jalla")));
+	EXO_ASSERT(resolves_to("~", home));
+	EXO_ASSERT(resolves_to("~/", home));
+
+	/* The separators after the '~' collapse like any other. */
+	EXO_ASSERT(resolves_to("~////.jalla/////", under(home, ".jalla")));
+	return true;
+});
+
+/*
+ * Only a '~' that is the whole path or is followed by a separator expands.
+ * Anywhere else it is a character in a name like any other.
+ */
+EXO_TEST(file_resolve_tilde_expands_only_at_the_start,
+{
+	EXO_ASSERT(resolves_to("//home/~////.jalla/////", PATH_PREFIX "/home/~/.jalla"));
+
+	const std::string cwd = current_directory();
+	if (cwd.empty()) return false;
+
+	/* '~user' is not expanded either: no user database is consulted. */
+	EXO_ASSERT(resolves_to("~foo/bar", under(cwd, "~foo/bar")));
+	EXO_ASSERT(resolves_to("~~", under(cwd, "~~")));
+	return true;
+});
+
+EXO_TEST(file_resolve_collapses_repeated_separators,
+{
+	EXO_ASSERT(resolves_to("//path///to////file", PATH_PREFIX "/path/to/file"));
+	EXO_ASSERT(resolves_to("/a//b", PATH_PREFIX "/a/b"));
+	return true;
+});
+
+EXO_TEST(file_resolve_drops_a_single_dot,
+{
+	EXO_ASSERT(resolves_to("/a/./b/./c", PATH_PREFIX "/a/b/c"));
+	EXO_ASSERT(resolves_to("/a/b/./../", PATH_PREFIX "/a"));
+	return true;
+});
+
+EXO_TEST(file_resolve_dot_dot_removes_the_preceding_component,
+{
+	EXO_ASSERT(resolves_to("/a/b/..", PATH_PREFIX "/a"));
+	EXO_ASSERT(resolves_to("/a/b/../", PATH_PREFIX "/a"));
+	EXO_ASSERT(resolves_to("/tmp/x/../y", PATH_PREFIX "/tmp/y"));
+
+	/* The long-hand case that was written down but never checked. */
+	EXO_ASSERT(resolves_to("//home////.jalla////../janv/../janv/../janvidar/.quickdc//..",
+		PATH_PREFIX "/home/janvidar"));
+	return true;
+});
+
+/*
+ * A '..' the root cannot satisfy is dropped instead of becoming a component
+ * above it, so no number of them names anything outside the file system. This is
+ * what a caller comparing a resolved name against a directory it chose depends
+ * on.
+ */
+EXO_TEST(file_resolve_dot_dot_cannot_climb_past_the_root,
+{
+	EXO_ASSERT(resolves_to("/home/janvidar/../..", PATH_PREFIX "/"));
+	EXO_ASSERT(resolves_to("/..", PATH_PREFIX "/"));
+	EXO_ASSERT(resolves_to("/../../../etc/passwd", PATH_PREFIX "/etc/passwd"));
+	EXO_ASSERT(resolves_to("/tmp/../../../../etc/passwd", PATH_PREFIX "/etc/passwd"));
+	EXO_ASSERT(resolves_to("/a/b/../../../../c", PATH_PREFIX "/c"));
+	return true;
+});
+
+/*
+ * The same for a relative path, which is made absolute first and so climbs from
+ * the working directory. The two cases written down years ago used seven '..' and
+ * expected /home, which only holds from a working directory at most seven deep;
+ * from a deeper one they resolve under whatever is left of it. Enough of them to
+ * reach the root from anywhere is what makes this reproducible.
+ */
+EXO_TEST(file_resolve_relative_dot_dot_stops_at_the_root,
+{
+	const std::string climb = many_parents(64);
+
+	EXO_ASSERT(resolves_to(climb + "/home/", PATH_PREFIX "/home"));
+	EXO_ASSERT(resolves_to(climb + "/home/../", PATH_PREFIX "/"));
+	EXO_ASSERT(resolves_to(climb + "/home/.../", PATH_PREFIX "/home/..."));
+	return true;
+});
+
+/* Three dots is a name. Only exactly one and exactly two are special. */
+EXO_TEST(file_resolve_three_dots_is_an_ordinary_name,
+{
+	EXO_ASSERT(resolves_to("/home/.../", PATH_PREFIX "/home/..."));
+	EXO_ASSERT(resolves_to("/a/.../b", PATH_PREFIX "/a/.../b"));
+	EXO_ASSERT(resolves_to("/a/....", PATH_PREFIX "/a/...."));
+	EXO_ASSERT(resolves_to("/a/..b", PATH_PREFIX "/a/..b"));
+	return true;
+});
+
+EXO_TEST(file_resolve_trailing_separator_makes_no_difference,
+{
+	const std::string bare = Samurai::IO::File::resolvePath("/a/b");
+	EXO_ASSERT(resolves_to("/a/b/", bare));
+	EXO_ASSERT(resolves_to("/a/b///", bare));
+	EXO_ASSERT(resolves_to("/a/b", PATH_PREFIX "/a/b"));
+	return true;
+});
+
+/* The root is the one path a trailing separator is not stripped from, because
+   stripping it would leave nothing. */
+EXO_TEST(file_resolve_the_root_stays_the_root,
+{
+	EXO_ASSERT(resolves_to("/", PATH_PREFIX "/"));
+	EXO_ASSERT(resolves_to("//", PATH_PREFIX "/"));
+	EXO_ASSERT(resolves_to("///", PATH_PREFIX "/"));
+	return true;
+});
+
+EXO_TEST(file_resolve_makes_a_relative_path_absolute,
+{
+	const std::string cwd = current_directory();
+	if (cwd.empty()) return false;
+
+	EXO_ASSERT(resolves_to("relative/thing", under(cwd, "relative/thing")));
+	EXO_ASSERT(resolves_to("./relative//thing/", under(cwd, "relative/thing")));
+	EXO_ASSERT(resolves_to(".", cwd));
+
+	/* An empty path is the working directory, not an empty result. */
+	EXO_ASSERT(resolves_to("", cwd));
+	return true;
+});
+
+/* Whatever goes in, what comes out is a name a caller can compare and open. */
+EXO_TEST(file_resolve_always_returns_an_absolute_path,
+{
+	const char* inputs[] = {
+		"", ".", "..", "/", "//", "relative", "~", "~/x", "~foo",
+		"/a/../../..", "a/b/../../../..", "/a//b/./c/"
+	};
+
+	for (const char* input : inputs)
+	{
+		const std::string out = Samurai::IO::File::resolvePath(input);
+		if (out.empty() || !(out[0] == '/' || (out.size() > 2 && out[1] == ':')))
+		{
+			printf("resolvePath(\"%s\"): expect an absolute path, got=%s\n",
+				input, out.c_str());
+			return false;
+		}
+	}
+	return true;
+});
+
+/* Resolving a resolved path changes nothing, so a name can be normalised more
+   than once on its way through a caller. */
+EXO_TEST(file_resolve_is_idempotent,
+{
+	const char* inputs[] = {
+		"//a//b/../c/", "~/x", "/", "relative/../thing", "/a/.../"
+	};
+
+	for (const char* input : inputs)
+	{
+		const std::string once = Samurai::IO::File::resolvePath(input);
+		EXO_ASSERT(resolves_to(once, once));
+	}
+	return true;
+});
+
+/* Constructing a File is what most callers reach this through. */
+EXO_TEST(file_resolve_agrees_with_the_constructor,
+{
+	const char* inputs[] = {
+		"//a//b/../c/", "~/x", "/", "relative/../thing", "/home/user/../.."
+	};
+
+	for (const char* input : inputs)
+	{
+		Samurai::IO::File f(input);
+		const std::string expected = Samurai::IO::File::resolvePath(input);
+		if (f.getName() != expected)
+		{
+			printf("File(\"%s\"): expect %s, got=%s\n",
+				input, expected.c_str(), f.getName().c_str());
+			return false;
+		}
+	}
+	return true;
+});
+
+/*
+ * The normalisation is lexical: a '..' after a symbolic link removes the link,
+ * not the directory it points at. The comment on the implementation says it
+ * follows symlinks, which it does not and has no way to without touching the
+ * disk. The lexical answer is the one asserted here, because it is the one a
+ * caller comparing names gets without a syscall - but it also means a resolved
+ * name inside a directory can still reach outside it once opened, if a link
+ * inside that directory points out.
+ */
+EXO_TEST(file_resolve_is_lexical_and_does_not_follow_symlinks,
+{
+	Scratch scratch("symlex");
+	const std::string deep = scratch.directory() + "/a";
+	const std::string deeper = deep + "/b";
+
+	/* This is the one case here that needs the disk, so a working directory it
+	   cannot write to leaves it unrun rather than failing. */
+	if (Samurai::IO::File::mkdir(deep.c_str()) != 0)
+		EXO_SKIP("the working directory is not writable");
+	if (Samurai::IO::File::mkdir(deeper.c_str()) != 0) return false;
+
+	const std::string link = scratch.path("link");
+	if (symlink("a/b", link.c_str()) != 0) return false;
+
+	const std::string through_link = Samurai::IO::File::resolvePath(link + "/..");
+	const std::string lexical_parent = Samurai::IO::File::resolvePath(scratch.directory());
+	const std::string target_parent = Samurai::IO::File::resolvePath(deep);
+
+	Samurai::IO::File::rmdir(deeper.c_str());
+	Samurai::IO::File::rmdir(deep.c_str());
+
+	if (through_link != lexical_parent || through_link == target_parent)
+	{
+		printf("%s: expect %s, got=%s\n", __FUNCTION__,
+			lexical_parent.c_str(), through_link.c_str());
+		return false;
+	}
+	return true;
+});
+
+/*
+ * Normalising is not confining: a '..' in a name appended to a directory
+ * resolves to something outside it, which is why a caller handed a name by a
+ * peer has to compare the resolved path against the directory it chose rather
+ * than trust resolvePath() to have done it. This pins that division of labour;
+ * it is not a defect in the function.
+ */
+EXO_TEST(file_resolve_normalises_but_does_not_confine_to_a_base,
+{
+	const std::string base = PATH_PREFIX "/share";
+
+	EXO_ASSERT(resolves_to(base + "/sub/../file", PATH_PREFIX "/share/file"));
+	EXO_ASSERT(resolves_to(base + "/../../etc/passwd", PATH_PREFIX "/etc/passwd"));
+
+	const std::string escaped = Samurai::IO::File::resolvePath(base + "/../../etc/passwd");
+	EXO_ASSERT(escaped.compare(0, base.size(), base) != 0);
+	return true;
+});
+
+/*
+ * Without a home directory in the environment the '~' is dropped rather than
+ * left in place, so nothing carrying one resolves to a name containing it. The
+ * documented fallback is '/', which is what a path below the '~' gets; a bare
+ * '~' becomes the working directory instead, since dropping it leaves an empty
+ * path. Neither reaches anywhere it should not.
+ */
+EXO_TEST(file_resolve_without_a_home_directory_drops_the_tilde,
+{
+	const char* previous = getenv("HOME");
+	const bool had_home = previous != nullptr;
+	const std::string saved = had_home ? std::string(previous) : std::string();
+
+	unsetenv("HOME");
+
+	const std::string cwd = current_directory();
+	const std::string bare = Samurai::IO::File::resolvePath("~");
+	const std::string below = Samurai::IO::File::resolvePath("~/x");
+	const std::string climbing = Samurai::IO::File::resolvePath("~/../../etc/passwd");
+
+	/* Put it back before asserting: a case that fails here must not leave the
+	   rest of the suite running without a home directory. */
+	if (had_home)
+		setenv("HOME", saved.c_str(), 1);
+
+	if (cwd.empty()) return false;
+
+	if (bare != cwd || below != PATH_PREFIX "/x"
+		|| climbing != PATH_PREFIX "/etc/passwd")
+	{
+		printf("%s: got '%s', '%s', '%s'\n", __FUNCTION__,
+			bare.c_str(), below.c_str(), climbing.c_str());
+		return false;
+	}
+	return true;
+});
