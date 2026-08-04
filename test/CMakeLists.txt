@@ -78,6 +78,7 @@ exotic_add_tests(autotest
         exotic/misc.tcc
         exotic/multicast.tcc
         exotic/notifier.tcc
+        exotic/random.tcc
         exotic/resolver.tcc
         exotic/socketmonitor.tcc
         exotic/sockets.tcc
