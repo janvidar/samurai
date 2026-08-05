@@ -170,6 +170,7 @@ set(SAMURAI_SOURCES
     src/io/net/interface.cpp
     src/io/net/multicast.cpp
     src/io/net/notifier.cpp
+    src/io/net/proxy.cpp
     src/io/net/socket.cpp
     src/io/net/socketaddress.cpp
     src/io/net/socketbase.cpp
@@ -179,11 +180,13 @@ set(SAMURAI_SOURCES
     src/io/net/socketmonitor-epoll.cpp
     src/io/net/socketmonitor-select.cpp
     src/io/net/socketmonitor-kqueue.cpp
+    src/io/net/socks5.cpp
     src/io/net/tlsfactory.cpp
     src/io/net/tlsfactory-openssl.cpp
     src/io/net/url.cpp
     src/io/net/dns/resolver.cpp
     src/io/net/dns/resolver-pool.cpp
+    src/io/net/dns/resolver-socks.cpp
     src/io/net/http/client.cpp
     src/io/net/http/response.cpp
     src/io/net/upnp/description.cpp

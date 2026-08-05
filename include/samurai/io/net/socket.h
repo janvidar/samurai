@@ -8,6 +8,8 @@
 
 #include <samurai/samurai.h>
 #include <samurai/io/net/socketbase.h>
+#include <samurai/io/net/proxy.h>
+#include <samurai/io/net/socks5.h>
 #include <samurai/io/net/tlsfactory.h>
 #include <memory>
 #include <samurai/io/net/dns/resolver.h>
@@ -70,10 +72,49 @@ class Socket :
 		Socket(const Socket&) = delete;
 		Socket& operator=(const Socket&) = delete;
 
+		/**
+		 * Resolve the peer's name, without connecting.
+		 *
+		 * Refused on a proxied socket, which reports SocketError::HostNotFound
+		 * instead: the whole point of reaching a peer through a proxy is that
+		 * its name is never handed to the system resolver, and this is the one
+		 * call that would. Call connect() directly - it needs no address.
+		 */
 		void lookup();
 
 		void connect();
 		void disconnect();
+
+		/**
+		 * Reach the peer through a proxy rather than directly.
+		 *
+		 * Has to be set before connect(). A socket starts from
+		 * ProxySettings::getDefault(), taken when it was constructed, so a
+		 * program that proxies everything says so once rather than at every
+		 * call site.
+		 *
+		 * A proxied socket does not resolve its peer: the name travels to the
+		 * proxy inside the request. Everything above the socket is unchanged -
+		 * EventConnected arrives when the tunnel is up and not before, so a TLS
+		 * handshake started from it runs inside the tunnel and verifies the
+		 * peer's certificate against the name that was asked for.
+		 *
+		 * Only outbound sockets. Setting this on one that came from
+		 * ServerSocket::accept() does nothing.
+		 */
+		void setProxy(const ProxySettings& settings);
+		const ProxySettings& getProxy() const { return proxy; }
+		bool isProxied() const { return outbound && proxy.isEnabled(); }
+
+		/**
+		 * The name the connection was asked for.
+		 *
+		 * Under a proxy this is the only thing that identifies the peer.
+		 * getAddress() reports the proxy, because that is what the descriptor is
+		 * connected to, and the address in the proxy's reply is its own bound
+		 * address rather than the peer's - Tor answers 0.0.0.0.
+		 */
+		std::string getPeerName() const;
 
 		/**
 		 * How long connect() waits for the peer before reporting
@@ -156,6 +197,16 @@ class Socket :
 		ssize_t write(std::span<const char> data)
 		{ return write(data.data(), data.size()); }
 		
+		/**
+		 * Start TLS on this socket.
+		 *
+		 * Refused, returning false, while a proxy handshake is still running:
+		 * TLS has to go inside the tunnel, so it cannot begin until there is
+		 * one. EventConnected is the signal that there is - it is not delivered
+		 * until the proxy has confirmed the peer - so a caller that starts the
+		 * handshake from there is already in the right order and this guard
+		 * never fires.
+		 */
 		bool TLSInitialize(bool server);
 		void TLSDeinitialize();
 		void TLSsendHandshake();
@@ -202,12 +253,38 @@ class Socket :
 		std::unique_ptr<Samurai::Timer> timer;
 		std::chrono::milliseconds connect_timeout;
 		bool outbound;
-		
+
 		int readable;
 		bool writable;
 
 		void sslInitialize(bool server);
 		void sslDeinitialize();
+
+		/*
+		 * Whose name the outstanding lookup is for.
+		 *
+		 * A proxied socket never resolves its peer, but it does have to find the
+		 * proxy, and a proxy may be named rather than written as a literal.
+		 * Resolving that name is not a leak - it names the proxy, which is about
+		 * to be told everything anyway - but the reply has to be routed to a
+		 * different place than a peer's would be.
+		 */
+		enum class LookupTarget { Peer, Proxy };
+		LookupTarget lookup_target = LookupTarget::Peer;
+
+		ProxySettings proxy;
+		/* Where the proxy is, once it is known. Separate from 'address', which
+		   holds the peer and must never be resolved when there is a proxy. */
+		std::unique_ptr<InetAddress> proxy_address;
+		std::unique_ptr<Socks5Handshake> handshake;
+
+		/** Connect to the proxy rather than to the peer. */
+		void internal_connect_proxy();
+		/** Open the descriptor and start ::connect() to whatever addr names. */
+		void internal_connect_addr();
+		/** Move the proxy handshake along as far as the socket allows. */
+		void internal_proxy_pump();
+		void internal_proxy_failed();
 
 	protected:
 		void handleMonitorEvent(SocketMonitor::Triggers trig) override;

@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#include <samurai/io/net/proxy.h>
 #include <samurai/io/net/socket.h>
 #include <samurai/io/net/datagram.h>
 #include <samurai/io/net/serversocket.h>
@@ -47,6 +48,10 @@ static int   arg_local_port = 0;
 static char* arg_local_addr = 0;
 static char* arg_addr       = 0;
 static int   arg_port       = 0;
+static char* arg_socks5     = 0;
+static char* arg_socks_user = 0;
+static char* arg_socks_pass = 0;
+static bool  arg_tor        = false;
 
 class Connection :
 	public Samurai::IO::Net::SocketEventHandler,
@@ -345,6 +350,13 @@ void print_usage(const char* cmd)
 "        -w secs                 timeout for connects and final net reads\n"
 // "        -x tos                  set Type Of Service\n"
 "        -z                      zero-I/O mode [used for scanning]\n"
+"        --socks5 host:port      reach the peer through a SOCKS5 proxy. The\n"
+"                                peer's name is sent to the proxy and never\n"
+"                                resolved here.\n"
+"        --socks5-user name      SOCKS5 username (RFC 1929)\n"
+"        --socks5-pass word      SOCKS5 password\n"
+"        --tor                   as --socks5 127.0.0.1:9050, and enables Tor's\n"
+"                                RESOLVE extension so -n is not needed\n"
 // "port numbers can be individual or ranges: lo-hi [inclusive];\n"
 // "hyphens in port names must be backslash escaped (e.g. 'ftp\-data').\n"
 );
@@ -381,10 +393,15 @@ void parse_args(int argc, char** argv)
 			CHECK_BOOL_ARG("-r", arg_randomize);
 			CHECK_BOOL_ARG("-6", arg_ipv6);
 
+			CHECK_BOOL_ARG("--tor", arg_tor);
+
 			CHECK_INT_ARG("-p", arg_local_port);
 			CHECK_STR_ARG("-s", arg_local_addr);
 			CHECK_INT_ARG("-w", arg_timeout);
 			CHECK_STR_ARG("-o", arg_hexdump);
+			CHECK_STR_ARG("--socks5", arg_socks5);
+			CHECK_STR_ARG("--socks5-user", arg_socks_user);
+			CHECK_STR_ARG("--socks5-pass", arg_socks_pass);
 
 			fprintf(stderr, "Unknown argument: %s\n", argv[n]);
 			exit(1);
@@ -408,10 +425,54 @@ void parse_args(int argc, char** argv)
 	}
 }
 
+
+/**
+ * Turn the proxy arguments into the process-wide default.
+ *
+ * Set before any socket is constructed, which is when a socket reads it.
+ */
+static bool apply_proxy_args(const char* cmd)
+{
+	if (!arg_socks5 && !arg_tor) return true;
+
+	Samurai::IO::Net::ProxySettings proxy = arg_socks5
+		? Samurai::IO::Net::ProxySettings::fromString(arg_socks5)
+		: Samurai::IO::Net::ProxySettings::tor();
+
+	if (!proxy.isEnabled())
+	{
+		fprintf(stderr, "%s: not a usable SOCKS5 proxy: %s\n", cmd, arg_socks5);
+		return false;
+	}
+
+	if (arg_socks_user || arg_socks_pass)
+	{
+		if (!proxy.setCredentials(arg_socks_user ? arg_socks_user : "",
+		                          arg_socks_pass ? arg_socks_pass : ""))
+		{
+			fprintf(stderr, "%s: SOCKS5 credentials are too long\n", cmd);
+			return false;
+		}
+	}
+
+	/* Only for --tor: on any other proxy an unknown command costs a round trip
+	   and then fails a lookup that the system resolver would have answered. */
+	if (arg_tor) proxy.setTorExtensions(true);
+
+	Samurai::IO::Net::ProxySettings::setDefault(proxy);
+
+	if (arg_verbose)
+		fprintf(stderr, "%s: using SOCKS5 proxy %s\n", cmd, proxy.toString().c_str());
+
+	return true;
+}
+
 #define MAXLINE 1024
 
 int main(int argc, char** argv) {
 	parse_args(argc, argv);
+	if (!apply_proxy_args(argv[0])) return 1;
+
 	Samurai::IO::Net::SocketMonitor* monitor = Samurai::IO::Net::SocketMonitor::getInstance();
 
 	Connection* con = 0;

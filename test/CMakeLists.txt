@@ -82,6 +82,7 @@ exotic_add_tests(autotest
         exotic/resolver.tcc
         exotic/socketmonitor.tcc
         exotic/sockets.tcc
+        exotic/socks5.tcc
         exotic/string.tcc
         exotic/timer.tcc
         exotic/tls.tcc

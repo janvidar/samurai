@@ -220,6 +220,11 @@ void Samurai::IO::Net::HTTP::Client::internal_start()
 		return;
 	}
 
+	/* Only when the caller named one: a socket already starts from the process
+	   default, and setting it from that here would be the same value written
+	   twice - and would quietly become wrong if the default moved. */
+	if (options.proxy) socket->setProxy(*options.proxy);
+
 	busy = true;
 
 	/* One deadline over the whole exchange - lookup, connect, request and
