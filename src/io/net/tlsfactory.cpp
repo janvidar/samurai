@@ -13,6 +13,7 @@ std::unique_ptr<Samurai::IO::File> Samurai::IO::Net::TlsFactory::pem_cert;
 bool Samurai::IO::Net::TlsFactory::allow_untrusted = false;
 std::vector<std::string> Samurai::IO::Net::TlsFactory::trust_anchors;
 bool Samurai::IO::Net::TlsFactory::require_client_cert = false;
+unsigned long Samurai::IO::Net::TlsFactory::config_generation = 0;
 
 Samurai::IO::Net::TlsFactory::TlsFactory()
 	: sd(INVALID_SOCKET)
@@ -53,10 +54,17 @@ void Samurai::IO::Net::TlsFactory::setDefaultRequireClientCertificate(bool toggl
 }
 
 
+unsigned long Samurai::IO::Net::TlsFactory::configGeneration()
+{
+	return config_generation;
+}
+
+
 void Samurai::IO::Net::TlsFactory::resetKeys()
 {
 	pem_key.reset();
 	pem_cert.reset();
+	config_generation++;
 }
 
 void Samurai::IO::Net::TlsFactory::freeKeys()
@@ -70,6 +78,7 @@ void Samurai::IO::Net::TlsFactory::setKeys(const char* private_key, const char* 
 	
 	pem_key = std::make_unique<Samurai::IO::File>(private_key);
 	pem_cert = std::make_unique<Samurai::IO::File>(public_key);
+	config_generation++;
 }
 
 Samurai::IO::File* Samurai::IO::Net::TlsFactory::getPrivateKey()
@@ -87,12 +96,14 @@ void Samurai::IO::Net::TlsFactory::addTrustAnchor(const char* pem_file)
 {
 	if (!pem_file || !*pem_file) return;
 	trust_anchors.push_back(pem_file);
+	config_generation++;
 }
 
 
 void Samurai::IO::Net::TlsFactory::clearTrustAnchors()
 {
 	trust_anchors.clear();
+	config_generation++;
 }
 
 

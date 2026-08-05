@@ -1353,3 +1353,250 @@ EXO_TEST(tls_generate_resolves_a_path_the_way_setkeys_does,
 	return 1;
 });
 
+/* ------------------------------------------------------------------------- */
+/* One context per role, shared between connections                          */
+/* ------------------------------------------------------------------------- */
+
+/*
+ * A context used to be built for every connection, so the certificate and the
+ * private key were parsed off disk on every accept. Now that peer transfers are
+ * encrypted by default that is once per transfer, for an RSA key, before the
+ * handshake can start - so it is built once per role and shared.
+ *
+ * There is no accessor for the cache, and adding one to observe it would be
+ * observing the implementation rather than the behaviour. The behaviour is that
+ * the files stop being read: these cases take the files away and assert that
+ * connections keep working, which can only be true of something cached.
+ */
+EXO_TEST(tls_a_context_is_not_rebuilt_for_every_connection,
+{
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
+
+	GeneratedKeys keys("shared-ctx", "127.0.0.1");
+	EXO_ASSERT(keys.ok);
+
+	BorrowedProcessKeys restore;
+	EXO_ASSERT(restore.saved);
+	restore.use(keys);
+
+	/* One connection, which is what builds the contexts. */
+	{
+		SocketPair pair;
+		EXO_ASSERT(pair.valid());
+
+		Samurai::IO::Net::OpenSSL server, client;
+		server.setAllowUntrusted(true);
+		client.setAllowUntrusted(true);
+		EXO_ASSERT(server.initialize(TlsOperation::Server, pair.fd[0]) == TlsStatus::Ok);
+		EXO_ASSERT(client.initialize(TlsOperation::Client, pair.fd[1]) == TlsStatus::Ok);
+		EXO_ASSERT(tls_handshake(server, client));
+	}
+
+	/*
+	 * Both files gone. Nothing has changed the keys or the anchors, so the cache
+	 * is still valid and a rebuild is never attempted - if one were, there would
+	 * be no certificate to load and the server would have nothing to present.
+	 */
+	::unlink(keys.key_path.c_str());
+	::unlink(keys.cert_path.c_str());
+	EXO_ASSERT(!Samurai::IO::File(keys.key_path).exists());
+
+	SocketPair pair;
+	EXO_ASSERT(pair.valid());
+
+	Samurai::IO::Net::OpenSSL server, client;
+	server.setAllowUntrusted(true);
+	client.setAllowUntrusted(true);
+	EXO_ASSERT(server.initialize(TlsOperation::Server, pair.fd[0]) == TlsStatus::Ok);
+	EXO_ASSERT(client.initialize(TlsOperation::Client, pair.fd[1]) == TlsStatus::Ok);
+	EXO_ASSERT(tls_handshake(server, client));
+
+	/* And it is really serving the pair that is no longer on disk. */
+	const auto digest = client.getPeerCertificateSHA256();
+	EXO_ASSERT(digest.has_value());
+	return 1;
+});
+
+/*
+ * The other half: a cache that is never invalidated is a cache that serves the
+ * wrong certificate for ever. setKeys() moves the generation on, so the context
+ * is rebuilt and the peer sees the new pair rather than the old one.
+ */
+EXO_TEST(tls_replacing_the_keys_replaces_what_a_peer_is_shown,
+{
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
+
+	GeneratedKeys first("shared-first", "127.0.0.1");
+	GeneratedKeys second("shared-second", "127.0.0.1");
+	EXO_ASSERT(first.ok);
+	EXO_ASSERT(second.ok);
+
+	BorrowedProcessKeys restore;
+	EXO_ASSERT(restore.saved);
+
+	/* What a peer is shown under each pair, asked of the wire rather than of
+	   the file, so this is what was actually presented. */
+	auto presented = [](const GeneratedKeys& keys, const BorrowedProcessKeys& r,
+			std::optional<Tls::Sha256Digest>& out) -> bool
+	{
+		r.use(keys);
+
+		SocketPair pair;
+		if (!pair.valid()) return false;
+
+		Samurai::IO::Net::OpenSSL server, client;
+		server.setAllowUntrusted(true);
+		client.setAllowUntrusted(true);
+		if (server.initialize(TlsOperation::Server, pair.fd[0]) != TlsStatus::Ok) return false;
+		if (client.initialize(TlsOperation::Client, pair.fd[1]) != TlsStatus::Ok) return false;
+		if (!tls_handshake(server, client)) return false;
+
+		out = client.getPeerCertificateSHA256();
+		return out.has_value();
+	};
+
+	std::optional<Tls::Sha256Digest> one, two;
+	EXO_ASSERT(presented(first, restore, one));
+	EXO_ASSERT(presented(second, restore, two));
+
+	/* Two different certificates, so two different digests - the same one twice
+	   would mean the second connection was served from a stale context. */
+	EXO_ASSERT(one.has_value());
+	EXO_ASSERT(two.has_value());
+	EXO_ASSERT(*one != *two);
+	return 1;
+});
+
+/*
+ * A connection made from a context survives that context being replaced under
+ * it. OpenSSL refcounts, so dropping the cache's reference is not dropping the
+ * connection's - and getting this wrong is a use-after-free rather than a
+ * failed handshake, which is why it is asserted rather than assumed.
+ */
+EXO_TEST(tls_a_live_connection_survives_the_context_being_replaced,
+{
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
+
+	GeneratedKeys keys("shared-live", "127.0.0.1");
+	GeneratedKeys other("shared-other", "127.0.0.1");
+	EXO_ASSERT(keys.ok);
+	EXO_ASSERT(other.ok);
+
+	BorrowedProcessKeys restore;
+	EXO_ASSERT(restore.saved);
+	restore.use(keys);
+
+	SocketPair pair;
+	EXO_ASSERT(pair.valid());
+
+	Samurai::IO::Net::OpenSSL server, client;
+	server.setAllowUntrusted(true);
+	client.setAllowUntrusted(true);
+	EXO_ASSERT(server.initialize(TlsOperation::Server, pair.fd[0]) == TlsStatus::Ok);
+	EXO_ASSERT(client.initialize(TlsOperation::Client, pair.fd[1]) == TlsStatus::Ok);
+	EXO_ASSERT(tls_handshake(server, client));
+
+	/* The cache drops what this pair was built from, twice over. */
+	restore.use(other);
+	Tls::addTrustAnchor(other.cert_path.c_str());
+	Tls::clearTrustAnchors();
+
+	/* The established connection still carries data both ways. */
+	EXO_ASSERT(tls_write_all(client, "still here"));
+	std::string got;
+	EXO_ASSERT(tls_read_exactly(server, 10, got));
+	EXO_ASSERT(got == "still here");
+	return 1;
+});
+
+/*
+ * A key that is not the certificate's key is caught when the context is built,
+ * not when a handshake fails. The distinction is what the operator is told: a
+ * handshake error names neither file, and the two files are exactly what needs
+ * looking at.
+ */
+EXO_TEST(tls_a_key_that_does_not_match_the_certificate_is_refused,
+{
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
+
+	GeneratedKeys a("mismatch-a", "127.0.0.1");
+	GeneratedKeys b("mismatch-b", "127.0.0.1");
+	EXO_ASSERT(a.ok);
+	EXO_ASSERT(b.ok);
+
+	BorrowedProcessKeys restore;
+	EXO_ASSERT(restore.saved);
+
+	/* a's certificate with b's key, which are separately valid and unrelated. */
+	Tls::setKeys(b.key_path.c_str(), a.cert_path.c_str());
+
+	SocketPair pair;
+	EXO_ASSERT(pair.valid());
+
+	Samurai::IO::Net::OpenSSL server;
+	server.setAllowUntrusted(true);
+	EXO_ASSERT(server.initialize(TlsOperation::Server, pair.fd[0]) == TlsStatus::Error);
+
+	/* And it stays refused rather than being cached as usable. */
+	Samurai::IO::Net::OpenSSL again;
+	again.setAllowUntrusted(true);
+	EXO_ASSERT(again.initialize(TlsOperation::Server, pair.fd[1]) == TlsStatus::Error);
+
+	/* Putting a matching pair back is enough - no restart, because a failed
+	   build is not cached. */
+	Tls::setKeys(a.key_path.c_str(), a.cert_path.c_str());
+
+	SocketPair fresh;
+	EXO_ASSERT(fresh.valid());
+	Samurai::IO::Net::OpenSSL server2, client2;
+	server2.setAllowUntrusted(true);
+	client2.setAllowUntrusted(true);
+	EXO_ASSERT(server2.initialize(TlsOperation::Server, fresh.fd[0]) == TlsStatus::Ok);
+	EXO_ASSERT(client2.initialize(TlsOperation::Client, fresh.fd[1]) == TlsStatus::Ok);
+	EXO_ASSERT(tls_handshake(server2, client2));
+	return 1;
+});
+
+/*
+ * A build that failed is not remembered as having failed. Nothing here changes
+ * the keys or the anchors, so the generation does not move - and if a failure
+ * were cached, a certificate that becomes readable again would need a restart
+ * before any connection could use it.
+ */
+EXO_TEST(tls_a_context_that_could_not_be_built_is_tried_again,
+{
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
+	if (::geteuid() == 0) EXO_SKIP("root reads a file whatever its mode");
+
+	GeneratedKeys keys("retry-ctx", "127.0.0.1");
+	EXO_ASSERT(keys.ok);
+
+	BorrowedProcessKeys restore;
+	EXO_ASSERT(restore.saved);
+	restore.use(keys);
+
+	/* Present, so it is loaded rather than skipped, and unreadable, so loading
+	   it fails - which is the transient case a cached failure would outlast. */
+	EXO_ASSERT(::chmod(keys.cert_path.c_str(), 0) == 0);
+
+	{
+		SocketPair pair;
+		EXO_ASSERT(pair.valid());
+		Samurai::IO::Net::OpenSSL server;
+		server.setAllowUntrusted(true);
+		EXO_ASSERT(server.initialize(TlsOperation::Server, pair.fd[0]) == TlsStatus::Error);
+	}
+
+	EXO_ASSERT(::chmod(keys.cert_path.c_str(), 0644) == 0);
+
+	/* No setKeys() in between, so the generation is where it was. */
+	SocketPair pair;
+	EXO_ASSERT(pair.valid());
+	Samurai::IO::Net::OpenSSL server, client;
+	server.setAllowUntrusted(true);
+	client.setAllowUntrusted(true);
+	EXO_ASSERT(server.initialize(TlsOperation::Server, pair.fd[0]) == TlsStatus::Ok);
+	EXO_ASSERT(client.initialize(TlsOperation::Client, pair.fd[1]) == TlsStatus::Ok);
+	EXO_ASSERT(tls_handshake(server, client));
+	return 1;
+});
