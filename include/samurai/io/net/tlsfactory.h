@@ -256,10 +256,29 @@ class TlsFactory {
 		bool allow_untrusted_conn;
 		bool require_client_cert_conn;
 		
+		/**
+		 * Bumped whenever the keys or the trust anchors change.
+		 *
+		 * The backend builds one context per role and shares it across
+		 * connections, rather than parsing the certificate and the private key
+		 * again on every accept. That cache is only correct while what went into
+		 * it still holds, so everything that changes it moves this on and the
+		 * backend rebuilds. Connections already established are unaffected: they
+		 * hold their own reference to the context they were made from.
+		 *
+		 * Not the per-connection toggles. Whether a given connection verifies
+		 * its peer is decided on the connection itself, so those can differ
+		 * between two connections sharing one context.
+		 */
+		static unsigned long configGeneration();
+
 		static void priv_init();
 		static void priv_fini();
 		static void resetKeys();
 		static void freeKeys();
+
+	private:
+		static unsigned long config_generation;
 };
 
 }

@@ -38,7 +38,8 @@ class OpenSSL final : public TlsFactory {
 		size_t pending() const override;
 
 	protected:
-		SSL_CTX *ctx;
+		/* The context is shared between connections of a role and is not owned
+		   here - see ssl_shared_context(). Only the session is. */
 		SSL *ssl;
 
 		/* Decided in initialize() and read again after the handshake, rather

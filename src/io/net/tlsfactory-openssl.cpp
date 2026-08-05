@@ -395,6 +395,205 @@ bool Samurai::IO::Net::TlsFactory::generateSelfSignedCertificate(
 	return true;
 }
 
+/*
+ * The contexts, one per role.
+ *
+ * A context used to be built for every connection, which meant parsing the
+ * certificate and the private key off disk on every accept. That was affordable
+ * while almost nothing used TLS; it is not now that peer transfers are encrypted
+ * by default and every one of them pays for an RSA key parse before the
+ * handshake starts. Everything in here is the same for every connection of a
+ * role, so it is built once and shared.
+ *
+ * What is not shared is anything a caller can decide per connection - whether to
+ * verify the peer, and which name to expect - so that stays on the SSL object,
+ * where two connections from one context can disagree about it.
+ *
+ * Sharing is safe: OpenSSL refcounts a context and SSL_new() takes a reference,
+ * so a connection outlives a rebuild that drops the cache's own reference. The
+ * cache is not guarded by a lock, which is the contract the rest of this class
+ * already has - setKeys() and the trust anchor list are unguarded statics too.
+ */
+namespace {
+
+struct SharedContexts
+{
+	SSL_CTX* client = nullptr;
+	SSL_CTX* server = nullptr;
+	unsigned long generation = 0;
+	bool primed = false;
+};
+
+SharedContexts shared;
+
+void ssl_release_shared()
+{
+	if (shared.client) SSL_CTX_free(shared.client);
+	if (shared.server) SSL_CTX_free(shared.server);
+	shared.client = nullptr;
+	shared.server = nullptr;
+}
+
+/*
+ * Everything the broken ciphers have in common is that a peer offering them is
+ * either ancient or lying, and TLS 1.2 is already the floor - so this bans them
+ * rather than naming an allow-list, and puts the forward-secret exchanges first
+ * so they are what gets chosen.
+ *
+ * It stops short of *requiring* forward secrecy. A peer whose only key exchange
+ * is RSA still connects, because the alternative for a client that has to reach
+ * a long tail of other implementations is a failed handshake the user reads as
+ * "encryption does not work", and the way that gets resolved is by turning
+ * encryption off. TLS 1.3 is left alone: every suite it has is acceptable.
+ */
+const char* SSL_CIPHER_POLICY =
+	"ECDHE:DHE:HIGH:"
+	"!aNULL:!eNULL:!EXPORT:!DES:!3DES:!RC4:!MD5:!PSK:!SRP:!SEED:!IDEA";
+
+/* Longer than any real chain, and short enough to bound the work a peer can ask
+   for by sending one that goes nowhere. */
+#define SSL_VERIFY_DEPTH 9
+
+SSL_CTX* ssl_build_context(bool client)
+{
+	SSL_CTX* ctx = SSL_CTX_new(client ? TLS_client_method() : TLS_server_method());
+	if (!ctx)
+	{
+		char msg[SSL_ERRBUF_SIZE];
+		ssl_error_string(msg, sizeof(msg));
+		QERR("Unable to create an SSL context: %s", msg);
+		return nullptr;
+	}
+
+	/*
+	 * SSLv2/v3 and TLS 1.0/1.1 are obsolete and rejected by modern peers, so
+	 * 1.2 is the floor. The ceiling is set explicitly rather than left at the
+	 * default so that a system configuration file carrying MaxProtocol cannot
+	 * quietly take TLS 1.3 away from us.
+	 */
+	SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
+	SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
+
+	if (SSL_CTX_set_cipher_list(ctx, SSL_CIPHER_POLICY) != 1)
+	{
+		char msg[SSL_ERRBUF_SIZE];
+		ssl_error_string(msg, sizeof(msg));
+		QERR("No acceptable cipher remains under the policy: %s", msg);
+		SSL_CTX_free(ctx);
+		return nullptr;
+	}
+
+	/*
+	 * Renegotiation has no use here and is where several protocol attacks live.
+	 * Compression is the CRIME attack and is disabled in the library by default,
+	 * said again so a build with it enabled does not inherit it.
+	 */
+	SSL_CTX_set_options(ctx, SSL_OP_NO_RENEGOTIATION | SSL_OP_NO_COMPRESSION);
+
+	/* Which cipher gets used is the server's decision to make, not the peer's. */
+	if (!client) SSL_CTX_set_options(ctx, SSL_OP_CIPHER_SERVER_PREFERENCE);
+
+	SSL_CTX_set_verify_depth(ctx, SSL_VERIFY_DEPTH);
+
+	/*
+	 * Off in the context, because whether a connection verifies is decided on
+	 * the connection - see initialize(). The trust store is loaded either way:
+	 * it costs nothing until something verifies against it, and building it here
+	 * is the point of sharing the context at all.
+	 */
+	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, nullptr);
+
+	/* Without a trust store SSL_VERIFY_PEER can never succeed. */
+	if (SSL_CTX_set_default_verify_paths(ctx) != 1)
+	{
+		char msg[SSL_ERRBUF_SIZE];
+		ssl_error_string(msg, sizeof(msg));
+		QERR("Unable to load the system certificate store: %s", msg);
+		SSL_CTX_free(ctx);
+		return nullptr;
+	}
+
+	/*
+	 * And whatever else was named, for a peer signed by an authority the system
+	 * store does not carry. A file that cannot be read is fatal rather than
+	 * skipped: silently carrying on would verify against the system store alone
+	 * and refuse every peer the caller added the anchor for, which reads as the
+	 * peer being untrustworthy rather than as a path being wrong.
+	 */
+	for (const std::string& anchor : Samurai::IO::Net::TlsFactory::getTrustAnchors())
+	{
+		if (SSL_CTX_load_verify_locations(ctx, anchor.c_str(), nullptr) == 1)
+			continue;
+
+		char msg[SSL_ERRBUF_SIZE];
+		ssl_error_string(msg, sizeof(msg));
+		QERR("Unable to load the trust anchor '%s': %s", anchor.c_str(), msg);
+		SSL_CTX_free(ctx);
+		return nullptr;
+	}
+
+	/*
+	 * The chain variant rather than the single-certificate one: a certificate
+	 * signed by an intermediate is useless to a peer that does not already hold
+	 * that intermediate, and the file is read the same way either way.
+	 */
+	Samurai::IO::File* cert = Samurai::IO::Net::TlsFactory::getCertificate();
+	Samurai::IO::File* pkey = Samurai::IO::Net::TlsFactory::getPrivateKey();
+
+	if (cert && cert->exists())
+	{
+		if (SSL_CTX_use_certificate_chain_file(ctx, cert->getName().c_str()) != 1)
+		{
+			char msg[SSL_ERRBUF_SIZE];
+			ssl_error_string(msg, sizeof(msg));
+			QERR("Unable to load certificate: %s", msg);
+			SSL_CTX_free(ctx);
+			return nullptr;
+		}
+	}
+
+	if (pkey && pkey->exists())
+	{
+		if (SSL_CTX_use_PrivateKey_file(ctx, pkey->getName().c_str(),
+				SSL_FILETYPE_PEM) != 1)
+		{
+			char msg[SSL_ERRBUF_SIZE];
+			ssl_error_string(msg, sizeof(msg));
+			QERR("Unable to load private key: %s", msg);
+			SSL_CTX_free(ctx);
+			return nullptr;
+		}
+	}
+
+	/*
+	 * That the two belong together needs no separate check: loading a private key
+	 * against a certificate already held refuses a mismatch, so a pair that does
+	 * not match fails above rather than during a handshake.
+	 */
+	return ctx;
+}
+
+/*
+ * The context for a role, built on first use and rebuilt when what went into it
+ * has changed. A failed build is not cached, so a certificate that is put right
+ * is picked up by the next connection rather than needing a restart.
+ */
+SSL_CTX* ssl_shared_context(bool client, unsigned long now)
+{
+	if (!shared.primed || shared.generation != now)
+	{
+		ssl_release_shared();
+		shared.generation = now;
+		shared.primed = true;
+	}
+
+	SSL_CTX*& slot = client ? shared.client : shared.server;
+	if (!slot) slot = ssl_build_context(client);
+	return slot;
+}
+
+}
+
 bool Samurai::IO::Net::TlsFactory::global_init()
 {
 	TlsFactory::priv_init();
@@ -404,6 +603,7 @@ bool Samurai::IO::Net::TlsFactory::global_init()
 
 bool Samurai::IO::Net::TlsFactory::global_deinit()
 {
+	ssl_release_shared();
 	TlsFactory::priv_fini();
 	return true;
 }
@@ -412,7 +612,6 @@ bool Samurai::IO::Net::TlsFactory::global_deinit()
 Samurai::IO::Net::OpenSSL::OpenSSL()
 {
 	ssl = nullptr;
-	ctx = nullptr;
 	verify_peer = false;
 }
 
@@ -430,110 +629,10 @@ Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initialize(
 
 	QDBG("Initializing OpenSSL with socket sd=%d", sd);
 
-	/* The method accessors return a const pointer. */
-	const SSL_METHOD* method;
-
-	if (mode == Samurai::IO::Net::TlsFactory::TlsOperation::Client)
-		method = TLS_client_method();
-	else
-		method = TLS_server_method();
-
-	ctx = SSL_CTX_new(method);
-	ssl = nullptr;
-	if (!ctx)
-	{
-		char msg[SSL_ERRBUF_SIZE];
-		ssl_error_string(msg, sizeof(msg));
-		QERR("SSL error: %s", msg);
-
-		return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
-	}
-
-	/*
-	 * SSLv2/v3 and TLS 1.0/1.1 are obsolete and rejected by modern peers, so
-	 * 1.2 is the floor. The ceiling is set explicitly rather than left at the
-	 * default so that a system configuration file carrying MaxProtocol cannot
-	 * quietly take TLS 1.3 away from us.
-	 */
-	SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
-	SSL_CTX_set_max_proto_version(ctx, TLS1_3_VERSION);
-
 	const bool client = (mode == Samurai::IO::Net::TlsFactory::TlsOperation::Client);
 
-	/*
-	 * A client always wants the server's certificate. A server only wants the
-	 * client's for mutual TLS, and demanding one otherwise rejects every client
-	 * that has none - which is nearly all of them, and would make verifying
-	 * connections unusable for a server.
-	 */
-	verify_peer = !allowUntrusted() && (client || requireClientCertificate());
-
-	if (verify_peer)
-	{
-		/* SSL_VERIFY_FAIL_IF_NO_PEER_CERT is a server-side flag; OpenSSL
-		   ignores it for a client, which fails the handshake on a missing
-		   certificate regardless. */
-		int flags = SSL_VERIFY_PEER;
-		if (!client) flags |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
-
-		SSL_CTX_set_verify(ctx, flags, nullptr);
-
-		/* Without a trust store SSL_VERIFY_PEER can never succeed. */
-		if (SSL_CTX_set_default_verify_paths(ctx) != 1)
-		{
-			char msg[SSL_ERRBUF_SIZE];
-			ssl_error_string(msg, sizeof(msg));
-			QERR("Unable to load the system certificate store: %s", msg);
-			return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
-		}
-
-		/*
-		 * And whatever else was named, for a peer signed by an authority the
-		 * system store does not carry. A file that cannot be read is fatal rather
-		 * than skipped: silently carrying on would verify against the system
-		 * store alone and refuse every peer the caller added the anchor for,
-		 * which reads as the peer being untrustworthy rather than as a path being
-		 * wrong.
-		 */
-		for (const std::string& anchor : getTrustAnchors())
-		{
-			if (SSL_CTX_load_verify_locations(ctx, anchor.c_str(), nullptr) == 1)
-				continue;
-
-			char msg[SSL_ERRBUF_SIZE];
-			ssl_error_string(msg, sizeof(msg));
-			QERR("Unable to load the trust anchor '%s': %s", anchor.c_str(), msg);
-			return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
-		}
-	}
-	else
-	{
-		SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, nullptr);
-	}
-
-	Samurai::IO::File* cert = TlsFactory::getCertificate();
-	if (cert && cert->exists())
-	{
-		if (SSL_CTX_use_certificate_file(ctx, cert->getName().c_str(), SSL_FILETYPE_PEM) != 1)
-		{
-			char msg[SSL_ERRBUF_SIZE];
-			ssl_error_string(msg, sizeof(msg));
-			QERR("Unable to load certificate: %s", msg);
-			return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
-		}
-	}
-
-	Samurai::IO::File* pkey = TlsFactory::getPrivateKey();
-	if (pkey && pkey->exists())
-	{
-		if (SSL_CTX_use_PrivateKey_file(ctx, pkey->getName().c_str(), SSL_FILETYPE_PEM) != 1)
-		{
-			char msg[SSL_ERRBUF_SIZE];
-			ssl_error_string(msg, sizeof(msg));
-			QERR("Unable to load private key: %s", msg);
-			return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
-		}
-	}
+	SSL_CTX* ctx = ssl_shared_context(client, configGeneration());
+	if (!ctx) return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 
 	ssl = SSL_new(ctx);
 	if (!ssl)
@@ -545,11 +644,38 @@ Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initialize(
 	}
 
 	/*
+	 * A client always wants the server's certificate. A server only wants the
+	 * client's for mutual TLS, and demanding one otherwise rejects every client
+	 * that has none - which is nearly all of them, and would make verifying
+	 * connections unusable for a server.
+	 *
+	 * Set on the connection rather than on the context, because both toggles it
+	 * reads are per connection: one peer that cannot be verified must not stop
+	 * the next connection from verifying, and they share this context.
+	 */
+	verify_peer = !allowUntrusted() && (client || requireClientCertificate());
+
+	if (verify_peer)
+	{
+		/* SSL_VERIFY_FAIL_IF_NO_PEER_CERT is a server-side flag; OpenSSL
+		   ignores it for a client, which fails the handshake on a missing
+		   certificate regardless. */
+		int flags = SSL_VERIFY_PEER;
+		if (!client) flags |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
+
+		SSL_set_verify(ssl, flags, nullptr);
+	}
+	else
+	{
+		SSL_set_verify(ssl, SSL_VERIFY_NONE, nullptr);
+	}
+
+	/*
 	 * A valid certificate chain proves nothing unless we also check that the
 	 * certificate was issued for the host we asked for. Without this, any
 	 * peer holding any CA-signed certificate can impersonate any server.
 	 */
-	if (mode == Samurai::IO::Net::TlsFactory::TlsOperation::Client && !peer_name.empty())
+	if (client && !peer_name.empty())
 	{
 		X509_VERIFY_PARAM* param = SSL_get0_param(ssl);
 
@@ -585,10 +711,10 @@ Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initialize(
 
 Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::deinitialize()
 {
+	/* Only the session. The context is shared, and SSL_free() drops the
+	   reference SSL_new() took on it - the cache keeps its own. */
 	if (ssl) SSL_free(ssl);
-	if (ctx) SSL_CTX_free(ctx);
 	ssl = nullptr;
-	ctx = nullptr;
 	return Samurai::IO::Net::TlsFactory::TlsStatus::Ok;
 }
 
