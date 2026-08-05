@@ -804,6 +804,24 @@ class Recorder final : public XmlContentHandler
 		}
 };
 
+/*
+ * How much character data the tree holds, everywhere in it.
+ *
+ * Not the data itself: the tree cannot reproduce document order, because an
+ * element joins the data written either side of a child - <a>x<b>y</b>z</a> holds
+ * "xz" on a and "y" on b, where the events are "x", "y", "z" in that order. What
+ * both must agree on is that nothing was dropped or delivered twice.
+ */
+size_t treeTextLength(const XmlElement* element)
+{
+	if (!element) return 0;
+
+	size_t total = element->getText().size();
+	for (const auto& child : element->getChildren())
+		total += treeTextLength(child.get());
+	return total;
+}
+
 std::string joined(const std::vector<std::string>& events)
 {
 	std::string out;
@@ -1077,5 +1095,124 @@ EXO_TEST(xml_reader_counts_an_elements_text_across_its_runs,
 	Recorder ok;
 	EXO_ASSERT(XmlReader::parse("<a>aaa<b/>bbb</a>", ok, limits) == XmlError::Ok);
 	EXO_ASSERT(ok.allText() == "aaabbb");
+	return 1;
+});
+
+/*
+ * The corpus QuickDC's own reader tests were built on.
+ *
+ * That reader is gone - this one replaced it - and its cases were about a parser
+ * that no longer exists, so their expectations went with it. Their inputs did not:
+ * sixty-three documents that a real consumer's tests were written against are
+ * worth more as a corpus than as nothing, and what is asserted over them is the
+ * property that matters here - the tree and the events agree, on acceptance, on
+ * refusal, and on the reason - plus that none of them takes the parser down.
+ */
+EXO_TEST(xml_the_inherited_corpus_reads_the_same_both_ways,
+{
+	static const char* documents[] = {
+		"<a></a>",
+		"<a>text</a>",
+		"<a><b>text</b></a>",
+		"<?xml version=\"1.0\"?><!-- note --><root></root>",
+		"<a x=\"1\"></a>",
+		"<a x='one'></a>",
+		"<a x=\"1\" y=\"2\" z=\"3\"></a>",
+		"<a x=\"\"></a>",
+		"<a x=\"&amp;&lt;&gt;&quot;&apos;\"></a>",
+		"<a href=\"http://example.org/x\"></a>",
+		"<a/>",
+		"<a x=\"1\"/>",
+		"<a x=\"1\" />",
+		"<a standalone/>",
+		"<a><b x=\"1\"/></a>",
+		"<a x=\"1\"></a><b></b>",
+		"<a 'foo'></a>",
+		"<a \"foo\"></a>",
+		"<a \"foo\" x=\"1\"></a>",
+		"<a x =\"1\"></a>",
+		"<a x= \"1\"></a>",
+		"<a x = \"1\"></a>",
+		"<a w=\"0\" x = \"1\" y=\"2\"></a>",
+		"<a x = \"1\"/>",
+		"<a x\n=\n\"1\"></a>",
+		"<a x y=\"1\"></a>",
+		"<a x ></a>",
+		"<a x=1></a>",
+		"<a x=1 y=2></a>",
+		"<a x=\"p>q\"></a>",
+		"<a x=\"it's\"></a>",
+		"<a href=http://example.org/x></a>",
+		"<a href=http://example.org/x/>",
+		"<a x=p/q></a>",
+		"<a x=/root></a>",
+		"<a x=/>",
+		"<a>&lt;b&gt; &amp; &quot;c&quot;</a>",
+		"<a></a>tail",
+		"<a><!-- p > q --><b></b></a>",
+		"<a><!----></a>",
+		"<a><!-- <b></b> --></a>",
+		"<a><![CDATA[p>q & <b>]]></a>",
+		"<a><![CDATA[]]></a>",
+		"<!DOCTYPE a><a></a>",
+		"<a x=\"\xc3\xa6\xc3\xb8\xc3\xa5\"></a>",
+		"<a>\xc3\xa6\xc3\xb8\xc3\xa5</a>",
+		"<a>&#65;&#66;</a>",
+		"<a>&#x41;&#X42;</a>",
+		"<a x=\"&#65;\"></a>",
+		"<a>&#229;</a>",
+		"<a>&#x263A;</a>",
+		"<a>&#x1F600;</a>",
+		"<a>a&#66;c</a>",
+		"<a>a &amp; b</a>",
+		"<a>&nbsp;</a>",
+		"<a>&#;</a>",
+		"<a>&#xZZ;</a>",
+		"<a>&#x110000;</a>",
+		"<a>&#xD800;</a>",
+		"<a>&#0;</a>",
+		"<a>&#65</a>",
+		"<a x=\"&amp;lt;\">&amp;gt;</a>",
+		"<a><![CDATA[&#65;&amp;]]></a>",
+		0
+	};
+
+	size_t accepted = 0;
+	size_t refused = 0;
+
+	for (size_t n = 0; documents[n]; n++)
+	{
+		XmlDocument doc;
+		const XmlError tree = doc.parse(documents[n]);
+
+		Recorder r;
+		const XmlError events = XmlReader::parse(documents[n], r);
+
+		if (tree != events)
+		{
+			const std::string why = std::string("'") + documents[n] + "' is "
+				+ Samurai::IO::toString(tree) + " as a tree but "
+				+ Samurai::IO::toString(events) + " as events";
+			EXO_FAIL(why.c_str());
+		}
+
+		if (tree == XmlError::Ok)
+		{
+			accepted++;
+			if (treeTextLength(doc.getRoot()) != r.allText().size())
+			{
+				const std::string why = std::string("'") + documents[n] + "': the tree holds "
+					+ std::to_string(treeTextLength(doc.getRoot()))
+					+ " characters against " + std::to_string(r.allText().size())
+					+ " reported as events";
+				EXO_FAIL(why.c_str());
+			}
+		}
+		else refused++;
+	}
+
+	/* Both kinds are represented, or this would be asserting one thing twice. */
+	EXO_ASSERT(accepted > 8);
+	EXO_ASSERT(refused > 8);
 	return 1;
 });
