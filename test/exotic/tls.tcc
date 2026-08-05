@@ -147,7 +147,14 @@ struct TlsSession
 
 	TlsSession()
 	{
-		if (!tls_test_keys().ready || !pair.valid()) return;
+		/*
+		 * Whatever the process keys point at, which is the case's decision - some
+		 * of these point them at a pair of their own before getting here, and
+		 * claiming the fixture would undo that. A case that wants the fixture
+		 * claims it on the way in.
+		 */
+		Samurai::IO::File* cert = Samurai::IO::Net::TlsFactory::getCertificate();
+		if (!cert || !cert->exists() || !pair.valid()) return;
 
 		server.setAllowUntrusted(true);
 		client.setAllowUntrusted(true);
@@ -196,12 +203,12 @@ static bool tls_read_exactly(Samurai::IO::Net::OpenSSL& tls, size_t want, std::s
 
 EXO_TEST(tls_global_init_and_fixture,
 {
-	return tls_test_keys().ready;
+	return tls_test_keys_claimed().ready;
 });
 
 EXO_TEST(tls_get_private_key_and_certificate,
 {
-	if (!tls_test_keys().ready) return false;
+	if (!tls_test_keys_claimed().ready) return false;
 	return Samurai::IO::Net::TlsFactory::getPrivateKey() != nullptr
 		&& Samurai::IO::Net::TlsFactory::getCertificate() != nullptr;
 });
@@ -209,7 +216,7 @@ EXO_TEST(tls_get_private_key_and_certificate,
 /* Accessors, not factories: the same object must come back each time. */
 EXO_TEST(tls_key_accessors_do_not_transfer_ownership,
 {
-	if (!tls_test_keys().ready) return false;
+	if (!tls_test_keys_claimed().ready) return false;
 	return Samurai::IO::Net::TlsFactory::getPrivateKey()
 			== Samurai::IO::Net::TlsFactory::getPrivateKey()
 		&& Samurai::IO::Net::TlsFactory::getCertificate()
@@ -231,7 +238,7 @@ EXO_TEST(tls_default_allow_untrusted_toggles,
 
 EXO_TEST(tls_own_certificate_fingerprint_matches_der_sha256,
 {
-	if (!tls_test_keys().ready) return false;
+	if (!tls_test_keys_claimed().ready) return false;
 
 	Tls::Sha256Digest expected{};
 	if (!tls_expected_fingerprint(tls_test_keys().cert_path, expected)) return false;
@@ -266,12 +273,16 @@ EXO_TEST(tls_handshake_on_uninitialized_is_an_error,
 
 EXO_TEST(tls_handshake_completes,
 {
+	if (!tls_test_keys_claimed().ready) return false;
+
 	TlsSession session;
 	return session.ok;
 });
 
 EXO_TEST(tls_peer_certificate_is_the_one_we_serve,
 {
+	if (!tls_test_keys_claimed().ready) return false;
+
 	TlsSession session;
 	if (!session.ok) return false;
 
@@ -285,6 +296,8 @@ EXO_TEST(tls_peer_certificate_is_the_one_we_serve,
 
 EXO_TEST(tls_client_to_server_round_trip,
 {
+	if (!tls_test_keys_claimed().ready) return false;
+
 	TlsSession session;
 	if (!session.ok) return false;
 
@@ -299,6 +312,8 @@ EXO_TEST(tls_client_to_server_round_trip,
 
 EXO_TEST(tls_server_to_client_round_trip,
 {
+	if (!tls_test_keys_claimed().ready) return false;
+
 	TlsSession session;
 	if (!session.ok) return false;
 
@@ -313,6 +328,8 @@ EXO_TEST(tls_server_to_client_round_trip,
 
 EXO_TEST(tls_binary_payload_survives,
 {
+	if (!tls_test_keys_claimed().ready) return false;
+
 	TlsSession session;
 	if (!session.ok) return false;
 
@@ -334,6 +351,8 @@ EXO_TEST(tls_binary_payload_survives,
  */
 EXO_TEST(tls_pending_reports_buffered_plaintext,
 {
+	if (!tls_test_keys_claimed().ready) return false;
+
 	TlsSession session;
 	if (!session.ok) return false;
 
@@ -349,6 +368,8 @@ EXO_TEST(tls_pending_reports_buffered_plaintext,
 
 EXO_TEST(tls_pending_is_zero_before_any_data,
 {
+	if (!tls_test_keys_claimed().ready) return false;
+
 	TlsSession session;
 	if (!session.ok) return false;
 	return session.server.pending() == 0;
@@ -357,6 +378,8 @@ EXO_TEST(tls_pending_is_zero_before_any_data,
 /* peek() must not consume: the same bytes have to read back afterwards. */
 EXO_TEST(tls_peek_does_not_consume,
 {
+	if (!tls_test_keys_claimed().ready) return false;
+
 	TlsSession session;
 	if (!session.ok) return false;
 
@@ -379,6 +402,8 @@ EXO_TEST(tls_peek_does_not_consume,
 
 EXO_TEST(tls_goodbye_and_deinitialize,
 {
+	if (!tls_test_keys_claimed().ready) return false;
+
 	TlsSession session;
 	if (!session.ok) return false;
 
@@ -392,6 +417,8 @@ EXO_TEST(tls_goodbye_and_deinitialize,
 /* Repeated sessions must not leak or corrupt the shared context. */
 EXO_TEST(tls_sessions_are_independent,
 {
+	if (!tls_test_keys_claimed().ready) return false;
+
 	for (int n = 0; n < 3; n++)
 	{
 		TlsSession session;
@@ -449,7 +476,7 @@ EXO_TEST(tls_default_require_client_certificate_toggles,
    client refuses to start rather than connect unauthenticated. */
 EXO_TEST(tls_verifying_client_without_a_peer_name_refuses_to_initialize,
 {
-	if (!tls_test_keys().ready) return false;
+	if (!tls_test_keys_claimed().ready) return false;
 
 	SocketPair pair;
 	if (!pair.valid()) return false;
@@ -461,7 +488,7 @@ EXO_TEST(tls_verifying_client_without_a_peer_name_refuses_to_initialize,
 /* The point of C1: a self-signed peer is turned away rather than accepted. */
 EXO_TEST(tls_self_signed_certificate_is_rejected_when_verifying,
 {
-	if (!tls_test_keys().ready) return false;
+	if (!tls_test_keys_claimed().ready) return false;
 
 	SocketPair pair;
 	if (!pair.valid()) return false;
@@ -486,7 +513,7 @@ EXO_TEST(tls_self_signed_certificate_is_rejected_when_verifying,
  */
 EXO_TEST(tls_verifying_server_does_not_demand_a_client_certificate,
 {
-	if (!tls_test_keys().ready) return false;
+	if (!tls_test_keys_claimed().ready) return false;
 
 	SocketPair pair;
 	if (!pair.valid()) return false;
@@ -540,7 +567,7 @@ EXO_TEST(tls_a_connection_setting_does_not_touch_the_default,
  */
 EXO_TEST(tls_one_untrusted_connection_leaves_the_others_verifying,
 {
-	if (!tls_test_keys().ready) return false;
+	if (!tls_test_keys_claimed().ready) return false;
 
 	SocketPair relaxed_pair;
 	SocketPair strict_pair;
@@ -758,7 +785,7 @@ static bool verified_handshake(Samurai::IO::Net::OpenSSL& server,
 
 EXO_TEST(tls_selfsigned_writes_a_key_and_a_certificate,
 {
-	if (!tls_test_keys().ready) EXO_SKIP("the working directory is not writable");
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
 
 	GeneratedKeys keys("generated", "quickdc-peer");
 	EXO_ASSERT(keys.ok);
@@ -795,7 +822,7 @@ EXO_TEST(tls_selfsigned_writes_a_key_and_a_certificate,
  */
 EXO_TEST(tls_selfsigned_private_key_is_readable_only_by_its_owner,
 {
-	if (!tls_test_keys().ready) EXO_SKIP("the working directory is not writable");
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
 
 	GeneratedKeys keys("modes", "quickdc-peer");
 	EXO_ASSERT(keys.ok);
@@ -826,7 +853,7 @@ EXO_TEST(tls_selfsigned_private_key_is_readable_only_by_its_owner,
  */
 EXO_TEST(tls_selfsigned_address_becomes_an_ip_subject_alt_name,
 {
-	if (!tls_test_keys().ready) EXO_SKIP("the working directory is not writable");
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
 
 	GeneratedKeys keys("san-ip", "127.0.0.1");
 	EXO_ASSERT(keys.ok);
@@ -849,7 +876,7 @@ EXO_TEST(tls_selfsigned_address_becomes_an_ip_subject_alt_name,
 
 EXO_TEST(tls_selfsigned_name_becomes_a_dns_subject_alt_name,
 {
-	if (!tls_test_keys().ready) EXO_SKIP("the working directory is not writable");
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
 
 	GeneratedKeys keys("san-dns", "peer.example.invalid");
 	EXO_ASSERT(keys.ok);
@@ -882,7 +909,7 @@ EXO_TEST(tls_selfsigned_name_becomes_a_dns_subject_alt_name,
  */
 EXO_TEST(tls_selfsigned_certificate_is_fit_for_both_roles,
 {
-	if (!tls_test_keys().ready) EXO_SKIP("the working directory is not writable");
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
 
 	GeneratedKeys keys("purpose", "127.0.0.1");
 	EXO_ASSERT(keys.ok);
@@ -911,7 +938,7 @@ EXO_TEST(tls_selfsigned_certificate_is_fit_for_both_roles,
  */
 EXO_TEST(tls_selfsigned_validity_starts_in_the_past_and_runs_for_years,
 {
-	if (!tls_test_keys().ready) EXO_SKIP("the working directory is not writable");
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
 
 	GeneratedKeys keys("validity", "127.0.0.1");
 	EXO_ASSERT(keys.ok);
@@ -938,7 +965,7 @@ EXO_TEST(tls_selfsigned_validity_starts_in_the_past_and_runs_for_years,
  */
 EXO_TEST(tls_selfsigned_keyprint_is_the_certificate_fingerprint,
 {
-	if (!tls_test_keys().ready) EXO_SKIP("the working directory is not writable");
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
 
 	GeneratedKeys keys("keyprint", "127.0.0.1");
 	EXO_ASSERT(keys.ok);
@@ -963,7 +990,7 @@ EXO_TEST(tls_selfsigned_keyprint_is_the_certificate_fingerprint,
  */
 EXO_TEST(tls_selfsigned_pairs_have_different_keyprints,
 {
-	if (!tls_test_keys().ready) EXO_SKIP("the working directory is not writable");
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
 
 	GeneratedKeys first("distinct-one", "127.0.0.1");
 	GeneratedKeys second("distinct-two", "127.0.0.1");
@@ -992,7 +1019,7 @@ EXO_TEST(tls_selfsigned_pairs_have_different_keyprints,
  */
 EXO_TEST(tls_selfsigned_certificate_completes_a_handshake,
 {
-	if (!tls_test_keys().ready) EXO_SKIP("the working directory is not writable");
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
 
 	GeneratedKeys keys("handshake", "127.0.0.1");
 	EXO_ASSERT(keys.ok);
@@ -1029,7 +1056,7 @@ EXO_TEST(tls_selfsigned_certificate_completes_a_handshake,
  */
 EXO_TEST(tls_selfsigned_certificate_verifies_as_its_own_anchor,
 {
-	if (!tls_test_keys().ready) EXO_SKIP("the working directory is not writable");
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
 
 	GeneratedKeys keys("verified", "127.0.0.1");
 	EXO_ASSERT(keys.ok);
@@ -1057,7 +1084,7 @@ EXO_TEST(tls_selfsigned_certificate_verifies_as_its_own_anchor,
 /* The anchor is what did it, not verification having been skipped. */
 EXO_TEST(tls_selfsigned_certificate_is_refused_without_the_anchor,
 {
-	if (!tls_test_keys().ready) EXO_SKIP("the working directory is not writable");
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
 
 	GeneratedKeys keys("unanchored", "127.0.0.1");
 	EXO_ASSERT(keys.ok);
@@ -1087,7 +1114,7 @@ EXO_TEST(tls_selfsigned_certificate_is_refused_without_the_anchor,
  */
 EXO_TEST(tls_selfsigned_certificate_serves_a_mutually_verified_handshake,
 {
-	if (!tls_test_keys().ready) EXO_SKIP("the working directory is not writable");
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
 
 	GeneratedKeys keys("mutual", "127.0.0.1");
 	EXO_ASSERT(keys.ok);
@@ -1123,7 +1150,7 @@ EXO_TEST(tls_selfsigned_certificate_serves_a_mutually_verified_handshake,
  */
 EXO_TEST(tls_selfsigned_refuses_to_replace_an_existing_certificate,
 {
-	if (!tls_test_keys().ready) EXO_SKIP("the working directory is not writable");
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
 
 	const std::string key_path = tls_temp_path("existing-cert-key.pem");
 	const std::string cert_path = tls_temp_path("existing-cert.pem");
@@ -1155,7 +1182,7 @@ EXO_TEST(tls_selfsigned_refuses_to_replace_an_existing_certificate,
 
 EXO_TEST(tls_selfsigned_refuses_to_replace_an_existing_private_key,
 {
-	if (!tls_test_keys().ready) EXO_SKIP("the working directory is not writable");
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
 
 	const std::string key_path = tls_temp_path("existing-key.pem");
 	const std::string cert_path = tls_temp_path("existing-key-cert.pem");
@@ -1190,7 +1217,7 @@ EXO_TEST(tls_selfsigned_refuses_to_replace_an_existing_private_key,
  */
 EXO_TEST(tls_selfsigned_leaves_no_key_behind_when_the_certificate_cannot_be_written,
 {
-	if (!tls_test_keys().ready) EXO_SKIP("the working directory is not writable");
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
 
 	const std::string key_path = tls_temp_path("orphan-key.pem");
 	const std::string cert_path = tls_temp_path("absent-directory/cert.pem");
@@ -1210,7 +1237,7 @@ EXO_TEST(tls_selfsigned_leaves_no_key_behind_when_the_certificate_cannot_be_writ
 /* A directory that cannot be written to fails the call rather than the process. */
 EXO_TEST(tls_selfsigned_fails_in_an_unwritable_directory,
 {
-	if (!tls_test_keys().ready) EXO_SKIP("the working directory is not writable");
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
 	if (geteuid() == 0) EXO_SKIP("running as root, which ignores the directory mode");
 
 	const std::string directory = tls_temp_path("unwritable");
@@ -1242,7 +1269,7 @@ EXO_TEST(tls_selfsigned_fails_in_an_unwritable_directory,
  */
 EXO_TEST(tls_selfsigned_refuses_a_name_it_cannot_carry,
 {
-	if (!tls_test_keys().ready) EXO_SKIP("the working directory is not writable");
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
 
 	const std::string key_path = tls_temp_path("badname-key.pem");
 	const std::string cert_path = tls_temp_path("badname-cert.pem");
@@ -1325,3 +1352,4 @@ EXO_TEST(tls_generate_resolves_a_path_the_way_setkeys_does,
 	EXO_ASSERT(!literal);
 	return 1;
 });
+

@@ -273,7 +273,7 @@ struct TlsFixture
 
 	TlsFixture()
 	{
-		if (!tcp.ready || !tls_test_keys().ready) return;
+		if (!tcp.ready || !tls_test_keys_claimed().ready) return;
 
 		/* The certificate is self-signed and names "localhost", so it cannot
 		   be verified against a loopback address. A Socket keeps its Tls to

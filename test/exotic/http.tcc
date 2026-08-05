@@ -386,7 +386,7 @@ class TlsCannedServer
 
 		explicit TlsCannedServer(std::string canned) : reply(std::move(canned))
 		{
-			if (!tls_test_keys().ready) return;
+			if (!tls_test_keys_claimed().ready) return;
 
 			Samurai::IO::Net::InetSocketAddress any((uint16_t) 0);
 			server = Samurai::IO::Net::ServerSocket::create(this, any);
