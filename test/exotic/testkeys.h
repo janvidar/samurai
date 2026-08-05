@@ -137,7 +137,21 @@ static bool tls_write_keypair(const std::string& key_path, const std::string& ce
 	return ok;
 }
 
-static TlsTestKeys& tls_test_keys()
+/*
+ * The one fixture, shared by every translation unit that includes this.
+ *
+ * inline rather than static, and that is the whole of it: a static function in a
+ * header has internal linkage, so each of the three .tcc files including this
+ * would get its own copy of the local static below - its own generated pair, and
+ * its own claim on the process-wide setKeys(). Whichever ran first decided what
+ * every other file's connections would present. An inline function has one
+ * instance of its local static across the program, so there is one pair.
+ *
+ * This accessor has no effect on process state. Reading a path or asking whether
+ * the pair exists must not move the keys out from under a case that pointed them
+ * at a pair of its own.
+ */
+inline TlsTestKeys& tls_test_keys()
 {
 	static TlsTestKeys keys = []
 	{
@@ -148,10 +162,25 @@ static TlsTestKeys& tls_test_keys()
 		if (!Samurai::IO::Net::TlsFactory::global_init()) return k;
 		if (!tls_write_keypair(k.key_path, k.cert_path)) return k;
 
-		Samurai::IO::Net::TlsFactory::setKeys(k.key_path.c_str(), k.cert_path.c_str());
 		k.ready = true;
 		return k;
 	}();
+	return keys;
+}
+
+/*
+ * The same pair, and the process keys pointed at it.
+ *
+ * For the top of a case, so that what a connection presents is decided by the
+ * case rather than by whatever ran before it - setKeys() is process-wide, and
+ * several cases here deliberately point it at a pair of their own. Claiming it
+ * on the way in is what makes each case's starting state its own.
+ */
+inline TlsTestKeys& tls_test_keys_claimed()
+{
+	TlsTestKeys& keys = tls_test_keys();
+	if (keys.ready)
+		Samurai::IO::Net::TlsFactory::setKeys(keys.key_path.c_str(), keys.cert_path.c_str());
 	return keys;
 }
 
