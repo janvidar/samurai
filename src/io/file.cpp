@@ -698,6 +698,12 @@ std::string Samurai::IO::File::resolvePath(const std::string& input) {
 			work = work.substr(1);
 	}
 
+	/* An empty name is the working directory, said here rather than left to
+	   absolute(): libstdc++ refuses an empty path and reports an error where
+	   libc++ resolves it, so the two disagree about "" and about a '~' that was
+	   dropped for want of a home directory. */
+	if (work.empty()) work = ".";
+
 	std::error_code ec;
 	std::filesystem::path p(work);
 
