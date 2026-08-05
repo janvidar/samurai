@@ -174,6 +174,11 @@ void Samurai::IO::Net::ServerSocket::internal_accept() {
 		return;
 	}
 
+	/* accept() does not go through SocketBase::createDescriptor(), so this is
+	   the only place an inbound connection can be given the same suppression
+	   every outbound one gets. */
+	Samurai::IO::Net::set_nosigpipe(new_sd);
+
 	Samurai::IO::Net::InetSocketAddress n_addr;
 
 	if (new_addr.ss_family == AF_INET) {

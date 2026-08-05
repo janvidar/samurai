@@ -1277,6 +1277,35 @@ EXO_TEST(sockets_tls_peer_certificate_is_the_one_we_configured,
 	return peer.has_value() && own.has_value() && *peer == *own;
 });
 
+/*
+ * The record is written by OpenSSL rather than by anything here, so what keeps
+ * a write to a departed peer from raising SIGPIPE is the transport the
+ * connection was given - not the flags a caller passes. Reaching the assertion
+ * at all is the test.
+ */
+EXO_TEST(sockets_tls_writing_to_a_peer_that_has_gone_is_an_error_not_a_signal,
+{
+	TlsFixture fix;
+	if (!fix.ready) return false;
+
+	fix.tcp.server_events.accepted.reset();
+
+	/*
+	 * The first record still goes into the send buffer; what the closed peer
+	 * answers with is a reset, and the write after that is the one that finds
+	 * the connection gone. Not pumped: the loop would notice the peer first and
+	 * leave the socket refusing the write before it reaches TLS.
+	 */
+	ssize_t last = 0;
+	for (int n = 0; n < 64 && last >= 0; n++)
+	{
+		last = fix.client()->write("payload", 7);
+		usleep(1000);
+	}
+
+	return last < 0;
+});
+
 /* Without TLS there is no peer certificate to report. */
 EXO_TEST(sockets_no_peer_certificate_without_tls,
 {

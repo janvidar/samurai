@@ -6,9 +6,11 @@
 
 #include <samurai/samurai.h>
 #include <samurai/io/net/tlsfactory-openssl.h>
+#include <samurai/io/net/socketglue.h>
 #include <samurai/io/file.h>
 
 #include <openssl/ssl.h>
+#include <openssl/bio.h>
 #include <openssl/bn.h>
 #include <openssl/crypto.h>
 #include <openssl/opensslv.h>
@@ -592,6 +594,114 @@ SSL_CTX* ssl_shared_context(bool client, unsigned long now)
 	return slot;
 }
 
+/*
+ * The transport OpenSSL is given for a connection.
+ *
+ * OpenSSL's own socket BIO writes with write(), which carries no flag to
+ * suppress SIGPIPE, so a record written to a peer that has gone raises the
+ * signal and kills the process. Nothing on the descriptor saves it where the
+ * platform has no SO_NOSIGPIPE - which is Linux, where the flag on the call is
+ * the only means there is. Every other write in the library goes out through
+ * send() with send_flags for that reason; this is the same BIO OpenSSL would
+ * have built, making the same call.
+ *
+ * The method is built on first use and not guarded by a lock, which is the
+ * contract the shared context above already has.
+ */
+BIO_METHOD* bio_method = nullptr;
+
+socket_t bio_descriptor(BIO* bio)
+{
+	return *static_cast<socket_t*>(BIO_get_data(bio));
+}
+
+/* A call cut short, or one that found no room, is one to make again - and is
+   not the peer going away. */
+bool bio_should_retry()
+{
+	const int error = Samurai::IO::Net::net_error();
+	return error == EAGAIN || error == EWOULDBLOCK || error == EINTR;
+}
+
+int bio_read(BIO* bio, char* data, int length)
+{
+	if (!data || length <= 0) return 0;
+
+	const ssize_t ret = ::recv(bio_descriptor(bio), data, (size_t) length, 0);
+
+	BIO_clear_retry_flags(bio);
+	if (ret < 0 && bio_should_retry()) BIO_set_retry_read(bio);
+
+	return (int) ret;
+}
+
+int bio_write(BIO* bio, const char* data, int length)
+{
+	if (!data || length <= 0) return 0;
+
+	const ssize_t ret = ::send(bio_descriptor(bio), data, (size_t) length,
+	                           Samurai::IO::Net::send_flags);
+
+	BIO_clear_retry_flags(bio);
+	if (ret < 0 && bio_should_retry()) BIO_set_retry_write(bio);
+
+	return (int) ret;
+}
+
+long bio_ctrl(BIO* bio, int cmd, [[maybe_unused]] long argument, void* pointer)
+{
+	switch (cmd)
+	{
+		case BIO_C_GET_FD:
+		{
+			if (!BIO_get_init(bio)) return -1;
+			const socket_t sd = bio_descriptor(bio);
+			if (pointer) *static_cast<int*>(pointer) = (int) sd;
+			return (long) sd;
+		}
+
+		/* The descriptor belongs to the Socket, which closes it. A BIO that
+		   closed it too would be closing whatever the descriptor named by the
+		   time it got there. */
+		case BIO_CTRL_GET_CLOSE:
+			return BIO_NOCLOSE;
+
+		/* Nothing is held back, so there is nothing a flush has to do. */
+		case BIO_CTRL_FLUSH:
+			return 1;
+
+		default:
+			return 0;
+	}
+}
+
+BIO_METHOD* ssl_bio_method()
+{
+	if (bio_method) return bio_method;
+
+	bio_method = BIO_meth_new(
+		BIO_get_new_index() | BIO_TYPE_SOURCE_SINK | BIO_TYPE_DESCRIPTOR,
+		"samurai socket");
+
+	if (!bio_method) return nullptr;
+
+	if (BIO_meth_set_read(bio_method, bio_read) != 1
+		|| BIO_meth_set_write(bio_method, bio_write) != 1
+		|| BIO_meth_set_ctrl(bio_method, bio_ctrl) != 1)
+	{
+		BIO_meth_free(bio_method);
+		bio_method = nullptr;
+	}
+
+	return bio_method;
+}
+
+void ssl_release_bio_method()
+{
+	if (bio_method) BIO_meth_free(bio_method);
+	bio_method = nullptr;
+}
+
 }
 
 bool Samurai::IO::Net::TlsFactory::global_init()
@@ -604,6 +714,7 @@ bool Samurai::IO::Net::TlsFactory::global_init()
 bool Samurai::IO::Net::TlsFactory::global_deinit()
 {
 	ssl_release_shared();
+	ssl_release_bio_method();
 	TlsFactory::priv_fini();
 	return true;
 }
@@ -705,7 +816,34 @@ Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initialize(
 		return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 	}
 
-	SSL_set_fd(ssl, sd);
+	/*
+	 * SSL_set_fd() would give the connection OpenSSL's socket BIO, which cannot
+	 * be told to suppress SIGPIPE - see ssl_bio_method(). set_nosigpipe() is
+	 * said here as well, because a descriptor a caller made itself has not been
+	 * through SocketBase and is otherwise unprotected on a platform where that
+	 * is what does the suppressing.
+	 */
+	Samurai::IO::Net::set_nosigpipe(sd);
+
+	BIO_METHOD* method = ssl_bio_method();
+	BIO* bio = method ? BIO_new(method) : nullptr;
+
+	if (!bio)
+	{
+		char msg[SSL_ERRBUF_SIZE];
+		ssl_error_string(msg, sizeof(msg));
+		QERR("Unable to create the transport for an SSL session: %s", msg);
+		return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
+	}
+
+	/* The descriptor is read out of this object on every call, so the BIO holds
+	   the member rather than a copy of it. */
+	BIO_set_data(bio, &sd);
+	BIO_set_init(bio, 1);
+
+	/* Both directions are the same descriptor, and SSL_set_bio() takes one
+	   reference when it is handed the same BIO twice. */
+	SSL_set_bio(ssl, bio, bio);
 	return Samurai::IO::Net::TlsFactory::TlsStatus::Ok;
 }
 
