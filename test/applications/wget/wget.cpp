@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
+#include <samurai/io/net/proxy.h>
 #include <samurai/io/net/socket.h>
 #include <samurai/io/net/socketevent.h>
 #include <samurai/io/net/socketmonitor.h>
@@ -24,7 +25,11 @@ class Connection : public Samurai::IO::Net::SocketEventHandler {
 			
 	public:
 		Connection(const Samurai::IO::Net::URL& url) {
-			socket = Samurai::IO::Net::Socket::create(this, url.getHost().toString(), url.getPort());
+			/* getHostname() rather than getHost().toString(), which reformats a
+			   literal, and getEffectivePort() rather than getPort(), which is 0
+			   for an "https://host" that names no port. */
+			socket = Samurai::IO::Net::Socket::create(this, url.getHostname(),
+			                                          url.getEffectivePort());
 		}
 		
 		virtual ~Connection() {
@@ -115,13 +120,43 @@ class Connection : public Samurai::IO::Net::SocketEventHandler {
 };
 
 int main(int argc, char** argv) {
-	if (argc < 2) {
-		printf("Usage: %s url\n", argv[0]);
+	const char* arg_url = 0;
+	const char* arg_socks5 = 0;
+	bool arg_tor = false;
+
+	for (int n = 1; n < argc; n++)
+	{
+		if (!strcmp(argv[n], "--tor")) { arg_tor = true; continue; }
+		if (!strcmp(argv[n], "--socks5") && n + 1 < argc) { arg_socks5 = argv[++n]; continue; }
+		if (argv[n][0] != '-' && !arg_url) { arg_url = argv[n]; continue; }
+		arg_url = 0;
+		break;
+	}
+
+	if (!arg_url) {
+		printf("Usage: %s [--socks5 host:port] [--tor] url\n", argv[0]);
 		printf("A simple HTTP file fetcher\n");
 		exit(-1);
 	}
 
-	Samurai::IO::Net::URL url(argv[1]);
+	/* Before the socket is constructed, which is when it reads the default. */
+	if (arg_socks5 || arg_tor)
+	{
+		Samurai::IO::Net::ProxySettings proxy = arg_socks5
+			? Samurai::IO::Net::ProxySettings::fromString(arg_socks5)
+			: Samurai::IO::Net::ProxySettings::tor();
+
+		if (!proxy.isEnabled()) {
+			printf("Not a usable SOCKS5 proxy: %s\n", arg_socks5);
+			exit(-1);
+		}
+
+		if (arg_tor) proxy.setTorExtensions(true);
+		Samurai::IO::Net::ProxySettings::setDefault(proxy);
+		printf("Proxy: '%s'\n", proxy.toString().c_str());
+	}
+
+	Samurai::IO::Net::URL url(arg_url);
 
 	printf("Url: '%s'\n", url.toString().c_str());
 

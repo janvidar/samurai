@@ -8,6 +8,7 @@
 
 #include <samurai/io/buffer.h>
 #include <samurai/io/net/http/response.h>
+#include <samurai/io/net/proxy.h>
 #include <samurai/io/net/socket.h>
 #include <samurai/io/net/socketevent.h>
 #include <samurai/io/net/url.h>
@@ -15,6 +16,7 @@
 
 #include <chrono>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -71,8 +73,14 @@ class RequestEventHandler : public Samurai::IO::Net::EventHandler
  *    stale-connection faults.
  *  - Content codings. No Accept-Encoding is sent, so a conforming server must
  *    not apply one.
- *  - Chunked requests, cookies, authentication, proxies, Expect: 100-continue,
- *    and bodies too large to hold in memory.
+ *  - Chunked requests, cookies, authentication, Expect: 100-continue, and bodies
+ *    too large to hold in memory.
+ *
+ * A SOCKS5 proxy is supported, being a property of the socket rather than of
+ * HTTP: the connection is tunnelled, the host in the URL is never resolved
+ * locally, and https over a tunnel verifies the certificate against the name the
+ * URL asked for. An HTTP proxy - the kind that takes an absolute-form request
+ * target, or CONNECT - is not.
  *
  * Not a SocketBase, so there is no create() factory: it owns a Socket, which
  * has one.
@@ -113,6 +121,16 @@ class Client final
 			 * never followed to a plain http target whatever this says.
 			 */
 			unsigned maxRedirects = 0;
+
+			/**
+			 * Reach the server through a SOCKS5 proxy.
+			 *
+			 * Nothing means the process default, ProxySettings::getDefault(), so
+			 * a program that proxies everything says so once. Set it to a
+			 * default-constructed ProxySettings to insist on a direct connection
+			 * where the process default is a proxy.
+			 */
+			std::optional<ProxySettings> proxy;
 		};
 
 		explicit Client(RequestEventHandler* eh);

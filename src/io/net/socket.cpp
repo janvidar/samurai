@@ -39,6 +39,9 @@ Samurai::IO::Net::Socket::Socket(Samurai::IO::Net::SocketEventHandler* eh, const
 	outbound(true),
 	readable(0),
 	writable(false)
+	/* Taken now rather than read at connect() time, so that moving the process
+	   default never disturbs a connection already under way. */
+	,proxy(Samurai::IO::Net::ProxySettings::getDefault())
 	,tls(nullptr)
 {
 	address = std::make_unique<InetAddress>(address_);
@@ -52,9 +55,14 @@ Samurai::IO::Net::Socket::Socket(SocketEventHandler* eh, const InetAddress& addr
 	eventHandler(eh),
 	timer(nullptr),
 	connect_timeout(std::chrono::seconds(CONNECT_TIMEOUT)),
-	outbound(false),
+	/* Outbound: a caller naming where to go is going there. This said false,
+	   which nothing read until isProxied() did - a socket built this way is no
+	   less ours than one built from a name, and a caller that resolved the
+	   address itself still wants the connection tunnelled. */
+	outbound(true),
 	readable(0),
 	writable(false)
+	,proxy(Samurai::IO::Net::ProxySettings::getDefault())
 	,tls(nullptr)
 {
 	address = std::make_unique<InetAddress>(addr_);
@@ -71,6 +79,9 @@ Samurai::IO::Net::Socket::Socket(socket_t sd_, const Samurai::IO::Net::SocketAdd
 	outbound(false),
 	readable(0),
 	writable(false)
+	/* No proxy, whatever the process default says: this wraps a descriptor
+	   ServerSocket accepted, which is already connected to whoever called. */
+	,proxy()
 	,tls(nullptr)
 {
 
@@ -97,8 +108,42 @@ void Samurai::IO::Net::Socket::setConnectTimeout(std::chrono::milliseconds timeo
 	connect_timeout = timeout;
 }
 
+void Samurai::IO::Net::Socket::setProxy(const Samurai::IO::Net::ProxySettings& settings)
+{
+	if (state != SocketState::Disconnected) return;
+	proxy = settings;
+}
+
+
+std::string Samurai::IO::Net::Socket::getPeerName() const
+{
+	if (!address) return std::string();
+
+	/* The name if there is one, and the address written out if there is not: an
+	   InetAddress built from raw bytes carries no name, and answering nothing
+	   for it would leave a proxied socket with no peer to ask for. */
+	if (!address->getHostname().empty()) return address->getHostname();
+	return address->getAddress();
+}
+
+
 void Samurai::IO::Net::Socket::lookup() {
 	if (state != SocketState::Disconnected) return;
+
+	/*
+	 * A proxied socket resolves nothing about its peer. This is the one call
+	 * that would hand the name to the system resolver, which is a plaintext
+	 * question to whatever resolv.conf names and tells that server exactly who
+	 * is about to be contacted - no matter that the connection itself is
+	 * tunnelled. Refusing is the whole feature; connect() needs no address.
+	 */
+	if (isProxied())
+	{
+		if (eventHandler)
+			eventHandler->EventError(this, Samurai::IO::Net::SocketError::HostNotFound,
+			                         "A proxied socket does not resolve its peer");
+		return;
+	}
 
 	if (address) {
 		if (eventHandler) eventHandler->EventHostLookup(this);
@@ -141,6 +186,7 @@ void Samurai::IO::Net::Socket::handleMonitorEvent(Samurai::IO::Net::SocketMonito
 			break;
 
 
+			case SocketState::ProxyHandshake:
 			case SocketState::SSLBye:
 			case SocketState::SSLHandshake:
 			case SocketState::SSLConnected:
@@ -170,6 +216,7 @@ void Samurai::IO::Net::Socket::handleMonitorEvent(Samurai::IO::Net::SocketMonito
 				internal_connected();
 				break;
 
+			case SocketState::ProxyHandshake:
 			case SocketState::SSLBye:
 			case SocketState::SSLHandshake:
 			case SocketState::Connected:
@@ -215,6 +262,12 @@ size_t Samurai::IO::Net::Socket::bufferedInput() const
 
 void Samurai::IO::Net::Socket::internal_canRead()
 {
+	if (state == SocketState::ProxyHandshake)
+	{
+		internal_proxy_pump();
+		return;
+	}
+
 	if (state == SocketState::Connected
 		|| state == SocketState::SSLConnected
 	) {
@@ -235,6 +288,12 @@ void Samurai::IO::Net::Socket::internal_canRead()
 
 void Samurai::IO::Net::Socket::internal_canWrite()
 {
+	if (state == SocketState::ProxyHandshake)
+	{
+		internal_proxy_pump();
+		return;
+	}
+
 	if (state == SocketState::Connected
 		|| state == SocketState::SSLConnected
 	)
@@ -351,6 +410,84 @@ void Samurai::IO::Net::Socket::internal_connected() {
 	}
 #endif // SAMURAI_POSIX
 
+	/*
+	 * The descriptor is connected - but to the proxy, so end to end there is
+	 * nothing yet. EventConnected is withheld until the proxy confirms the peer,
+	 * which is what lets everything above this stay unchanged: a handler that
+	 * starts a TLS handshake when it is told it is connected starts it inside
+	 * the tunnel, because it is not told until there is one.
+	 *
+	 * The connect timer is deliberately left armed. From a caller's point of
+	 * view the connection is still being made, and a proxy that accepts the TCP
+	 * connection and then says nothing has to time out like any other peer that
+	 * never answers.
+	 */
+	if (isProxied() && handshake)
+	{
+		state = SocketState::ProxyHandshake;
+		internal_proxy_pump();
+		return;
+	}
+
+	toggleWriteNotifier(false);
+	state = SocketState::Connected;
+	if (eventHandler) eventHandler->EventConnected(this);
+}
+
+
+void Samurai::IO::Net::Socket::internal_proxy_failed()
+{
+	const char* message = "Proxy handshake failed";
+	Samurai::IO::Net::SocketError code = Samurai::IO::Net::SocketError::ProxyProtocol;
+
+	if (handshake) code = handshake->getError(message);
+
+	handshake.reset();
+	state = SocketState::Invalid;
+	/* close() disables the monitor on the way out, so the socket is out of the
+	   loop before the handler is entitled to release the last reference to it. */
+	close();
+	if (eventHandler) eventHandler->EventError(this, code, message);
+}
+
+
+void Samurai::IO::Net::Socket::internal_proxy_pump()
+{
+	if (!handshake) return;
+
+	bool want_write = false;
+	std::error_code ec;
+	const Socks5Handshake::Status status =
+		Samurai::IO::Net::socks5_pump(*handshake, sd, want_write, ec);
+
+	if (ec)
+	{
+		internal_error(ec.value());
+		return;
+	}
+
+	toggleWriteNotifier(want_write);
+
+	if (status == Socks5Handshake::Status::Failed)
+	{
+		internal_proxy_failed();
+		return;
+	}
+
+	if (status != Socks5Handshake::Status::Done) return;
+
+	/*
+	 * Through. The tunnel is a stream like any other from here on, and the
+	 * handshake object has nothing left to hold: by construction it read no
+	 * further than the last byte of the reply, so none of the peer's own bytes
+	 * were swallowed on the way.
+	 *
+	 * This is where the connect deadline is finally disarmed, and where the
+	 * application is told - which is what makes a TLS handshake started from
+	 * EventConnected run inside the tunnel rather than to the proxy.
+	 */
+	handshake.reset();
+	timer.reset();
 	toggleWriteNotifier(false);
 	state = SocketState::Connected;
 	if (eventHandler) eventHandler->EventConnected(this);
@@ -368,12 +505,80 @@ void Samurai::IO::Net::Socket::connect()
 {
 	if (!(state == SocketState::Disconnected || state == SocketState::HostFound)) return;
 
+	/*
+	 * This is the branch that stops the leak. Directly, a name has to become an
+	 * address before there is anything to connect to; through a proxy it does
+	 * not, because the name is what gets sent. So the lookup below is skipped
+	 * entirely rather than being made conditional further down: there is no path
+	 * from here to the resolver.
+	 */
+	if (isProxied())
+	{
+		internal_connect_proxy();
+		return;
+	}
+
 	if (addr == nullptr) {
 		autoConnectAfterLookup = true;
 		lookup();
 		return;
 	}
 
+	internal_connect_addr();
+}
+
+
+/**
+ * Connect to the proxy, which is where a proxied socket goes.
+ *
+ * The proxy is normally written as a literal - 127.0.0.1 for Tor - and then
+ * there is nothing to resolve. A proxy named rather than numbered is resolved
+ * locally, which is not the leak this feature exists to close: the name being
+ * looked up is the proxy's, and the proxy is about to be told everything in any
+ * case. The peer's name is never looked up.
+ */
+void Samurai::IO::Net::Socket::internal_connect_proxy()
+{
+	/*
+	 * Built before anything is connected, so that a request the proxy must not
+	 * be asked - a peer on the local network, a name too long to encode - is
+	 * refused without opening a connection to it, and without telling it the
+	 * name. Whether it can be expressed does not depend on reaching the proxy.
+	 *
+	 * Built afresh each time rather than kept: one left over from a connection
+	 * that failed part way through is half-negotiated, and resuming it against a
+	 * proxy that has never heard of it would send the second half of an exchange
+	 * as though it were the first.
+	 */
+	handshake = std::make_unique<Socks5Handshake>(
+		proxy, Socks5Handshake::Command::Connect, getPeerName(), port);
+
+	if (handshake->getStatus() == Socks5Handshake::Status::Failed)
+	{
+		internal_proxy_failed();
+		return;
+	}
+
+	if (!proxy_address)
+		proxy_address = std::make_unique<InetAddress>(proxy.getHost());
+
+	if (!proxy_address->isResolved())
+	{
+		/* Not through lookup(), which now refuses to resolve anything for a
+		   proxied socket and reports EventHostLookup - an event about the peer
+		   that the application did not ask for and this is not. */
+		lookup_target = LookupTarget::Proxy;
+		proxy_address->lookup(this);
+		return;
+	}
+
+	addr = std::make_unique<InetSocketAddress>(*proxy_address, proxy.getPort());
+	internal_connect_addr();
+}
+
+
+void Samurai::IO::Net::Socket::internal_connect_addr()
+{
 	if (!createDescriptor(addr->getSockAddrFamily())) {
 		state = SocketState::Invalid;
 		disableMonitor();
@@ -417,6 +622,7 @@ void Samurai::IO::Net::Socket::connect()
 void Samurai::IO::Net::Socket::disconnect() {
 	switch (state) {
 		case SocketState::Connecting:
+		case SocketState::ProxyHandshake:
 		case SocketState::Connected:
 		case SocketState::SSLHandshake:
 		case SocketState::SSLConnected:
@@ -608,6 +814,19 @@ ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
 
 
 void Samurai::IO::Net::Socket::EventHostFound(const Samurai::IO::Net::InetAddress* resolved_addr) {
+	/*
+	 * The proxy's own name resolved, which is not the peer's and is not the
+	 * application's business: it did not ask for a lookup and there is no
+	 * SocketState it would recognise here. Carry straight on to the connect.
+	 */
+	if (lookup_target == LookupTarget::Proxy)
+	{
+		addr = std::make_unique<InetSocketAddress>(*resolved_addr, proxy.getPort());
+		lookup_target = LookupTarget::Peer;
+		internal_connect_addr();
+		return;
+	}
+
 	addr = std::make_unique<InetSocketAddress>(*resolved_addr, port);
 
 	state = SocketState::HostFound;
@@ -617,9 +836,17 @@ void Samurai::IO::Net::Socket::EventHostFound(const Samurai::IO::Net::InetAddres
 
 
 void Samurai::IO::Net::Socket::EventHostError(Samurai::IO::Net::DNS::Resolver::Error /*error*/) {
+	/* Which name failed matters to whoever has to fix it: a proxy that cannot be
+	   found is a configuration error, and reporting it as the peer not being
+	   found sends the reader looking in the wrong place. */
+	const bool was_proxy = (lookup_target == LookupTarget::Proxy);
+	lookup_target = LookupTarget::Peer;
+
 	state = SocketState::Invalid;
 	disableMonitor();
-	if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::HostNotFound, "Host not found.");
+	if (eventHandler)
+		eventHandler->EventError(this, Samurai::IO::Net::SocketError::HostNotFound,
+		                         was_proxy ? "Proxy host not found." : "Host not found.");
 }
 
 
@@ -632,7 +859,11 @@ void Samurai::IO::Net::Socket::EventHostError(Samurai::IO::Net::DNS::Resolver::E
  * use after free.
  */
 void Samurai::IO::Net::Socket::EventTimeout(Samurai::Timer*) {
-	const bool connecting = (state == SocketState::Connecting);
+	/* A proxy handshake still counts as connecting: the caller has not been told
+	   it is connected, and a proxy that accepted the TCP connection and then
+	   said nothing would otherwise hold the socket open for good. */
+	const bool connecting = (state == SocketState::Connecting
+	                      || state == SocketState::ProxyHandshake);
 
 	timer.reset();
 
@@ -652,6 +883,17 @@ void Samurai::IO::Net::Socket::toggleWriteNotifier(bool toggle) {
 
 bool Samurai::IO::Net::Socket::TLSInitialize(bool server) {
 	if (tls) return false;
+
+	/* TLS belongs inside the tunnel, so there has to be one first. A handler
+	   that starts the handshake from EventConnected is already in that order -
+	   the event is not delivered until the proxy has confirmed the peer - so
+	   this only catches one started earlier, from EventConnecting say, where the
+	   handshake would go to the proxy instead of through it. */
+	if (state == SocketState::ProxyHandshake)
+	{
+		QERR("Refusing to start TLS before the proxy handshake has finished");
+		return false;
+	}
 
 	tls = std::make_unique<OpenSSL>();
 

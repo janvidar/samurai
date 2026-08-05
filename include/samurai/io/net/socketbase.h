@@ -30,6 +30,11 @@ enum class SocketState
 	Connected,
 	Disconnecting,
 	Listening,
+	/* Connected to a proxy and negotiating with it, which covers the whole
+	   SOCKS5 exchange the way SSLHandshake covers the whole TLS one. A socket
+	   here is not usable yet: the application has not been told it is connected,
+	   because end to end there is nothing to write to. */
+	ProxyHandshake,
 	SSLHandshake,
 	SSLConnected,
 	SSLBye,
@@ -48,6 +53,14 @@ enum class SocketError
 	SocketRead,
 	SocketWrite,
 	SocketAccept,
+	/* A proxy refused the request: it would not authenticate us, or its policy
+	   forbids the peer we asked for. Distinct from ConnectionRefused, which is
+	   the peer refusing, because only one of the two is worth retrying against
+	   a different peer. */
+	ProxyAuthFailed,
+	ProxyRefused,
+	/* The proxy answered with something that is not SOCKS5. */
+	ProxyProtocol,
 	SocketUnknown
 };
 

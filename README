@@ -49,6 +49,84 @@ found, which is worth checking: LibreSSL reports itself as "OpenSSL 2.0.0" to
 everything that reads OPENSSL_VERSION_NUMBER.
 
 
+Proxies
+-------
+
+An outbound TCP connection can be made through a SOCKS5 proxy, Tor's SocksPort
+included:
+
+    ProxySettings::setDefault(ProxySettings::tor());   // 127.0.0.1:9050
+
+    // or per connection, before connect()
+    auto socket = Socket::create(&handler, "example.com", 443);
+    socket->setProxy(ProxySettings("127.0.0.1", 1080));
+    socket->connect();
+
+A socket takes the process default when it is constructed, so moving the default
+never disturbs a connection already under way, and setProxy() overrides it for
+one connection. ProxySettings::fromString() parses "host:port" and
+"socks5://user:password@host:port", which is what a command line hands over.
+Username and password are RFC 1929; Tor reads a distinct pair as a stream
+isolation key when IsolateSOCKSAuth is on, which is how two connections are kept
+off one circuit.
+
+A proxied socket never resolves its peer. The name travels to the proxy inside
+the CONNECT request and is resolved on the far side, because a name handed to the
+system resolver is a plaintext question to whatever resolv.conf names, and that
+question names the peer whether or not the connection is tunnelled. So there is
+no equivalent of the distinction curl draws between socks5:// and socks5h://:
+this is always the latter. An .onion name needs nothing special - it is not an
+address literal, so it goes out as a domain name like any other. Socket::lookup()
+refuses on a proxied socket rather than resolving anyway; connect() needs no
+address.
+
+Nothing goes through the proxy as a datagram. CONNECT is the only command that
+can be sent: BIND and UDP ASSOCIATE are not implemented and cannot be asked for,
+so there is no way to arrange anything through a proxy that is not a stream. Tor
+carries no datagrams in any case.
+
+A peer on the local network is refused before the request is sent - 10.0.0.0/8,
+127.0.0.0/8, 169.254.0.0/16, fc00::/7, fe80::/10, and the names "localhost" and
+anything under .local. Through Tor such a request cannot succeed, no exit relay
+routing those; through any other proxy it can, which is worse, since an address
+the program did not choose for itself turns the proxy into a way to reach
+machines its user cannot see. ProxySettings::setAllowPrivateTargets(true) is for
+a proxy that exists precisely to reach a network segment.
+
+TLS runs inside the tunnel. EventConnected is not delivered until the proxy has
+confirmed the peer, so a handler that starts the handshake there is already in the
+right order, and the certificate is verified against the name that was asked for
+rather than against the proxy. TLSInitialize() refuses while the proxy handshake
+is still running.
+
+Tor extends SOCKS5 with two commands that return an answer instead of opening a
+stream, RESOLVE and RESOLVE_PTR. With ProxySettings::setTorExtensions(true) the
+DNS resolver uses them, so a program that has to resolve a name for its own sake
+can do so without asking the system resolver. It is off by default: a proxy that
+is not Tor answers an unknown command with command-not-supported, which costs a
+round trip and then fails a lookup that would have worked. The proxy has to be
+given as an address literal for this, since resolving a proxy's own name is a
+question only the system resolver can answer.
+
+What is NOT proxied, and will not be:
+
+    DatagramSocket, MulticastSocket   no datagram is proxied, see above
+    UPnP gateway port mapping         SSDP over multicast, then HTTP to an
+                                      address on the local network
+    ServerSocket                      an inbound connection arrives directly
+    DNS::Resolver                     unless Tor extensions are on
+
+These keep working exactly as they did, and bypass the proxy. A program that
+needs every packet to go through one has to leave them alone; the library does
+not refuse them on its behalf.
+
+netcat and wget take --socks5 host:port and --tor, which is how this is exercised
+against a real proxy:
+
+    ./build/test/netcat --tor duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion 80
+    ./build/test/wget --socks5 127.0.0.1:9050 https://check.torproject.org/api/ip
+
+
 Configuration
 -------------
 
