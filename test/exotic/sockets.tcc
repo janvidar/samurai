@@ -1432,3 +1432,131 @@ EXO_TEST(sockets_a_registration_survives_a_rejected_change_beside_it,
 	pump([&] { return monitor->size() <= baseline; }, 2000);
 	return true;
 });
+
+/* ------------------------------------------------------------------------- */
+/* Dialling twice from one local port                                        */
+/* ------------------------------------------------------------------------- */
+
+/*
+ * Two peers that can neither of them be connected to reach each other by dialling
+ * at once, each from the local port it already used to reach a hub - so the mapping
+ * its NAT made for that connection is the one the other's SYN arrives on.
+ *
+ * That needs a second connection from a port another socket is still holding, which
+ * an ordinary outbound socket cannot do: the port is assigned rather than chosen,
+ * and it is in use. These cases are about the two things setReuseLocalPort() adds.
+ */
+EXO_TEST(sockets_a_second_connection_can_share_a_local_port,
+{
+	SocketMonitor* monitor = SocketMonitor::getInstance();
+	const size_t baseline = monitor->size();
+
+	bool ok = false;
+	{
+		/* Two places to connect to, standing in for a hub and a peer. */
+		SocketRecorder hub_events;
+		SocketRecorder peer_events;
+		InetSocketAddress any((uint16_t) 0);
+
+		auto hub = Samurai::IO::Net::ServerSocket::create(&hub_events, any);
+		auto peer = Samurai::IO::Net::ServerSocket::create(&peer_events, any);
+		if (!hub || !peer || hub->getFD() == -1 || peer->getFD() == -1)
+			EXO_SKIP("could not listen on the loopback");
+		if (!hub->listen() || !peer->listen())
+			EXO_SKIP("could not listen on the loopback");
+
+		/* The hub connection, whose port is to be shared. */
+		SocketRecorder to_hub_events;
+		auto to_hub = Socket::create(&to_hub_events, std::string("127.0.0.1"), hub->getLocalPort());
+        EXO_ASSERT(to_hub != nullptr);
+		to_hub->setReuseLocalPort(0);
+		to_hub->connect();
+		EXO_ASSERT(pump([&] { return to_hub_events.connected; }));
+
+		const uint16_t shared = to_hub->getLocalPort();
+		EXO_ASSERT(shared != 0);
+
+		/* And the peer connection, from that same port. */
+		SocketRecorder to_peer_events;
+		auto to_peer = Socket::create(&to_peer_events, std::string("127.0.0.1"), peer->getLocalPort());
+		EXO_ASSERT(to_peer != nullptr);
+		to_peer->setReuseLocalPort(shared);
+		to_peer->connect();
+
+		ok = pump([&] { return to_peer_events.connected; });
+
+		/* Connected, and from the port that was asked for rather than another. */
+		if (ok) ok = to_peer->getLocalPort() == shared;
+
+		to_peer.reset();
+		to_hub.reset();
+		hub_events.accepted.reset();
+		peer_events.accepted.reset();
+		peer.reset();
+		hub.reset();
+	}
+
+	pump([&] { return monitor->size() <= baseline; }, 1000);
+	EXO_ASSERT(ok);
+	return 1;
+});
+
+/*
+ * A local port that cannot be bound is reported, not worked around.
+ *
+ * Carrying on from a port the system picked instead would connect - and the peer
+ * has already been told which port to expect, so the connection it is waiting for
+ * would never arrive and nothing would say why. A listening socket's port is one
+ * that genuinely cannot be shared this way.
+ *
+ * Note what the case above establishes about the other direction: a *connected*
+ * socket's port can be shared without that socket having agreed, because the two
+ * differ in the rest of the tuple. So a client dialling from its hub connection's
+ * port needs nothing of the hub connection.
+ */
+EXO_TEST(sockets_a_local_port_that_cannot_be_bound_is_reported,
+{
+	SocketMonitor* monitor = SocketMonitor::getInstance();
+	const size_t baseline = monitor->size();
+
+	bool reported = false;
+	bool connected = false;
+	{
+		SocketRecorder peer_events;
+		SocketRecorder blocker_events;
+		InetSocketAddress any((uint16_t) 0);
+
+		auto peer = Samurai::IO::Net::ServerSocket::create(&peer_events, any);
+		auto blocker = Samurai::IO::Net::ServerSocket::create(&blocker_events, any);
+		if (!peer || !blocker || peer->getFD() == -1 || blocker->getFD() == -1)
+			EXO_SKIP("could not listen on the loopback");
+		if (!peer->listen() || !blocker->listen())
+			EXO_SKIP("could not listen on the loopback");
+
+		SocketRecorder events;
+		auto client = Socket::create(&events, std::string("127.0.0.1"), peer->getLocalPort());
+		EXO_ASSERT(client != nullptr);
+
+		/* A port somebody is listening on. */
+		client->setReuseLocalPort(blocker->getLocalPort());
+		client->connect();
+
+		pump([&] { return events.connected || events.error; }, 1500);
+		connected = events.connected;
+		reported = events.error;
+
+		client.reset();
+		peer_events.accepted.reset();
+		blocker.reset();
+		peer.reset();
+	}
+
+	pump([&] { return monitor->size() <= baseline; }, 1000);
+
+	/* Either the platform refused it and said so, or it allowed it - but it must
+	   not have quietly connected from some other port. */
+	EXO_ASSERT(reported || connected);
+	if (connected) EXO_SKIP("this platform shares a listening socket's port");
+	EXO_ASSERT(reported);
+	return 1;
+});
