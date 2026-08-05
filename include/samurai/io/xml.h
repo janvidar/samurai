@@ -40,9 +40,14 @@ enum class XmlError
 const char* toString(XmlError error);
 
 class XmlDocument;
-/* Builds the tree. Defined in the implementation; named here only so that
-   XmlElement can grant it the access no one else has. */
+/* Parses, and assembles what it parses into a tree. Defined in the
+   implementation; named here only so that XmlElement can grant them the access
+   no one else has. */
 class XmlParser;
+class XmlSink;
+class XmlTreeSink;
+class XmlHandlerSink;
+class XmlContentHandler;
 
 /**
  * One element of a parsed document.
@@ -116,6 +121,7 @@ class XmlElement final
 
 	friend class XmlDocument;
 	friend class XmlParser;
+	friend class XmlTreeSink;
 };
 
 /**
@@ -191,6 +197,82 @@ class XmlDocument final
 		std::unique_ptr<XmlElement> root;
 		XmlError error = XmlError::Ok;
 		size_t error_offset = 0;
+};
+
+
+/**
+ * What a document is reported as while it is being read, in document order.
+ *
+ * The alternative to XmlDocument rather than a second parser: the same parser
+ * drives both, so what one accepts the other accepts. Use this where the tree
+ * would be the expensive part - a share file list runs to hundreds of megabytes,
+ * and a handler that acts on each element as it arrives never holds more than one
+ * of them - and XmlDocument where random access by name is what is wanted.
+ *
+ * A handler is told what happened, not asked what to do: there is no way to
+ * refuse a document from here. Bound it with Limits instead, and check whatever
+ * the handler gathered once the parse has returned Ok.
+ */
+class XmlContentHandler
+{
+	public:
+		virtual ~XmlContentHandler() = default;
+
+		/** Name and value, in the order they were written. */
+		using Attributes = std::vector<std::pair<std::string, std::string>>;
+
+		/** Before anything else, and only for a document that begins to parse. */
+		virtual void startDocument() { }
+
+		/** After the last event, and only for a parse that succeeded. */
+		virtual void endDocument() { }
+
+		/**
+		 * @param prefix the namespace prefix as written, empty when there was
+		 *        none. Not resolved - see the note on XmlDocument.
+		 * @param name the name with any prefix removed.
+		 */
+		virtual void startElement(std::string_view prefix, std::string_view name,
+			const Attributes& attributes) = 0;
+
+		/** Reported for an empty element too, directly after its start. */
+		virtual void endElement(std::string_view prefix, std::string_view name) = 0;
+
+		/**
+		 * Character data, with references already expanded.
+		 *
+		 * One call per run of data between markup, so a reference within a run
+		 * does not split it but a CDATA section or a child element does: the
+		 * three pieces of <a>x<![CDATA[y]]>z</a> arrive as three calls. A handler
+		 * that needs the whole of an element's data has to join them.
+		 */
+		virtual void characters(std::string_view text) = 0;
+};
+
+
+/**
+ * Read a document as a sequence of events.
+ *
+ * Nothing is retained, so the same Limits bound a document far larger than one
+ * XmlDocument would hold - raise maxDocumentSize, maxElements and maxDepth to
+ * suit what is being read, and note that maxTextLength still counts the whole of
+ * one element's character data even though none of it is kept.
+ */
+class XmlReader final
+{
+	public:
+		using Limits = XmlDocument::Limits;
+
+		/** With the default limits, which are XmlDocument's. */
+		static XmlError parse(std::string_view text, XmlContentHandler& handler);
+
+		/**
+		 * @param errorOffset where the parse stopped, written only when one is
+		 *        asked for. Meaningful for a parse that failed; for one that
+		 *        succeeded it is where the document ended.
+		 */
+		static XmlError parse(std::string_view text, XmlContentHandler& handler,
+			const Limits& limits, size_t* errorOffset = nullptr);
 };
 
 }
