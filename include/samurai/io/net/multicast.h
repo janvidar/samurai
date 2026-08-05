@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2001-2007 Jan Vidar Krey, janvidar@extatic.org
+ * Copyright (C) 2001-2026 Jan Vidar Krey, janvidar@extatic.org
  * See the file "COPYING" for licensing details.
  */
 

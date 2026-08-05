@@ -1,6 +1,6 @@
 #
 ## CMake build for the Samurai library
-## Copyright (c) 2001-2009, Jan Vidar Krey
+## Copyright (c) 2001-2026, Jan Vidar Krey
 #
 
 cmake_minimum_required(VERSION 3.16)
