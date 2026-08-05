@@ -6,6 +6,8 @@
 #include <samurai/io/xml.h>
 #include <string>
 #include <string_view>
+#include <vector>
+#include <string.h>
 
 /*
  * The XML reader exists to read a UPnP device description and a SOAP response,
@@ -746,4 +748,334 @@ EXO_TEST(xml_reparsing_replaces_the_previous_tree,
 	if (doc.getRoot()->getName() != "second") return false;
 
 	return doc.parse("<broken>") != XmlError::Ok && doc.getRoot() == nullptr;
+});
+
+/* ------------------------------------------------------------------------- */
+/* The same document, read as events                                         */
+/* ------------------------------------------------------------------------- */
+
+namespace {
+
+using Samurai::IO::XmlContentHandler;
+using Samurai::IO::XmlReader;
+
+/* Writes down what it is told, so a case can assert the sequence. */
+class Recorder final : public XmlContentHandler
+{
+	public:
+		std::vector<std::string> events;
+		int documents_started = 0;
+		int documents_ended = 0;
+
+		void startDocument() override { documents_started++; }
+		void endDocument() override { documents_ended++; }
+
+		void startElement(std::string_view prefix, std::string_view name,
+			const Attributes& attributes) override
+		{
+			std::string line = "start ";
+			if (!prefix.empty()) line += std::string(prefix) + ":";
+			line += name;
+			for (const auto& a : attributes)
+				line += " " + a.first + "=" + a.second;
+			events.push_back(line);
+		}
+
+		void endElement(std::string_view prefix, std::string_view name) override
+		{
+			std::string line = "end ";
+			if (!prefix.empty()) line += std::string(prefix) + ":";
+			line += name;
+			events.push_back(line);
+		}
+
+		void characters(std::string_view text) override
+		{
+			events.push_back("text " + std::string(text));
+		}
+
+		/* The character data of the whole document, joined. */
+		std::string allText() const
+		{
+			std::string out;
+			for (const std::string& e : events)
+				if (e.compare(0, 5, "text ") == 0) out += e.substr(5);
+			return out;
+		}
+};
+
+std::string joined(const std::vector<std::string>& events)
+{
+	std::string out;
+	for (const std::string& e : events) { out += e; out += "|"; }
+	return out;
+}
+
+}
+
+/* The events, in the order the document was written. */
+EXO_TEST(xml_reader_reports_a_document_in_order,
+{
+	Recorder r;
+	EXO_ASSERT(XmlReader::parse("<a x=\"1\"><b>text</b></a>", r) == XmlError::Ok);
+
+	EXO_ASSERT(joined(r.events) ==
+		"start a x=1|start b|text text|end b|end a|");
+	EXO_ASSERT(r.documents_started == 1);
+	EXO_ASSERT(r.documents_ended == 1);
+	return 1;
+});
+
+/* An empty element is a start and an end with nothing between. */
+EXO_TEST(xml_reader_reports_an_empty_element_as_start_and_end,
+{
+	Recorder r;
+	EXO_ASSERT(XmlReader::parse("<a><b/></a>", r) == XmlError::Ok);
+	EXO_ASSERT(joined(r.events) == "start a|start b|end b|end a|");
+	return 1;
+});
+
+/* A prefix is reported apart from the name, as the tree reports it. */
+EXO_TEST(xml_reader_reports_a_prefix_apart_from_the_name,
+{
+	Recorder r;
+	EXO_ASSERT(XmlReader::parse("<s:Body xmlns:s=\"u\"/>", r) == XmlError::Ok);
+	EXO_ASSERT(joined(r.events) == "start s:Body xmlns:s=u|end s:Body|");
+	return 1;
+});
+
+namespace {
+
+size_t textPieces(const Recorder& r)
+{
+	size_t pieces = 0;
+	for (const std::string& e : r.events)
+		if (e.compare(0, 5, "text ") == 0) pieces++;
+	return pieces;
+}
+
+}
+
+/*
+ * References are expanded before the handler sees them, and expanding one does
+ * not break the run it was written in: a handler is given the whole of a run
+ * between markup as one call.
+ */
+EXO_TEST(xml_reader_expands_references_without_splitting_a_run,
+{
+	Recorder r;
+	EXO_ASSERT(XmlReader::parse("<a>one &amp; two</a>", r) == XmlError::Ok);
+
+	EXO_ASSERT(r.allText() == "one & two");
+	EXO_ASSERT_EQ_UINT(textPieces(r), 1u);
+	return 1;
+});
+
+/*
+ * What does split a run is markup: a CDATA section is its own piece, so an
+ * element's data can arrive in several and a handler that wants all of it has to
+ * join them. This is the case the documented contract exists for.
+ */
+EXO_TEST(xml_reader_splits_a_runs_text_at_markup,
+{
+	Recorder r;
+	EXO_ASSERT(XmlReader::parse("<a>x<![CDATA[y]]>z</a>", r) == XmlError::Ok);
+
+	EXO_ASSERT(r.allText() == "xyz");
+	EXO_ASSERT_EQ_UINT(textPieces(r), 3u);
+	return 1;
+});
+
+/* CDATA arrives as character data, unexpanded. */
+EXO_TEST(xml_reader_reports_cdata_as_characters,
+{
+	Recorder r;
+	EXO_ASSERT(XmlReader::parse("<a><![CDATA[<b>&amp;]]></a>", r) == XmlError::Ok);
+	EXO_ASSERT(r.allText() == "<b>&amp;");
+	return 1;
+});
+
+/*
+ * A document that failed is not reported as having ended: a handler told the
+ * document ended has been told the events it saw were all of them, and for a
+ * failed parse they were not.
+ */
+EXO_TEST(xml_reader_does_not_end_a_document_that_failed,
+{
+	Recorder r;
+	EXO_ASSERT(XmlReader::parse("<a><b></a>", r) != XmlError::Ok);
+	EXO_ASSERT(r.documents_started == 1);
+	EXO_ASSERT(r.documents_ended == 0);
+	return 1;
+});
+
+/* And it says where it stopped, when asked. */
+EXO_TEST(xml_reader_reports_where_it_stopped,
+{
+	Recorder r;
+	const XmlReader::Limits limits;
+	size_t offset = 0;
+
+	EXO_ASSERT(XmlReader::parse("<a>text<<</a>", r, limits, &offset) != XmlError::Ok);
+	EXO_ASSERT(offset > 0);
+	EXO_ASSERT(offset <= strlen("<a>text<<</a>"));
+	return 1;
+});
+
+/*
+ * The point of one parser behind both: whatever the tree accepts, the events
+ * accept, and whatever it refuses they refuse with the same reason. A second
+ * hand-written parser is exactly how those two drift apart.
+ */
+EXO_TEST(xml_reader_and_document_agree_on_every_case_here,
+{
+	static const char* documents[] = {
+		"<a/>",
+		"<a></a>",
+		"<a x=\"1\" y=\"2\"/>",
+		"<a><b><c>deep</c></b></a>",
+		"<a>one &amp; two &lt;three&gt;</a>",
+		"<a><![CDATA[raw]]></a>",
+		"<!-- comment --><a/>",
+		"<?xml version=\"1.0\"?><a/>",
+		"\xef\xbb\xbf<a/>",
+		"<s:a xmlns:s=\"u\"><s:b/></s:a>",
+		"<a>&#65;&#x42;</a>",
+		/* And the refusals. */
+		"",
+		"<a>",
+		"<a></b>",
+		"<a><b></a>",
+		"<a/><b/>",
+		"<a>&nosuch;</a>",
+		"<a x=\"<\"/>",
+		"<!DOCTYPE a><a/>",
+		"<a",
+		"</a>",
+		0
+	};
+
+	for (size_t n = 0; documents[n]; n++)
+	{
+		XmlDocument doc;
+		const XmlError tree = doc.parse(documents[n]);
+
+		Recorder r;
+		const XmlError events = XmlReader::parse(documents[n], r);
+
+		if (tree != events)
+		{
+			const std::string why = std::string("'") + documents[n]
+				+ "' is " + Samurai::IO::toString(tree) + " as a tree but "
+				+ Samurai::IO::toString(events) + " as events";
+			EXO_FAIL(why.c_str());
+		}
+	}
+	return 1;
+});
+
+/* And they agree on the text they saw, however it was split. */
+EXO_TEST(xml_reader_and_document_agree_on_the_text,
+{
+	static const char* documents[] = {
+		"<a>plain</a>",
+		"<a>one &amp; two</a>",
+		"<a><![CDATA[raw]]>and more</a>",
+		"<a>before<b/>after</a>",
+		"<a>&#65;&#x42;C</a>",
+		0
+	};
+
+	for (size_t n = 0; documents[n]; n++)
+	{
+		XmlDocument doc;
+		EXO_ASSERT(doc.parse(documents[n]) == XmlError::Ok);
+
+		Recorder r;
+		EXO_ASSERT(XmlReader::parse(documents[n], r) == XmlError::Ok);
+
+		if (doc.getRoot()->getText() != r.allText())
+		{
+			const std::string why = std::string("'") + documents[n] + "': tree says '"
+				+ doc.getRoot()->getText() + "', events say '" + r.allText() + "'";
+			EXO_FAIL(why.c_str());
+		}
+	}
+	return 1;
+});
+
+/* ------------------------------------------------------------------------- */
+/* What bounds an event parse                                                */
+/* ------------------------------------------------------------------------- */
+
+/*
+ * Nothing is retained, so the limits are what stop a hostile document rather than
+ * memory running out - and they have to hold for the events exactly as they do for
+ * the tree, or raising them for one would quietly raise them for neither.
+ */
+EXO_TEST(xml_reader_refuses_a_document_past_its_size,
+{
+	Recorder r;
+	XmlReader::Limits limits;
+	limits.maxDocumentSize = 8;
+
+	EXO_ASSERT(XmlReader::parse("<a>0123456789</a>", r, limits)
+		== XmlError::SizeExceeded);
+	return 1;
+});
+
+EXO_TEST(xml_reader_refuses_a_document_nested_too_deep,
+{
+	Recorder r;
+	XmlReader::Limits limits;
+	limits.maxDepth = 2;
+
+	EXO_ASSERT(XmlReader::parse("<a><b><c/></b></a>", r, limits)
+		== XmlError::DepthExceeded);
+	return 1;
+});
+
+EXO_TEST(xml_reader_refuses_too_many_elements,
+{
+	Recorder r;
+	XmlReader::Limits limits;
+	limits.maxElements = 2;
+
+	EXO_ASSERT(XmlReader::parse("<a><b/><c/></a>", r, limits)
+		== XmlError::SizeExceeded);
+	return 1;
+});
+
+EXO_TEST(xml_reader_refuses_too_many_attributes,
+{
+	Recorder r;
+	XmlReader::Limits limits;
+	limits.maxAttributes = 1;
+
+	EXO_ASSERT(XmlReader::parse("<a x=\"1\" y=\"2\"/>", r, limits)
+		== XmlError::SizeExceeded);
+	return 1;
+});
+
+/*
+ * Character data is counted per element and across the runs it was written in, so
+ * text either side of a child adds up rather than each piece being measured on
+ * its own. A per-run cap would let a document carry any amount of data by
+ * breaking it up.
+ */
+EXO_TEST(xml_reader_counts_an_elements_text_across_its_runs,
+{
+	Recorder r;
+	XmlReader::Limits limits;
+	limits.maxTextLength = 8;
+
+	/* Four runs of three, which is over the cap only when they are added up. */
+	EXO_ASSERT(XmlReader::parse("<a>aaa<b/>bbb<c/>ccc<d/>ddd</a>", r, limits)
+		== XmlError::SizeExceeded);
+
+	/* And within it when they are not. */
+	Recorder ok;
+	EXO_ASSERT(XmlReader::parse("<a>aaa<b/>bbb</a>", ok, limits) == XmlError::Ok);
+	EXO_ASSERT(ok.allText() == "aaabbb");
+	return 1;
 });
