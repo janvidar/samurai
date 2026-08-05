@@ -9,16 +9,22 @@
 #include <samurai/io/file.h>
 
 #include <openssl/ssl.h>
+#include <openssl/bn.h>
 #include <openssl/crypto.h>
 #include <openssl/opensslv.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
+#include <openssl/rand.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 
+#include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 /*
  * The build requires OpenSSL 3.0 or LibreSSL 3.5, both of which negotiate
@@ -115,6 +121,278 @@ std::optional<Samurai::IO::Net::TlsFactory::Sha256Digest> Samurai::IO::Net::TlsF
 	auto found = sha256_of(cert);
 	X509_free(cert);
 	return found;
+}
+
+static bool ssl_failure(const char* what)
+{
+	char msg[SSL_ERRBUF_SIZE];
+	ssl_error_string(msg, sizeof(msg));
+	QERR("%s: %s", what, msg);
+	return false;
+}
+
+/* The OpenSSL objects a generated certificate needs, freed on every path out. */
+template <typename T, void (*Free)(T*)>
+struct SslDeleter
+{
+	void operator()(T* p) const { Free(p); }
+};
+
+using PkeyPtr = std::unique_ptr<EVP_PKEY, SslDeleter<EVP_PKEY, EVP_PKEY_free>>;
+using CertPtr = std::unique_ptr<X509, SslDeleter<X509, X509_free>>;
+using BioPtr = std::unique_ptr<BIO, SslDeleter<BIO, BIO_free_all>>;
+using BignumPtr = std::unique_ptr<BIGNUM, SslDeleter<BIGNUM, BN_free>>;
+using ExtensionPtr = std::unique_ptr<X509_EXTENSION, SslDeleter<X509_EXTENSION, X509_EXTENSION_free>>;
+using GeneralNamePtr = std::unique_ptr<GENERAL_NAME, SslDeleter<GENERAL_NAME, GENERAL_NAME_free>>;
+using GeneralNamesPtr = std::unique_ptr<GENERAL_NAMES, SslDeleter<GENERAL_NAMES, GENERAL_NAMES_free>>;
+
+/*
+ * What a certificate name may hold: RFC 5280 caps a common name at 64
+ * characters, and a name outside printable ASCII either cannot be encoded as
+ * the IA5String a dNSName is, or would be re-encoded into something no peer
+ * checking the name could ever match. Refused rather than truncated.
+ */
+static bool ssl_name_is_usable(const std::string& name)
+{
+	if (name.empty() || name.size() > 64) return false;
+
+	for (const char c : name)
+		if ((unsigned char) c <= 0x20 || (unsigned char) c >= 0x7f) return false;
+
+	return true;
+}
+
+/*
+ * A subjectAltName, without which nothing can verify the certificate names the
+ * peer it was reached at: a bare common name has not been accepted for that in
+ * a decade.
+ *
+ * Built through GENERAL_NAME rather than a configuration string so that a name
+ * carrying a separator cannot add entries of its own.
+ */
+static bool ssl_add_subject_alt_name(X509* cert, const std::string& name)
+{
+	GeneralNamePtr entry(GENERAL_NAME_new());
+	GeneralNamesPtr names(sk_GENERAL_NAME_new_null());
+	if (!entry || !names) return false;
+
+	/*
+	 * An address literal is matched against an iPAddress entry and a name
+	 * against dNSName, never the other way about. initialize() decides which
+	 * of the two a peer name is by the same test, so an entry typed the other
+	 * way could never match.
+	 */
+	ASN1_OCTET_STRING* address = a2i_IPADDRESS(name.c_str());
+	if (address)
+	{
+		GENERAL_NAME_set0_value(entry.get(), GEN_IPADD, address);
+	}
+	else
+	{
+		ERR_clear_error(); /* a name that is not an address leaves an error queued */
+
+		ASN1_IA5STRING* dns = ASN1_IA5STRING_new();
+		if (!dns) return false;
+
+		if (ASN1_STRING_set(dns, name.data(), (int) name.size()) != 1)
+		{
+			ASN1_IA5STRING_free(dns);
+			return false;
+		}
+		GENERAL_NAME_set0_value(entry.get(), GEN_DNS, dns);
+	}
+
+	if (sk_GENERAL_NAME_push(names.get(), entry.get()) <= 0) return false;
+	(void) entry.release(); /* the stack owns it now */
+
+	return X509_add1_ext_i2d(cert, NID_subject_alt_name, names.get(), 0,
+		X509V3_ADD_DEFAULT) == 1;
+}
+
+static bool ssl_add_extension(X509* cert, int nid, const char* value)
+{
+	ExtensionPtr ext(X509V3_EXT_conf_nid(nullptr, nullptr, nid, value));
+	if (!ext) return false;
+	return X509_add_ext(cert, ext.get(), -1) == 1;
+}
+
+/*
+ * A serial has to be unpredictable rather than a counter: two peers generating
+ * their own certificate would otherwise both call theirs number one.
+ */
+static bool ssl_set_random_serial(X509* cert)
+{
+	unsigned char bytes[16];
+	if (RAND_bytes(bytes, (int) sizeof(bytes)) != 1) return false;
+
+	/* A serial is a positive integer, so the sign bit must be clear. */
+	bytes[0] &= 0x7f;
+
+	BignumPtr serial(BN_bin2bn(bytes, (int) sizeof(bytes), nullptr));
+	if (!serial) return false;
+
+	return BN_to_ASN1_INTEGER(serial.get(), X509_get_serialNumber(cert)) != nullptr;
+}
+
+/*
+ * Created with O_EXCL, so a file that is already there is never overwritten,
+ * and given the mode asked for explicitly rather than left to the process
+ * umask: a umask that widened the mode would leave a private key readable by
+ * others, and one that narrowed it to nothing would leave a key we cannot read
+ * back ourselves.
+ */
+static BIO* ssl_create_pem_file(const char* path, mode_t perms)
+{
+	const int fd = ::open(path, O_WRONLY | O_CREAT | O_EXCL, perms);
+	if (fd == -1)
+	{
+		QERR("Unable to create '%s': %s", path, strerror(errno));
+		return nullptr;
+	}
+
+	BIO* bio = nullptr;
+	if (::fchmod(fd, perms) == 0)
+	{
+		/* BIO_CLOSE hands the descriptor over, so the BIO closes it. */
+		bio = BIO_new_fd(fd, BIO_CLOSE);
+		if (bio) return bio;
+	}
+	else
+	{
+		QERR("Unable to set the mode of '%s': %s", path, strerror(errno));
+	}
+
+	::close(fd);
+	::unlink(path);
+	return nullptr;
+}
+
+bool Samurai::IO::Net::TlsFactory::generateSelfSignedCertificate(
+	const char* private_key_path,
+	const char* certificate_path,
+	const std::string& common_name)
+{
+	if (!private_key_path || !*private_key_path || !certificate_path || !*certificate_path)
+	{
+		QERR("Both a private key path and a certificate path are required");
+		return false;
+	}
+
+	if (!ssl_name_is_usable(common_name))
+	{
+		QERR("'%s' cannot be a certificate name: 1 to 64 printable ASCII "
+		     "characters, and no spaces", common_name.c_str());
+		return false;
+	}
+
+	/*
+	 * Resolved the same way File does it, because setKeys() is handed the same
+	 * two strings and reads them through File: a caller passing "~/.quickdc/..."
+	 * to both has to mean one pair of files, not a literal '~' directory here
+	 * and a home directory there.
+	 */
+	const std::string key_path = Samurai::IO::File::resolvePath(private_key_path);
+	const std::string cert_path = Samurai::IO::File::resolvePath(certificate_path);
+
+	ERR_clear_error();
+
+	PkeyPtr pkey(EVP_RSA_gen(SELF_SIGNED_KEY_BITS));
+	if (!pkey) return ssl_failure("Unable to generate a private key");
+
+	CertPtr cert(X509_new());
+	if (!cert) return ssl_failure("Unable to create a certificate");
+
+	/* Version 3, which is the one that can carry an extension at all. */
+	if (X509_set_version(cert.get(), 2) != 1)
+		return ssl_failure("Unable to set the certificate version");
+
+	if (!ssl_set_random_serial(cert.get()))
+		return ssl_failure("Unable to set the certificate serial");
+
+	/*
+	 * Backdated an hour, so a peer whose clock is behind ours does not see a
+	 * certificate that is not valid yet, and valid for long enough that it does
+	 * not expire under a user who installed once and never looked again. Expiry
+	 * buys nothing here in any case: there is no authority to renew from and no
+	 * revocation, and a peer that pinned the keyprint would have to be told
+	 * about a new one.
+	 */
+	if (!X509_gmtime_adj(X509_getm_notBefore(cert.get()), -60L * 60)
+		|| !X509_gmtime_adj(X509_getm_notAfter(cert.get()),
+			60L * 60 * 24 * SELF_SIGNED_VALID_DAYS))
+		return ssl_failure("Unable to set the certificate validity");
+
+	if (X509_set_pubkey(cert.get(), pkey.get()) != 1)
+		return ssl_failure("Unable to set the certificate public key");
+
+	X509_NAME* subject = X509_get_subject_name(cert.get());
+	if (X509_NAME_add_entry_by_txt(subject, "CN", MBSTRING_ASC,
+			(const unsigned char*) common_name.c_str(), -1, -1, 0) != 1)
+		return ssl_failure("Unable to set the certificate subject");
+
+	/* Self-signed: the issuer is the subject. */
+	if (X509_set_issuer_name(cert.get(), subject) != 1)
+		return ssl_failure("Unable to set the certificate issuer");
+
+	if (!ssl_add_subject_alt_name(cert.get(), common_name))
+		return ssl_failure("Unable to add a subjectAltName");
+
+	/*
+	 * An end entity certificate, not an authority: it signs nothing but itself,
+	 * and OpenSSL still accepts it as its own trust anchor for a peer that was
+	 * handed it out of band.
+	 */
+	if (!ssl_add_extension(cert.get(), NID_basic_constraints, "critical,CA:FALSE"))
+		return ssl_failure("Unable to add basicConstraints");
+
+	/* digitalSignature covers TLS 1.3 and the ECDHE_RSA exchanges, and
+	   keyEncipherment the TLS 1.2 exchange that encrypts to the key. */
+	if (!ssl_add_extension(cert.get(), NID_key_usage,
+			"critical,digitalSignature,keyEncipherment"))
+		return ssl_failure("Unable to add keyUsage");
+
+	/*
+	 * Both purposes, because one certificate serves both roles here - setKeys()
+	 * is process wide and initialize() presents the same certificate whether it
+	 * was asked for a client or a server. A certificate carrying serverAuth
+	 * alone is refused as a client certificate by a peer that verifies one.
+	 */
+	if (!ssl_add_extension(cert.get(), NID_ext_key_usage, "serverAuth,clientAuth"))
+		return ssl_failure("Unable to add extendedKeyUsage");
+
+	if (X509_sign(cert.get(), pkey.get(), EVP_sha256()) <= 0)
+		return ssl_failure("Unable to sign the certificate");
+
+	BioPtr key_file(ssl_create_pem_file(key_path.c_str(), 0600));
+	if (!key_file) return false;
+
+	if (PEM_write_bio_PrivateKey(key_file.get(), pkey.get(), nullptr, nullptr, 0,
+			nullptr, nullptr) != 1
+		|| BIO_flush(key_file.get()) != 1)
+	{
+		key_file.reset();
+		::unlink(key_path.c_str());
+		return ssl_failure("Unable to write the private key");
+	}
+	key_file.reset();
+
+	BioPtr cert_file(ssl_create_pem_file(cert_path.c_str(), 0644));
+	if (!cert_file)
+	{
+		::unlink(key_path.c_str());
+		return false;
+	}
+
+	if (PEM_write_bio_X509(cert_file.get(), cert.get()) != 1
+		|| BIO_flush(cert_file.get()) != 1)
+	{
+		cert_file.reset();
+		::unlink(cert_path.c_str());
+		::unlink(key_path.c_str());
+		return ssl_failure("Unable to write the certificate");
+	}
+
+	return true;
 }
 
 bool Samurai::IO::Net::TlsFactory::global_init()

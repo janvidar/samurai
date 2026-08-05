@@ -113,6 +113,48 @@ class TlsFactory {
 		static Samurai::IO::File* getPrivateKey();
 		static Samurai::IO::File* getCertificate();
 
+		/** The RSA modulus size of a generated key, in bits. */
+		static constexpr unsigned SELF_SIGNED_KEY_BITS = 3072;
+
+		/** How long a generated certificate is valid, in days. */
+		static constexpr unsigned SELF_SIGNED_VALID_DAYS = 3650;
+
+		/**
+		 * Write a private key and a matching self-signed certificate, for a
+		 * peer that has none and cannot get one signed by anybody.
+		 *
+		 * The certificate carries serverAuth and clientAuth, because the same
+		 * one is presented at both ends of a connection - see setKeys().
+		 *
+		 * @param private_key_path where the PEM private key is written, created
+		 *        with mode 0600. A key anyone can read is worse than no TLS.
+		 *        Resolved the way File does it, so a leading '~' means the home
+		 *        directory - the same two strings can be handed to setKeys().
+		 * @param certificate_path where the PEM certificate is written, created
+		 *        with mode 0644, being public by definition.
+		 * @param common_name the name to assert, as the subject CN and as the
+		 *        one subjectAltName: an iPAddress entry if it parses as an
+		 *        address, a dNSName entry otherwise. Nothing verifies it - a
+		 *        self-signed certificate says only what its holder chose to say
+		 *        - so pass the address or name this peer is reached at when that
+		 *        is known, and a stable label when it is not. Limited to 64
+		 *        printable ASCII characters without spaces, which is what a CN
+		 *        can hold; anything else is refused rather than truncated or
+		 *        re-encoded into a name that would never match.
+		 *
+		 * Neither file is overwritten: an existing one fails the call, because
+		 * replacing a key silently changes the keyprint every peer pinned. The
+		 * caller decides what to do about that - normally generate only when
+		 * getCertificate() reports nothing there.
+		 *
+		 * @return true if both files were written. On failure nothing is left
+		 *         behind: a file this call created is removed again, and a file
+		 *         it found is untouched. setKeys() is not called for you.
+		 */
+		static bool generateSelfSignedCertificate(const char* private_key_path,
+			const char* certificate_path,
+			const std::string& common_name);
+
 		/**
 		 * The same digest of the certificate we present ourselves, read from
 		 * the file handed to setKeys(). False if there is no certificate, or
