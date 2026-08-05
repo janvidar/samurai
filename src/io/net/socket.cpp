@@ -577,6 +577,13 @@ void Samurai::IO::Net::Socket::internal_connect_proxy()
 }
 
 
+void Samurai::IO::Net::Socket::setReuseLocalPort(uint16_t port)
+{
+	reuse_local_port = true;
+	local_port = port;
+}
+
+
 void Samurai::IO::Net::Socket::internal_connect_addr()
 {
 	if (!createDescriptor(addr->getSockAddrFamily())) {
@@ -591,6 +598,40 @@ void Samurai::IO::Net::Socket::internal_connect_addr()
 		disableMonitor();
 		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, strerror(Samurai::IO::Net::net_error()));
 		return;
+	}
+
+	/*
+	 * Between the descriptor existing and the connection starting, which is the
+	 * only moment a local address can be chosen. Both options are needed together:
+	 * the port is one another socket already holds, so it cannot be bound without
+	 * permission to share it - see setReuseLocalPort().
+	 *
+	 * A refusal is reported rather than ignored. Carrying on would connect from
+	 * some other port, and a caller that asked for this one asked because the
+	 * peer is being told which port to expect.
+	 */
+	if (reuse_local_port) {
+		std::error_code ec;
+		if (!setReuseAddress(true, ec) || !setReusePort(true, ec)) {
+			state = SocketState::Invalid;
+			disableMonitor();
+			if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, "the local port could not be made shareable");
+			return;
+		}
+
+		if (local_port) {
+			/* The same family as the peer, since that is what the descriptor is. */
+			const bool six = addr->getSockAddrFamily() == AF_INET6;
+			Samurai::IO::Net::InetAddress any(six ? "::" : "0.0.0.0");
+			Samurai::IO::Net::InetSocketAddress local(any, local_port);
+
+			if (!bind(&local, ec)) {
+				state = SocketState::Invalid;
+				disableMonitor();
+				if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, "the local port asked for could not be bound");
+				return;
+			}
+		}
 	}
 
 	setMonitor(Samurai::IO::Net::SocketMonitor::Triggers::Read |  Samurai::IO::Net::SocketMonitor::Triggers::Write);

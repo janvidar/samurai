@@ -102,6 +102,27 @@ class Socket :
 		 * Only outbound sockets. Setting this on one that came from
 		 * ServerSocket::accept() does nothing.
 		 */
+		/**
+		 * Share this connection's local port, and optionally choose it.
+		 *
+		 * Has to be set before connect(): the descriptor does not exist until
+		 * then, and a local address cannot be bound afterwards.
+		 *
+		 * This is for TCP simultaneous open, which is how two peers that can
+		 * neither of them be connected to reach each other. Each dials the other
+		 * from the same local port it already used to reach a third party - a hub -
+		 * so the mapping its NAT made for that connection is the one the other's
+		 * SYN arrives on. That needs two things the ordinary path does not give: a
+		 * local port that is chosen rather than assigned, and permission to use one
+		 * another socket already holds.
+		 *
+		 * @param port the local port to bind, or 0 to let the system choose one
+		 *        and only make it shareable. A caller that will later dial from
+		 *        this connection's port passes 0 here and reads getLocalPort()
+		 *        once connected.
+		 */
+		void setReuseLocalPort(uint16_t port);
+
 		void setProxy(const ProxySettings& settings);
 		const ProxySettings& getProxy() const { return proxy; }
 		bool isProxied() const { return outbound && proxy.isEnabled(); }
@@ -271,6 +292,14 @@ class Socket :
 		 */
 		enum class LookupTarget { Peer, Proxy };
 		LookupTarget lookup_target = LookupTarget::Peer;
+
+		/*
+		 * Whether the local port is shareable, and which one to bind. Applied when
+		 * the descriptor is made, since neither can be set before that or after
+		 * the connection is under way.
+		 */
+		bool reuse_local_port = false;
+		uint16_t local_port = 0;
 
 		ProxySettings proxy;
 		/* Where the proxy is, once it is known. Separate from 'address', which
