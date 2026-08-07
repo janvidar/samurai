@@ -5,6 +5,7 @@
  */
 
 #include <samurai/samurai.h>
+#include <samurai/error.h>
 #include <samurai/io/net/tlsfactory-openssl.h>
 #include <samurai/io/net/socketglue.h>
 #include <samurai/io/file.h>
@@ -64,6 +65,40 @@ static void ssl_error_string(char* buf, size_t buflen)
 
 	ERR_error_string_n(code, buf, buflen);
 	ERR_clear_error();
+}
+
+static void ssl_call_error_string(char* buf, size_t buflen, int error, int ret,
+                                  int saved_errno)
+{
+	unsigned long code = ERR_get_error();
+
+	if (code)
+	{
+		ERR_error_string_n(code, buf, buflen);
+		ERR_clear_error();
+		return;
+	}
+
+	if (error == SSL_ERROR_SYSCALL)
+	{
+		if (ret == 0)
+		{
+			strncpy(buf, "peer closed the connection without a TLS shutdown",
+				buflen - 1);
+			buf[buflen - 1] = 0;
+			return;
+		}
+
+		if (saved_errno)
+		{
+			snprintf(buf, buflen, "%s",
+				Samurai::system_error(saved_errno).message().c_str());
+			return;
+		}
+	}
+
+	strncpy(buf, "no error reported", buflen - 1);
+	buf[buflen - 1] = 0;
 }
 
 /*
@@ -1004,6 +1039,7 @@ ssize_t Samurai::IO::Net::OpenSSL::read(char* data, size_t length, Samurai::IO::
 	ERR_clear_error();
 
 	int ret = SSL_read(ssl, data, ssl_clamp_length(length));
+	const int saved_errno = Samurai::IO::Net::net_error();
 
 	if (ret > 0)
 	{
@@ -1032,7 +1068,7 @@ ssize_t Samurai::IO::Net::OpenSSL::read(char* data, size_t length, Samurai::IO::
 		default:
 		{
 			char msg[SSL_ERRBUF_SIZE];
-			ssl_error_string(msg, sizeof(msg));
+			ssl_call_error_string(msg, sizeof(msg), error, ret, saved_errno);
 			QERR("SSL read error (%d): %s", error, msg);
 			status = Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 			return -1;
@@ -1051,6 +1087,7 @@ ssize_t Samurai::IO::Net::OpenSSL::peek(char* data, size_t length, Samurai::IO::
 	ERR_clear_error();
 
 	int ret = SSL_peek(ssl, data, ssl_clamp_length(length));
+	const int saved_errno = Samurai::IO::Net::net_error();
 
 	if (ret > 0)
 	{
@@ -1079,7 +1116,7 @@ ssize_t Samurai::IO::Net::OpenSSL::peek(char* data, size_t length, Samurai::IO::
 		default:
 		{
 			char msg[SSL_ERRBUF_SIZE];
-			ssl_error_string(msg, sizeof(msg));
+			ssl_call_error_string(msg, sizeof(msg), error, ret, saved_errno);
 			QERR("SSL peek error (%d): %s", error, msg);
 			status = Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 			return -1;
@@ -1103,9 +1140,16 @@ ssize_t Samurai::IO::Net::OpenSSL::write(const char* data, size_t length, Samura
 		return -1;
 	}
 
+	if (length == 0)
+	{
+		status = Samurai::IO::Net::TlsFactory::TlsStatus::Ok;
+		return 0;
+	}
+
 	ERR_clear_error();
 
 	int ret = SSL_write(ssl, data, ssl_clamp_length(length));
+	const int saved_errno = Samurai::IO::Net::net_error();
 
 	if (ret > 0)
 	{
@@ -1134,7 +1178,7 @@ ssize_t Samurai::IO::Net::OpenSSL::write(const char* data, size_t length, Samura
 		default:
 		{
 			char msg[SSL_ERRBUF_SIZE];
-			ssl_error_string(msg, sizeof(msg));
+			ssl_call_error_string(msg, sizeof(msg), error, ret, saved_errno);
 			QERR("SSL write error (%d): %s", error, msg);
 			status = Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 			return -1;
