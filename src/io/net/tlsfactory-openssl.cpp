@@ -102,6 +102,31 @@ static void ssl_call_error_string(char* buf, size_t buflen, int error, int ret,
 }
 
 /*
+ * Whether a failed read is the peer having gone away rather than anything
+ * having gone wrong.
+ *
+ * A peer that closes its connection without sending a close_notify first ends
+ * the stream all the same, and most of them do exactly that once they have no
+ * more to say. OpenSSL reports it as SSL_ERROR_SYSCALL with a zero return and
+ * nothing on the error queue, or - once the error queue is used for it - as
+ * SSL_ERROR_SSL with SSL_R_UNEXPECTED_EOF_WHILE_READING. Neither is a failure
+ * to report to anybody: the stream is over, which is what the caller needs to
+ * be told so it can close its end.
+ */
+static bool ssl_read_at_eof(int error, int ret)
+{
+	if (error == SSL_ERROR_SYSCALL)
+		return ret == 0 && ERR_peek_error() == 0;
+
+#ifdef SSL_R_UNEXPECTED_EOF_WHILE_READING
+	if (error == SSL_ERROR_SSL)
+		return ERR_GET_REASON(ERR_peek_error()) == SSL_R_UNEXPECTED_EOF_WHILE_READING;
+#endif
+
+	return false;
+}
+
+/*
  * X509_digest() hashes the DER encoding of the whole certificate, which is what
  * a certificate fingerprint is defined over.
  */
@@ -1067,6 +1092,13 @@ ssize_t Samurai::IO::Net::OpenSSL::read(char* data, size_t length, Samurai::IO::
 
 		default:
 		{
+			if (ssl_read_at_eof(error, ret))
+			{
+				ERR_clear_error();
+				status = Samurai::IO::Net::TlsFactory::TlsStatus::Closed;
+				return 0;
+			}
+
 			char msg[SSL_ERRBUF_SIZE];
 			ssl_call_error_string(msg, sizeof(msg), error, ret, saved_errno);
 			QERR("SSL read error (%d): %s", error, msg);
@@ -1115,6 +1147,13 @@ ssize_t Samurai::IO::Net::OpenSSL::peek(char* data, size_t length, Samurai::IO::
 
 		default:
 		{
+			if (ssl_read_at_eof(error, ret))
+			{
+				ERR_clear_error();
+				status = Samurai::IO::Net::TlsFactory::TlsStatus::Closed;
+				return 0;
+			}
+
 			char msg[SSL_ERRBUF_SIZE];
 			ssl_call_error_string(msg, sizeof(msg), error, ret, saved_errno);
 			QERR("SSL peek error (%d): %s", error, msg);

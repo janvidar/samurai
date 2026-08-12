@@ -199,6 +199,7 @@ void Samurai::IO::Net::Socket::handleMonitorEvent(Samurai::IO::Net::SocketMonito
 				   peeking would skip valid reads. End-of-stream arrives
 				   as TlsStatus::Closed through read() instead. */
 				internal_canRead();
+				internal_stream_end();
 				break;
 
 
@@ -368,6 +369,9 @@ static Samurai::IO::Net::SocketError classify_socket_error(int socket_error,
 		case EADDRNOTAVAIL:
 			message = "Address is not available";
 			return SocketError::SocketUnknown;
+		case EPROTO:
+			message = "Protocol error";
+			return SocketError::SocketRead;
 	}
 
 	message = "Unknown socket error.";
@@ -404,6 +408,21 @@ void Samurai::IO::Net::Socket::internal_closed() {
 	state = SocketState::Disconnected;
 	close();
 	if (eventHandler) eventHandler->EventDisconnected(this);
+}
+
+void Samurai::IO::Net::Socket::internal_stream_end() {
+	const StreamEnd how = stream_end;
+	stream_end = StreamEnd::None;
+
+	if (how == StreamEnd::None) return;
+
+	if (state == SocketState::Invalid || state == SocketState::Disconnected)
+		return;
+
+	if (how == StreamEnd::Failed)
+		internal_error(EPROTO);
+	else
+		internal_closed();
 }
 
 void Samurai::IO::Net::Socket::internal_connected() {
@@ -1100,6 +1119,7 @@ Samurai::IO::ReadResult Samurai::IO::Net::Socket::read(char* data, size_t length
 		switch (status) {
 			case Samurai::IO::Net::TlsFactory::TlsStatus::Ok:
 				if (ret > 0) { transferred = (size_t) ret; noteProgress(); return Samurai::IO::ReadResult::Ok; }
+				stream_end = StreamEnd::Closed;
 				return Samurai::IO::ReadResult::EndOfFile;
 
 			case Samurai::IO::Net::TlsFactory::TlsStatus::WantWrite:
@@ -1110,9 +1130,11 @@ Samurai::IO::ReadResult Samurai::IO::Net::Socket::read(char* data, size_t length
 				return Samurai::IO::ReadResult::WouldBlock;
 
 			case Samurai::IO::Net::TlsFactory::TlsStatus::Closed:
+				stream_end = StreamEnd::Closed;
 				return Samurai::IO::ReadResult::EndOfFile;
 
 			case Samurai::IO::Net::TlsFactory::TlsStatus::Error:
+				stream_end = StreamEnd::Failed;
 				ec = Samurai::system_error(EPROTO);
 				return Samurai::IO::ReadResult::Error;
 		}
@@ -1162,6 +1184,7 @@ Samurai::IO::ReadResult Samurai::IO::Net::Socket::peek(char* data, size_t length
 		switch (status) {
 			case Samurai::IO::Net::TlsFactory::TlsStatus::Ok:
 				if (tls_ret > 0) { transferred = (size_t) tls_ret; return Samurai::IO::ReadResult::Ok; }
+				stream_end = StreamEnd::Closed;
 				return Samurai::IO::ReadResult::EndOfFile;
 
 			case Samurai::IO::Net::TlsFactory::TlsStatus::WantWrite:
@@ -1172,9 +1195,11 @@ Samurai::IO::ReadResult Samurai::IO::Net::Socket::peek(char* data, size_t length
 				return Samurai::IO::ReadResult::WouldBlock;
 
 			case Samurai::IO::Net::TlsFactory::TlsStatus::Closed:
+				stream_end = StreamEnd::Closed;
 				return Samurai::IO::ReadResult::EndOfFile;
 
 			case Samurai::IO::Net::TlsFactory::TlsStatus::Error:
+				stream_end = StreamEnd::Failed;
 				ec = Samurai::system_error(EPROTO);
 				return Samurai::IO::ReadResult::Error;
 		}

@@ -315,6 +315,26 @@ class Socket :
 		void internal_proxy_pump();
 		void internal_proxy_failed();
 
+		/**
+		 * What a read of a TLS socket found at the end of the stream, kept
+		 * until the read that found it has returned.
+		 *
+		 * A plaintext socket learns that the peer is gone from the probe in
+		 * handleMonitorEvent(), which tears the connection down there. A TLS
+		 * socket cannot be probed that way - see the note there - so the read
+		 * itself is what discovers it, and a read is not entitled to hand the
+		 * event handler a disconnection while that same handler is inside the
+		 * call. Recording it means the descriptor still gets released: it
+		 * stays readable for ever at end of stream, so a caller that ignores
+		 * what a read told it would otherwise be handed the same event by the
+		 * monitor for as long as the socket lives.
+		 */
+		enum class StreamEnd { None, Closed, Failed };
+		StreamEnd stream_end = StreamEnd::None;
+
+		/** Act on whatever a read recorded, if the socket is still up. */
+		void internal_stream_end();
+
 	protected:
 		void handleMonitorEvent(SocketMonitor::Triggers trig) override;
 		size_t bufferedInput() const override;
