@@ -178,6 +178,7 @@ int Samurai::IO::Net::DatagramSocket::send(DatagramPacket* packet) {
 	   removed explicitly or the next send() resends it. */
 	packet->buffer->remove((size_t) ret);
 
+	if (ret > 0) noteProgress();
 	if (bandwidthManager) bandwidthManager->dataSendUDP((size_t) ret);
 	return ret;
 }
@@ -228,6 +229,7 @@ int Samurai::IO::Net::DatagramSocket::read(DatagramPacket* packet) {
 	packet->setData(data, (size_t) status);
 	if (have_addr) packet->setAddress(&taddr);
 
+	noteProgress();
 	if (bandwidthManager) bandwidthManager->dataRecvUDP((size_t) status);
 	return (int) status;
 }

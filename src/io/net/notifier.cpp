@@ -116,6 +116,7 @@ void Samurai::IO::Net::Notifier::handleMonitorEvent(Samurai::IO::Net::SocketMoni
 	while (::recv(sd, buf, sizeof(buf), 0) > 0)
 	{
 		/* discard: the bytes say only that something happened */
+		noteProgress();
 	}
 
 	if (callback) callback();

@@ -174,6 +174,10 @@ void Samurai::IO::Net::ServerSocket::internal_accept() {
 		return;
 	}
 
+	/* Taking a connection off the queue is what progress means for a listener;
+	   see SocketBase::getProgress(). */
+	noteProgress();
+
 	/* accept() does not go through SocketBase::createDescriptor(), so this is
 	   the only place an inbound connection can be given the same suppression
 	   every outbound one gets. */

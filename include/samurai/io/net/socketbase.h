@@ -195,8 +195,28 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 
 		void setMonitor(SocketMonitor::Triggers trigger);
 		void disableMonitor();
-	
+
+		/**
+		 * How many times this socket has actually moved data.
+		 *
+		 * Only the number's changing means anything; what it counts is bytes for
+		 * a stream, datagrams for one of those, and connections for a listener.
+		 * The monitor reads it either side of a callback to tell a dispatch that
+		 * did something from one that did not - see SocketMonitor::dispatch() -
+		 * because every backend here is level triggered, so a descriptor whose
+		 * handler answers a readiness report by doing nothing is reported again
+		 * immediately and for as long as the condition lasts.
+		 *
+		 * Deliberately not bumped by peek(): looking at what has arrived without
+		 * taking it off the socket is the one operation that can be repeated
+		 * forever without getting anywhere.
+		 */
+		uint64_t getProgress() const { return progress; }
+
 	protected:
+		/** Record that the operation just performed moved something. */
+		void noteProgress() { progress++; }
+
 		/**
 		 * Called by create() once the object is owned by a shared_ptr.
 		 * Anything needing shared_from_this() - registering with the socket
@@ -255,6 +275,7 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 
 		SocketMonitor::Triggers monitor_trigger;
 		bool monitored;
+		uint64_t progress;
 		SocketType type;
 		Samurai::IO::Net::BandwidthManager* bandwidthManager;
 		

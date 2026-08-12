@@ -374,6 +374,21 @@ static Samurai::IO::Net::SocketError classify_socket_error(int socket_error,
 	return SocketError::SocketUnknown;
 }
 
+/*
+ * Both of these release the descriptor, and both do it before reporting.
+ *
+ * Releasing it is the half that was missing: a connection that failed or that
+ * the peer closed is over, and nothing here was ever going to read or write it
+ * again - but only ~Socket closed it, so a socket whose owner kept hold of it
+ * afterwards, or was itself waiting to be deleted, left a descriptor open for
+ * the life of the process. A client that fails to reach a hub and retries does
+ * that once a minute.
+ *
+ * Doing it first is the same reasoning as internal_proxy_failed(): close()
+ * unregisters, so the socket is out of the event loop before the handler is
+ * entitled to drop the last reference to it. Nothing is lost by the order, since
+ * a socket in either state refuses reads and writes in any case.
+ */
 void Samurai::IO::Net::Socket::internal_error(int socket_error) {
 	state = SocketState::Invalid;
 
@@ -381,14 +396,14 @@ void Samurai::IO::Net::Socket::internal_error(int socket_error) {
 	const Samurai::IO::Net::SocketError classified =
 		classify_socket_error(socket_error, message);
 
+	close();
 	if (eventHandler) eventHandler->EventError(this, classified, message);
-	disableMonitor();
 }
 
 void Samurai::IO::Net::Socket::internal_closed() {
 	state = SocketState::Disconnected;
+	close();
 	if (eventHandler) eventHandler->EventDisconnected(this);
-	disableMonitor();
 }
 
 void Samurai::IO::Net::Socket::internal_connected() {
@@ -588,14 +603,14 @@ void Samurai::IO::Net::Socket::internal_connect_addr()
 {
 	if (!createDescriptor(addr->getSockAddrFamily())) {
 		state = SocketState::Invalid;
-		disableMonitor();
+		close();
 		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, strerror(Samurai::IO::Net::net_error()));
 		return;
 	}
 
 	if (!setNonBlocking(true)) {
 		state = SocketState::Invalid;
-		disableMonitor();
+		close();
 		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, strerror(Samurai::IO::Net::net_error()));
 		return;
 	}
@@ -614,7 +629,7 @@ void Samurai::IO::Net::Socket::internal_connect_addr()
 		std::error_code ec;
 		if (!setReuseAddress(true, ec) || !setReusePort(true, ec)) {
 			state = SocketState::Invalid;
-			disableMonitor();
+			close();
 			if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, "the local port could not be made shareable");
 			return;
 		}
@@ -627,7 +642,7 @@ void Samurai::IO::Net::Socket::internal_connect_addr()
 
 			if (!bind(&local, ec)) {
 				state = SocketState::Invalid;
-				disableMonitor();
+				close();
 				if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, "the local port asked for could not be bound");
 				return;
 			}
@@ -650,7 +665,7 @@ void Samurai::IO::Net::Socket::internal_connect_addr()
 			return;
 		} else {
 			state = SocketState::Invalid;
-			disableMonitor();
+			close();
 			if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, strerror(Samurai::IO::Net::net_error()));
 			return;
 		}
@@ -660,7 +675,16 @@ void Samurai::IO::Net::Socket::internal_connect_addr()
 }
 
 
+/*
+ * Closed before the handler is told, for the reason internal_closed() is: the
+ * handler is entitled to release the last reference to this socket, and the
+ * close() that used to follow the report then ran on freed memory. Every caller
+ * that reaches here from outside a monitor callback - the local hub's deferred
+ * disconnect among them - had to hold a reference of its own to work around that.
+ */
 void Samurai::IO::Net::Socket::disconnect() {
+	bool was_up = false;
+
 	switch (state) {
 		case SocketState::Connecting:
 		case SocketState::ProxyHandshake:
@@ -669,7 +693,7 @@ void Samurai::IO::Net::Socket::disconnect() {
 		case SocketState::SSLConnected:
 		case SocketState::SSLBye:
 			state = SocketState::Disconnected;
-			if (eventHandler) eventHandler->EventDisconnected(this);
+			was_up = true;
 			break;
 
 		default:
@@ -677,6 +701,8 @@ void Samurai::IO::Net::Socket::disconnect() {
 	}
 
 	close();
+
+	if (was_up && eventHandler) eventHandler->EventDisconnected(this);
 }
 
 
@@ -699,6 +725,7 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 
 		switch (status) {
 			case Samurai::IO::Net::TlsFactory::TlsStatus::Ok:
+				if (ret > 0) noteProgress();
 				return ret;
 
 			case Samurai::IO::Net::TlsFactory::TlsStatus::WantWrite:
@@ -712,7 +739,7 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 			case Samurai::IO::Net::TlsFactory::TlsStatus::Error:
 				if (eventHandler) eventHandler->EventTLSDisconnected(this);
 				state = SocketState::Invalid;
-				disableMonitor();
+				close();
 				if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketWrite, "FIXME: SSL/TLS send error");
 				return -1;
 
@@ -728,7 +755,7 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 				return 0;
 			} else {
 				state = SocketState::Invalid;
-				disableMonitor();
+				close();
 				if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketWrite, strerror(Samurai::IO::Net::net_error()));
 				return -1;
 			}
@@ -741,6 +768,7 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 		}
 	}
 
+	if (ret > 0) noteProgress();
 	if (bandwidthManager) bandwidthManager->dataSendTCP((size_t) ret);
 	return ret;
 }
@@ -762,6 +790,7 @@ ssize_t Samurai::IO::Net::Socket::read(char* data, size_t length) {
 
 		switch (status) {
 			case Samurai::IO::Net::TlsFactory::TlsStatus::Ok:
+				if (ret > 0) noteProgress();
 				return ret;
 
 			case Samurai::IO::Net::TlsFactory::TlsStatus::WantWrite:
@@ -775,7 +804,7 @@ ssize_t Samurai::IO::Net::Socket::read(char* data, size_t length) {
 			case Samurai::IO::Net::TlsFactory::TlsStatus::Error:
 				if (eventHandler) eventHandler->EventTLSDisconnected(this);
 				state = SocketState::Invalid;
-				disableMonitor();
+				close();
 				if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketRead, "FIXME: SSL/TLS read error");
 				return -1;
 		}
@@ -791,11 +820,12 @@ ssize_t Samurai::IO::Net::Socket::read(char* data, size_t length) {
 			}
 
 			state = SocketState::Invalid;
-			disableMonitor();
+			close();
 			if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketRead, strerror(Samurai::IO::Net::net_error()));
 			return 0; // nothing was read.
 		}
 	}
+	if (ret > 0) noteProgress();
 	if (bandwidthManager) bandwidthManager->dataRecvTCP((size_t) ret);
 	return ret;
 }
@@ -830,7 +860,7 @@ ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
 			case Samurai::IO::Net::TlsFactory::TlsStatus::Error:
 				if (eventHandler) eventHandler->EventTLSDisconnected(this);
 				state = SocketState::Invalid;
-				disableMonitor();
+				close();
 				if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketRead, "SSL/TLS peek error");
 				return 0;
 		}
@@ -846,7 +876,7 @@ ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
 		}
 
 		state = SocketState::Invalid;
-		disableMonitor();
+		close();
 		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketRead, strerror(Samurai::IO::Net::net_error()));
 		return 0;
 	}
@@ -884,7 +914,7 @@ void Samurai::IO::Net::Socket::EventHostError(Samurai::IO::Net::DNS::Resolver::E
 	lookup_target = LookupTarget::Peer;
 
 	state = SocketState::Invalid;
-	disableMonitor();
+	close();
 	if (eventHandler)
 		eventHandler->EventError(this, Samurai::IO::Net::SocketError::HostNotFound,
 		                         was_proxy ? "Proxy host not found." : "Host not found.");
@@ -1069,7 +1099,7 @@ Samurai::IO::ReadResult Samurai::IO::Net::Socket::read(char* data, size_t length
 
 		switch (status) {
 			case Samurai::IO::Net::TlsFactory::TlsStatus::Ok:
-				if (ret > 0) { transferred = (size_t) ret; return Samurai::IO::ReadResult::Ok; }
+				if (ret > 0) { transferred = (size_t) ret; noteProgress(); return Samurai::IO::ReadResult::Ok; }
 				return Samurai::IO::ReadResult::EndOfFile;
 
 			case Samurai::IO::Net::TlsFactory::TlsStatus::WantWrite:
@@ -1094,6 +1124,7 @@ Samurai::IO::ReadResult Samurai::IO::Net::Socket::read(char* data, size_t length
 	if (ret > 0)
 	{
 		transferred = (size_t) ret;
+		noteProgress();
 		if (bandwidthManager) bandwidthManager->dataRecvTCP(transferred);
 		return Samurai::IO::ReadResult::Ok;
 	}
@@ -1179,6 +1210,7 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length, std::er
 	ssize_t ret = ::send(sd, data, length, Samurai::IO::Net::send_flags);
 	if (ret >= 0)
 	{
+		if (ret > 0) noteProgress();
 		if (bandwidthManager) bandwidthManager->dataSendTCP((size_t) ret);
 		return ret;
 	}
@@ -1262,6 +1294,7 @@ ssize_t Samurai::IO::Net::Socket::write(std::span<const std::string_view> buffer
 	int ret = WSASend(sd, vec, (DWORD) count, &sent, 0, nullptr, nullptr);
 	if (ret == 0)
 	{
+		if (sent > 0) noteProgress();
 		if (bandwidthManager) bandwidthManager->dataSendTCP((size_t) sent);
 		return (ssize_t) sent;
 	}
@@ -1274,6 +1307,7 @@ ssize_t Samurai::IO::Net::Socket::write(std::span<const std::string_view> buffer
 	ssize_t ret = ::sendmsg(sd, &msg, Samurai::IO::Net::send_flags);
 	if (ret >= 0)
 	{
+		if (ret > 0) noteProgress();
 		if (bandwidthManager) bandwidthManager->dataSendTCP((size_t) ret);
 		return ret;
 	}

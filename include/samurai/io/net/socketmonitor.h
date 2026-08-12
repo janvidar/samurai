@@ -6,6 +6,7 @@
 #ifndef HAVE_SAMURAI_SOCKETMONITOR_H
 #define HAVE_SAMURAI_SOCKETMONITOR_H
 
+#include <chrono>
 #include <map>
 #include <memory>
 #include <vector>
@@ -174,12 +175,69 @@ class SocketMonitor
 		/** Deliver a read event to every socket that holds buffered input. */
 		void dispatchBufferedInput();
 
+		/**
+		 * What is known about one monitored descriptor.
+		 *
+		 * Everything past the reference is the runaway guard. Every backend here
+		 * is level triggered, so a descriptor that is ready stays ready until
+		 * something acts on it: bytes are taken off it, it is closed, or the
+		 * interest in it changes. A handler that answers the report by doing none
+		 * of those is reported again on the next pass, and on every pass after
+		 * that, which is a busy loop at the speed of the poll rather than an
+		 * event that got lost. Enough of those in a row and the monitor stops
+		 * believing the descriptor; see dispatch().
+		 */
+		struct Watch
+		{
+			std::weak_ptr<SocketBase> socket;
+
+			/**
+			 * Consecutive readiness reports answered with nothing at all.
+			 *
+			 * What each report is measured against is read either side of the
+			 * callback rather than kept here on purpose: a socket written to from
+			 * somewhere other than its own handler - a timer, say - is still not
+			 * answering the reports it is being given, and remembering the figure
+			 * between passes would let that count as an answer.
+			 */
+			unsigned idle = 0;
+
+			/**
+			 * When a descriptor taken out of the poll goes back in, or the epoch
+			 * for one that was never taken out. Not the same thing as being
+			 * unmonitored: the socket still believes it is watched, its registry
+			 * entry is still here, and its owner is never told.
+			 */
+			bool paused = false;
+			std::chrono::steady_clock::time_point resume{};
+
+			/**
+			 * Whether this has been complained about already.
+			 *
+			 * A descriptor that never starts answering is paused again every time
+			 * it is let back in, which is four times a second - and a log line at
+			 * that rate is how the one line that mattered gets lost. Cleared by
+			 * progress, so a second episode is reported as a second episode.
+			 */
+			bool reported = false;
+		};
+
+		/**
+		 * Take a descriptor out of the poll for a while, having concluded that
+		 * nothing is answering it. Says so once, loudly, because a spin that is
+		 * merely slowed down is still a bug somewhere above this.
+		 */
+		void pauseWatch(socket_t fd, Watch& watch, SocketBase* socket, Triggers trig);
+
+		/** Put back whatever has waited long enough, and say when the next is due. */
+		int resumePaused();
+
 	protected:
 		explicit SocketMonitor(std::string_view name);
 		static SocketMonitor* socket_monitor;
 		std::string_view name;
 
-		std::map<socket_t, std::weak_ptr<SocketBase> > registry;
+		std::map<socket_t, Watch> registry;
 };
 
 /* SocketMonitor::Triggers is a flag set; see samurai/bitmask.h. */
