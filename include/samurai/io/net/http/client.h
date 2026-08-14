@@ -196,6 +196,18 @@ class Client final
 		 */
 		const InetAddress* getLocalAddress() const;
 
+		/**
+		 * The local port the connection was made from.
+		 *
+		 * Kept past the socket for the same reason getLocalAddress() is. A
+		 * protocol that tells the peer which port it came from - so the peer
+		 * can say whether a NAT rewrote it - needs this and cannot read it off
+		 * a socket that has already been closed.
+		 *
+		 * Zero until connected.
+		 */
+		uint16_t getLocalPort() const { return local_port; }
+
 	private:
 		void EventConnected(const Socket*) override;
 		void EventTLSConnected(const Socket*) override;
@@ -224,8 +236,9 @@ class Client final
 		Samurai::IO::Buffer incoming;
 
 		ResponseParser parser;
-		/* Kept past the socket, so it survives being asked for from a handler. */
+		/* Kept past the socket, so they survive being asked for from a handler. */
 		InetAddress local_address;
+		uint16_t local_port = 0;
 		bool busy = false;
 		bool reported = false;
 

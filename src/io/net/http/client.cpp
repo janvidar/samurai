@@ -153,6 +153,7 @@ void Samurai::IO::Net::HTTP::Client::internal_start()
 	incoming.clear();
 	outgoing.clear();
 	local_address = InetAddress();
+	local_port = 0;
 	reported = false;
 	secure = false;
 	handshaking = false;
@@ -358,6 +359,7 @@ void Samurai::IO::Net::HTTP::Client::EventConnected(const Socket*)
 	{
 		if (const InetAddress* local = socket->getLocalAddress())
 			local_address = *local;
+		local_port = socket->getLocalPort();
 	}
 
 	if (!secure)
