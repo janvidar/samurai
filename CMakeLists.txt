@@ -205,7 +205,9 @@ set(SAMURAI_SOURCES
     src/crypto/digest/hash.cpp
     src/crypto/digest/hashvalue.cpp
     src/crypto/digest/merkletree.cpp
-    src/crypto/digest/tiger.cpp)
+    src/crypto/digest/sha.cpp
+    src/crypto/digest/tiger.cpp
+    src/crypto/hmac.cpp)
 
 # The sources are compiled once into an object library, and the enabled
 # library flavours are then assembled from those objects. The objects are
