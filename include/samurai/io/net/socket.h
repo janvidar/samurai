@@ -123,6 +123,32 @@ class Socket :
 		 */
 		void setReuseLocalPort(uint16_t port);
 
+		/**
+		 * Connect from this source address rather than whichever one the
+		 * routing table chooses.
+		 *
+		 * Has to be set before connect(), for the same reason
+		 * setReuseLocalPort() does: the descriptor does not exist until then.
+		 *
+		 * A host with more than one address of a family does not have a source
+		 * address; the kernel picks one per destination, preferring the address
+		 * sharing the longest prefix with the target (RFC 6724). That is
+		 * ordinarily what is wanted and occasionally wrong: a measurement that
+		 * asks a server "which address am I" gets an answer about whichever
+		 * address the route selected, and for two destinations in one subnet
+		 * that can be two different answers to what the caller believed was one
+		 * question. Naming the source removes the question.
+		 *
+		 * The address must be of the same family as the peer. A connection
+		 * whose source cannot be bound fails rather than proceeding from
+		 * another address: a caller that named one did so because something
+		 * downstream depends on which it was.
+		 *
+		 * Combines with setReuseLocalPort() - the port comes from there and the
+		 * address from here, and either may be left unset.
+		 */
+		void setLocalAddress(const InetAddress& address);
+
 		void setProxy(const ProxySettings& settings);
 		const ProxySettings& getProxy() const { return proxy; }
 		bool isProxied() const { return outbound && proxy.isEnabled(); }
@@ -300,6 +326,8 @@ class Socket :
 		 */
 		bool reuse_local_port = false;
 		uint16_t local_port = 0;
+		/** The source address to bind, when the caller named one. */
+		std::unique_ptr<InetAddress> local_address;
 
 		ProxySettings proxy;
 		/* Where the proxy is, once it is known. Separate from 'address', which

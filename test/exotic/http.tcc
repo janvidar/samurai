@@ -155,6 +155,8 @@ class CannedServer
 		std::string reply;
 		/* Everything the client sent, so a case can assert on the request. */
 		std::string request;
+		/* The address the last connection came from. */
+		std::string peer;
 		bool answer = true;
 		bool close_without_answering = false;
 		int connections = 0;
@@ -200,6 +202,11 @@ class CannedServer
 
 			accepted = socket;
 			accepted->setEventHandler(this);
+
+			/* Which address the client connected from. The only place a
+			   source-address bind can actually be observed is at the far end. */
+			if (const Samurai::IO::Net::InetAddress* from = socket->getAddress())
+				peer = from->toString();
 
 			/* Each connection is answered from the start of the reply. */
 			sent = 0;
@@ -1638,4 +1645,105 @@ EXO_TEST(http_client_uses_the_limits_in_force_at_request_time,
 	http_pump([&] { return events.done; });
 
 	return events.done && !events.ok && events.status == Status::ResponseTooLarge;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Options::localAddress                                                     */
+/*                                                                           */
+/* The whole of 127/8 is local on Linux, so 127.0.0.2 is a second source     */
+/* address to bind and the server can see which one arrived. Where the       */
+/* platform does not offer one, the bind fails and the case is skipped       */
+/* rather than reported as a defect in the option.                           */
+/* ------------------------------------------------------------------------- */
+
+namespace {
+
+/** Whether this machine can source a connection from 127.0.0.2. */
+bool haveSecondLoopbackAddress()
+{
+	Samurai::IO::Net::InetSocketAddress local(
+		Samurai::IO::Net::InetAddress("127.0.0.2"), (uint16_t) 0);
+	auto probe = Samurai::IO::Net::ServerSocket::create(nullptr, local);
+	return probe && probe->getFD() != -1;
+}
+
+} // namespace
+
+EXO_TEST(http_client_binds_the_source_address_it_was_given,
+{
+	if (!haveSecondLoopbackAddress()) return true;  /* nothing to bind */
+
+	CannedServer server("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nhi");
+	if (!server.ready()) return false;
+
+	Client::Options options;
+	options.localAddress = Samurai::IO::Net::InetAddress("127.0.0.2");
+
+	ClientRecorder events;
+	Client client(&events, options);
+	client.get(server.url("/"));
+
+	http_pump([&] { return events.done; });
+	if (!events.ok) return false;
+
+	/* Asserted at the server, not at the client: the point of the option is
+	   what the far end sees. */
+	if (server.peer != "127.0.0.2") return false;
+
+	/* And the client agrees about where it connected from. */
+	const Samurai::IO::Net::InetAddress* local = client.getLocalAddress();
+	return local && local->toString() == "127.0.0.2";
+});
+
+EXO_TEST(http_client_without_the_option_is_unchanged,
+{
+	CannedServer server("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nhi");
+	if (!server.ready()) return false;
+
+	ClientRecorder events;
+	Client client(&events);
+	client.get(server.url("/"));
+
+	http_pump([&] { return events.done; });
+	if (!events.ok) return false;
+	/* The ordinary route to 127.0.0.1 sources from 127.0.0.1. */
+	return server.peer == "127.0.0.1";
+});
+
+EXO_TEST(http_client_fails_when_the_source_family_does_not_match,
+{
+	/*
+	 * An IPv6 source for an IPv4 peer cannot be bound. Failing is the point:
+	 * connecting anyway from some other address would give a caller that named
+	 * one an answer about a different address than it asked about.
+	 */
+	CannedServer server("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nhi");
+	if (!server.ready()) return false;
+
+	Client::Options options;
+	options.localAddress = Samurai::IO::Net::InetAddress("::1");
+
+	ClientRecorder events;
+	Client client(&events, options);
+	client.get(server.url("/"));
+
+	http_pump([&] { return events.done; });
+	return events.done && !events.ok && server.connections == 0;
+});
+
+EXO_TEST(http_client_fails_when_the_source_address_is_not_local,
+{
+	/* An address this machine does not hold cannot be bound. */
+	CannedServer server("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nhi");
+	if (!server.ready()) return false;
+
+	Client::Options options;
+	options.localAddress = Samurai::IO::Net::InetAddress("203.0.113.7");
+
+	ClientRecorder events;
+	Client client(&events, options);
+	client.get(server.url("/"));
+
+	http_pump([&] { return events.done; });
+	return events.done && !events.ok && server.connections == 0;
 });

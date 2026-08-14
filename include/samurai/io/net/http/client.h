@@ -8,6 +8,7 @@
 
 #include <samurai/io/buffer.h>
 #include <samurai/io/net/http/response.h>
+#include <samurai/io/net/inetaddress.h>
 #include <samurai/io/net/proxy.h>
 #include <samurai/io/net/socket.h>
 #include <samurai/io/net/socketevent.h>
@@ -121,6 +122,23 @@ class Client final
 			 * never followed to a plain http target whatever this says.
 			 */
 			unsigned maxRedirects = 0;
+
+			/**
+			 * Connect from this source address rather than whichever one the
+			 * routing table chooses.
+			 *
+			 * Nothing means the ordinary behaviour, which is what almost every
+			 * caller wants. It is here for a client on a host with several
+			 * addresses of one family that needs the server to see a
+			 * particular one - a reachability check asking "which address am
+			 * I, and can it be reached" is meaningless if the answer is about
+			 * an address chosen by the route rather than by the caller. See
+			 * Socket::setLocalAddress().
+			 *
+			 * Must match the family of the address the URL resolves to; a
+			 * mismatch fails the request rather than falling back.
+			 */
+			std::optional<InetAddress> localAddress;
 
 			/**
 			 * Reach the server through a SOCKS5 proxy.

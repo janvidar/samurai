@@ -225,6 +225,12 @@ void Samurai::IO::Net::HTTP::Client::internal_start()
 	   twice - and would quietly become wrong if the default moved. */
 	if (options.proxy) socket->setProxy(*options.proxy);
 
+	/* Before connect(), which is the only moment a source address can be
+	   chosen. Not set under a proxy: the connection is to the proxy, so binding
+	   a source for it says nothing about which address the far end sees. */
+	if (options.localAddress && !socket->isProxied())
+		socket->setLocalAddress(*options.localAddress);
+
 	busy = true;
 
 	/* One deadline over the whole exchange - lookup, connect, request and

@@ -618,6 +618,12 @@ void Samurai::IO::Net::Socket::setReuseLocalPort(uint16_t port)
 }
 
 
+void Samurai::IO::Net::Socket::setLocalAddress(const Samurai::IO::Net::InetAddress& address)
+{
+	local_address = std::make_unique<Samurai::IO::Net::InetAddress>(address);
+}
+
+
 void Samurai::IO::Net::Socket::internal_connect_addr()
 {
 	if (!createDescriptor(addr->getSockAddrFamily())) {
@@ -644,25 +650,43 @@ void Samurai::IO::Net::Socket::internal_connect_addr()
 	 * some other port, and a caller that asked for this one asked because the
 	 * peer is being told which port to expect.
 	 */
-	if (reuse_local_port) {
+	if (reuse_local_port || local_address) {
 		std::error_code ec;
-		if (!setReuseAddress(true, ec) || !setReusePort(true, ec)) {
-			state = SocketState::Invalid;
-			close();
-			if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, "the local port could not be made shareable");
-			return;
+
+		/* Only the port-sharing case needs these, and they are not free: a
+		   socket that did not ask to share its port should not be sharing it. */
+		if (reuse_local_port) {
+			if (!setReuseAddress(true, ec) || !setReusePort(true, ec)) {
+				state = SocketState::Invalid;
+				close();
+				if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, "the local port could not be made shareable");
+				return;
+			}
 		}
 
-		if (local_port) {
+		if (local_port || local_address) {
 			/* The same family as the peer, since that is what the descriptor is. */
 			const bool six = addr->getSockAddrFamily() == AF_INET6;
+
+			if (local_address) {
+				const bool src_six =
+					local_address->getType() == Samurai::IO::Net::InetAddress::Version::IPv6;
+				if (!local_address->isValid() || src_six != six) {
+					state = SocketState::Invalid;
+					close();
+					if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, "the source address is not of the peer's address family");
+					return;
+				}
+			}
+
 			Samurai::IO::Net::InetAddress any(six ? "::" : "0.0.0.0");
-			Samurai::IO::Net::InetSocketAddress local(any, local_port);
+			Samurai::IO::Net::InetSocketAddress local(
+				local_address ? *local_address : any, local_port);
 
 			if (!bind(&local, ec)) {
 				state = SocketState::Invalid;
 				close();
-				if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, "the local port asked for could not be bound");
+				if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, local_address ? "the source address asked for could not be bound" : "the local port asked for could not be bound");
 				return;
 			}
 		}

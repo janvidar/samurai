@@ -75,6 +75,7 @@ exotic_add_tests(autotest
         exotic/http.tcc
         exotic/inetaddress.tcc
         exotic/interface.tcc
+        exotic/json.tcc
         exotic/misc.tcc
         exotic/multicast.tcc
         exotic/notifier.tcc
