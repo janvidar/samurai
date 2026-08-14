@@ -79,6 +79,26 @@ size_t Samurai::IO::Net::DatagramPacket::size() {
 	return buffer->size();
 }
 
+/*
+ * Both were declared and never defined, so the first caller of either got a
+ * link error rather than a datagram.
+ *
+ * peek() copies and read() copies and consumes, which is the split Buffer
+ * already makes between pop() and remove(). Consuming only what was copied
+ * rather than the whole packet keeps read() usable by a caller that reads in
+ * fixed-size pieces; a caller wanting the whole message asks size() first.
+ */
+int Samurai::IO::Net::DatagramPacket::peek(uint8_t* data, size_t length) {
+	if (!data || !length) return 0;
+	return (int) buffer->pop(reinterpret_cast<char*>(data), length);
+}
+
+int Samurai::IO::Net::DatagramPacket::read(uint8_t* data, size_t length) {
+	const int got = peek(data, length);
+	if (got > 0) buffer->remove((size_t) got);
+	return got;
+}
+
 Samurai::IO::Buffer* Samurai::IO::Net::DatagramPacket::getBuffer() {
 	return buffer.get();
 }
