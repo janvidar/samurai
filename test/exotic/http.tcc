@@ -1664,7 +1664,12 @@ bool haveSecondLoopbackAddress()
 	Samurai::IO::Net::InetSocketAddress local(
 		Samurai::IO::Net::InetAddress("127.0.0.2"), (uint16_t) 0);
 	auto probe = Samurai::IO::Net::ServerSocket::create(nullptr, local);
-	return probe && probe->getFD() != -1;
+	if (!probe) return false;
+
+	/* create() only got as far as a descriptor, and a descriptor is had for
+	   the asking whether or not the address exists here; the bind is in
+	   listen(), so that is what has to be reached to learn the answer. */
+	return probe->listen();
 }
 
 } // namespace
