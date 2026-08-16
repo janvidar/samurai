@@ -12,18 +12,22 @@ Building
 
 Samurai builds with CMake (3.16 or newer):
 
-    git clone --recurse-submodules https://github.com/janvidar/samurai.git
+    git clone https://github.com/janvidar/samurai.git
     cmake -S . -B build
     cmake --build build -j
     ctest --test-dir build
 
-The submodule is the exotic test generator, which the automated suite is built
-through. In a clone made without it, run
+The automated suite is built through the exotic test framework, which this
+library does not carry a copy of - it belongs to whoever is building, not to
+samurai, since QuickDC's tests are built through it as well. Clone it beside
+this checkout to enable the suite:
 
-    git submodule update --init
+    git clone https://github.com/janvidar/exotic.git ../exotic
 
-The library itself does not need it; without it the suite is skipped, with a
-notice at configure time.
+An installed exotic is used when there is no such directory, and
+-DEXOTIC_SOURCE_DIR=... names one somewhere else. The library itself does not
+need any of it; without it the suite is skipped, with a notice at configure
+time.
 
 Requirements: a C++20 compiler, zlib, bzip2, and either OpenSSL 3.0 or newer or
 LibreSSL 3.5 or newer. TLS is mandatory, and the two are used through the same
@@ -188,10 +192,10 @@ description directly, which is also how they are exercised against a stub:
     ./build/test/portmap --url http://192.168.1.1:5000/rootDesc.xml add 8080
 
 The automated suite lives in test/exotic and is written for the "exotic" test
-framework, pinned as a submodule in third_party/exotic and built as part of the
+framework, which is looked for beside this checkout and built as part of the
 project. Each .tcc file is compiled as its own translation unit and the tests
 register themselves, so nothing is generated and Perl is not needed. An
-installed exotic is used instead when the submodule is absent.
+installed exotic is used instead when there is no checkout to be found.
 
 ctest runs the suite as a single test named autotest. The binary can also be run
 directly, which is what to do when a name is wanted rather than a pass or fail:

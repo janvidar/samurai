@@ -29,11 +29,17 @@ jobs:
             cxx: clang++
 
     steps:
-      # The exotic test generator is a submodule; without it CMake skips the
-      # whole suite and the run would pass having tested nothing.
+      # Checked out beside each other rather than into the workspace root: the
+      # exotic test framework is looked for next to this checkout, and without it
+      # CMake skips the whole suite and the run would pass having tested nothing.
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          path: samurai
+
+      - uses: actions/checkout@v4
+        with:
+          repository: janvidar/exotic
+          path: exotic
 
       - name: Install dependencies
         run: |
@@ -42,7 +48,7 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -S . -B build \
+          cmake -S samurai -B build \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
             -DCMAKE_C_COMPILER=${{ matrix.cc }} \
             -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
@@ -64,7 +70,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          path: samurai
+
+      - uses: actions/checkout@v4
+        with:
+          repository: janvidar/exotic
+          path: exotic
 
       - name: Install dependencies
         run: |
@@ -78,7 +89,7 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -S . -B build-asan \
+          cmake -S samurai -B build-asan \
             -DCMAKE_BUILD_TYPE=Debug \
             -DSAMURAI_SANITIZE=ON
 
@@ -95,7 +106,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          path: samurai
+
+      - uses: actions/checkout@v4
+        with:
+          repository: janvidar/exotic
+          path: exotic
 
       # macOS ships LibreSSL headers too old for the TLS code, so the Homebrew
       # OpenSSL has to be pointed at explicitly.
@@ -104,7 +120,7 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -S . -B build \
+          cmake -S samurai -B build \
             -DCMAKE_BUILD_TYPE=Debug \
             -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)"
 

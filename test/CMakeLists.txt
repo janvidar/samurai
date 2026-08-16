@@ -42,22 +42,33 @@ endforeach()
 # The exotic suite (test/exotic/*.tcc)
 #
 # These are the real automated tests. They are built through exotic
-# (https://github.com/janvidar/exotic), which is pinned as a submodule in
-# third_party/exotic; a clone made without --recurse-submodules leaves that
-# directory empty, so fall back to an installed package and skip the suite when
-# neither is available.
+# (https://github.com/janvidar/exotic), which this library does not carry a copy
+# of: exotic is a dependency of samurai's tests and of QuickDC's both, and a copy
+# owned by one of them is a copy the other has to reach inside for. So it is
+# looked for in three places, in the order that costs least.
+#
+# A superproject that has already added exotic has defined the target, and that
+# one is used. Adding the same source directory a second time would not produce
+# a second library - it would collide on the target names and stop the configure.
 # ---------------------------------------------------------------------------
 
-if(EXISTS ${PROJECT_SOURCE_DIR}/third_party/exotic/CMakeLists.txt)
-    add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/exotic
-        ${CMAKE_CURRENT_BINARY_DIR}/exotic)
-else()
-    find_package(Exotic QUIET)
-    if(NOT Exotic_FOUND)
-        message(STATUS
-            "Samurai: exotic not found - skipping the test/exotic suite. Run "
-            "'git submodule update --init' to enable ~930 additional tests.")
-        return()
+# Where a standalone build looks: beside this checkout, which is the layout a
+# superproject holding both of them produces anyway.
+set(EXOTIC_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../exotic" CACHE PATH
+    "Where the exotic test framework is checked out, when it is not installed")
+
+if(NOT TARGET Exotic::exotic)
+    if(EXISTS ${EXOTIC_SOURCE_DIR}/CMakeLists.txt)
+        add_subdirectory(${EXOTIC_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/exotic)
+    else()
+        find_package(Exotic QUIET)
+        if(NOT Exotic_FOUND)
+            message(STATUS
+                "Samurai: exotic not found - skipping the test/exotic suite. Clone "
+                "https://github.com/janvidar/exotic beside this checkout, or set "
+                "EXOTIC_SOURCE_DIR, to enable the autotest suite.")
+            return()
+        endif()
     endif()
 endif()
 
