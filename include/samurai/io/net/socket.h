@@ -79,6 +79,12 @@ class Socket :
 		 * instead: the whole point of reaching a peer through a proxy is that
 		 * its name is never handed to the system resolver, and this is the one
 		 * call that would. Call connect() directly - it needs no address.
+		 *
+		 * A reference is held across the EventHostLookup() this reports, for the
+		 * reason the note above EventTimeout() gives: that call reaches the
+		 * application - it is what puts "looking up" in front of a user - and an
+		 * application entitled to give up there may drop the last reference it
+		 * has, leaving the resolve that follows reaching into a freed object.
 		 */
 		void lookup();
 

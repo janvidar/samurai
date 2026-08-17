@@ -1589,3 +1589,47 @@ EXO_TEST(sockets_a_local_port_that_cannot_be_bound_is_reported,
 	EXO_ASSERT(reported);
 	return 1;
 });
+
+/* ------------------------------------------------------------------------- */
+
+/*
+ * An application is entitled to give up while a socket is telling it what it is
+ * doing, and dropping the last reference is how it does that.
+ *
+ * EventHostLookup() is the one that reaches a user - it is what puts "looking
+ * up" in front of them, so it is also where a cancel lands - and the resolve it
+ * announces runs after it returns, off members of the very object the handler
+ * may just have released. A resolver drain holds nothing to keep that alive the
+ * way a monitor dispatch does.
+ */
+class LookupCanceller : public SocketRecorder
+{
+	public:
+		std::shared_ptr<Socket> hold;
+
+		void EventHostLookup(const Socket*) override
+		{
+			host_lookup = true;
+			hold.reset();
+		}
+};
+
+EXO_TEST(socket_survives_the_last_reference_going_while_it_reports_a_lookup,
+{
+	LookupCanceller events;
+
+	events.hold = Socket::create(&events, std::string("127.0.0.1"), 1411);
+	EXO_ASSERT(events.hold);
+	EXO_ASSERT(events.hold.use_count() == 1);
+
+	/*
+	 * Nothing of the socket may be touched after this returns: the reference the
+	 * call holds across the callback is the last one, so it is freed on the way
+	 * out - which is the point. What is asked afterwards is asked of the handler.
+	 */
+	events.hold->lookup();
+
+	EXO_ASSERT(events.host_lookup);
+	EXO_ASSERT(!events.hold);
+	return 1;
+});

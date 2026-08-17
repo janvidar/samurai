@@ -146,6 +146,8 @@ void Samurai::IO::Net::Socket::lookup() {
 	}
 
 	if (address) {
+		const std::shared_ptr<SocketBase> keep = weak_from_this().lock();
+
 		if (eventHandler) eventHandler->EventHostLookup(this);
 		address->lookup(this);
 	}
