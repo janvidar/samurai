@@ -20,9 +20,9 @@ Samurai builds with CMake (3.16 or newer):
 The automated suite is built through the exotic test framework, which this
 library does not carry a copy of - it belongs to whoever is building, not to
 samurai, since QuickDC's tests are built through it as well. Clone it beside
-this checkout to enable the suite:
+this checkout to enable the suite, from the same place this was cloned from:
 
-    git clone https://github.com/janvidar/exotic.git ../exotic
+    git clone <same host>/janvidar/exotic.git ../exotic
 
 An installed exotic is used when there is no such directory, and
 -DEXOTIC_SOURCE_DIR=... names one somewhere else. The library itself does not
