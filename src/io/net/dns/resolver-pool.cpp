@@ -36,6 +36,18 @@ Error mapResolveError(int rc)
 /*
  * NOTE: getaddrinfo(), not gethostbyname(): it is reentrant and returns both
  * address families, which matters more here than it did on the loop thread.
+ *
+ * Which family comes back is the platform's choice and not a caller's: the
+ * request carries no family and AF_UNSPEC is what is asked, so a name holding
+ * both records answers with whichever the system prefers. Anything that needs a
+ * particular family has to ask for a name that has only that one - which is why
+ * a reachability check is pointed at its family's own hostname rather than at
+ * the dual-stack name.
+ *
+ * A host with no usable address of a family also gets no answer of it: a
+ * resolver that filters unreachable families - as a current system does - fails
+ * an AAAA-only name outright rather than returning an address nothing could
+ * reach, and that arrives here as a name that does not exist.
  */
 void resolveForward(ResolverPool::Request& request)
 {
