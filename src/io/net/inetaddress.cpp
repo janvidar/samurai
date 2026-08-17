@@ -479,10 +479,11 @@ void Samurai::IO::Net::InetAddress::EventHostFound(const Samurai::IO::Net::InetA
 void Samurai::IO::Net::InetAddress::EventHostError(Samurai::IO::Net::DNS::Resolver::Error error)
 {
 	resolveState = ResolveState::ResolveError;
-	if (dnsevent) {
-		dnsevent->EventHostError(error);
-	}
+
+	Samurai::IO::Net::ResolveEventHandler* handler = dnsevent;
 	dnsevent = nullptr;
+
+	if (handler) handler->EventHostError(error);
 }
 
 
