@@ -51,10 +51,20 @@ struct TlsTestKeys
 	TlsTestKeys& operator=(const TlsTestKeys&) = delete;
 };
 
-/* Written next to the generated test sources, which is a writable build dir. */
+/*
+ * Written next to the generated test sources, which is a writable build dir, and
+ * named after the process that writes it.
+ *
+ * The name has to be unique per process because the destructor unlinks what it
+ * wrote: two runs of this suite from one build directory would otherwise load,
+ * overwrite and delete one another's key pair, and a server left without a usable
+ * key offers no cipher suite at all - which surfaces as "no shared cipher" from
+ * whichever handshake was in progress, in a test that says nothing about keys.
+ */
 static std::string tls_temp_path(const char* leaf)
 {
-	return std::string("samurai-tls-test-") + leaf;
+	return std::string("samurai-tls-test-") + std::to_string(getpid())
+	     + std::string("-") + leaf;
 }
 
 static bool tls_write_keypair(const std::string& key_path, const std::string& cert_path)
