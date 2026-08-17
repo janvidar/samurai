@@ -163,6 +163,10 @@ bool Samurai::IO::Net::DatagramSocket::listen() {
 	if (!addr || sd == INVALID_SOCKET) return false;
 	if (!setReuseAddress(true)) return false;
 	if (!setNonBlocking(true)) return false;
+
+	/* As ServerSocket::listen() does, and for the same reason. */
+	if (addr->getSockAddrFamily() == AF_INET6) setV6Only(true);
+
 	if (!bind(addr.get())) return false;
 	return true;
 }

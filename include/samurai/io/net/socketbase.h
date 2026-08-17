@@ -116,6 +116,23 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		bool setReusePort(bool toggle, std::error_code& ec);
 
 		/**
+		 * Whether a socket bound to the IPv6 wildcard carries IPv4 as well.
+		 *
+		 * Off by default on some systems and on by default on others, which is
+		 * why anything binding both wildcards has to say: with it off, "::" also
+		 * takes every IPv4 address, and the bind of "0.0.0.0" that follows fails
+		 * with the address already in use. Turning it on gives one socket per
+		 * family, each answering for its own, which is the arrangement a caller
+		 * can reason about on every platform.
+		 *
+		 * Set it before bind(); afterwards the kernel has already decided. Fails
+		 * on a socket that is not IPv6, which is not an error worth handling -
+		 * ask only where the address is one.
+		 */
+		bool setV6Only(bool toggle);
+		bool setV6Only(bool toggle, std::error_code& ec);
+
+		/**
 		 * Get the local address part of the socket.
 		 */
 		const InetAddress* getLocalAddress() const;

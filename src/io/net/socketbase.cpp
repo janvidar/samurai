@@ -249,6 +249,30 @@ bool Samurai::IO::Net::SocketBase::setReuseAddress(bool toggle, std::error_code&
 	return true;
 }
 
+bool Samurai::IO::Net::SocketBase::setV6Only(bool toggle) {
+	std::error_code ec;
+	return setV6Only(toggle, ec);
+}
+
+
+bool Samurai::IO::Net::SocketBase::setV6Only(bool toggle, std::error_code& ec) {
+	ec.clear();
+#ifndef IPV6_V6ONLY
+	(void) toggle;
+	ec = Samurai::system_error(ENOPROTOOPT);
+	return false;
+#else
+	int on = toggle ? 1 : 0;
+	if (Samurai::IO::Net::set_sockopt(sd, IPPROTO_IPV6, IPV6_V6ONLY, &on, sizeof(on)) == SOCKET_ERROR)
+	{
+		ec = Samurai::system_error(Samurai::IO::Net::net_error());
+		QERR("ERROR: setV6Only to %s failed", toggle ? "ON" : "OFF");
+		return false;
+	}
+	return true;
+#endif
+}
+
 bool Samurai::IO::Net::SocketBase::setReusePort(bool toggle) {
 	std::error_code ec;
 	return setReusePort(toggle, ec);

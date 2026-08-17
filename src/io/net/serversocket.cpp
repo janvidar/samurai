@@ -117,6 +117,12 @@ bool Samurai::IO::Net::ServerSocket::listen(size_t backlog, std::error_code& ec)
 	if (sd == INVALID_SOCKET) { ec = Samurai::system_error(EBADF); return false; }
 	if (!setReuseAddress(true)) { ec = Samurai::system_error(Samurai::IO::Net::net_error()); return false; }
 	if (!setNonBlocking(true, ec)) return false;
+
+	/* One socket per family, so that binding both wildcards is the same
+	   arrangement everywhere; see setV6Only(), which says why it is asked and
+	   reports its own failure. */
+	if (addr->getSockAddrFamily() == AF_INET6) setV6Only(true);
+
 	if (!bind(addr.get(), ec)) return false;
 
 	/* NOTE: backlog is a size_t here and an int in the syscall. The caller's

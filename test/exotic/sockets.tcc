@@ -1633,3 +1633,58 @@ EXO_TEST(socket_survives_the_last_reference_going_while_it_reports_a_lookup,
 	EXO_ASSERT(!events.hold);
 	return 1;
 });
+
+/* ------------------------------------------------------------------------- */
+
+/*
+ * The IPv6 wildcard answers for IPv6 and leaves IPv4 alone, so a program that
+ * wants both binds one socket for each.
+ *
+ * Which is only true because listen() asks for it. Left to the system, "::"
+ * carries IPv4 as well on some platforms and not on others - and where it does,
+ * the bind of "0.0.0.0" that follows fails with the address already in use, so a
+ * client that listened on both families on one machine would silently listen on
+ * neither on the next. Skipped rather than failed where the host has no IPv6 to
+ * bind at all, which is a machine this says nothing about.
+ */
+EXO_TEST(serversocket_both_wildcards_can_hold_the_same_port,
+{
+	SocketRecorder six_events;
+	SocketRecorder four_events;
+
+	InetSocketAddress six_any("::", 0, Samurai::IO::Net::InetAddress::Version::IPv6);
+	auto six = Samurai::IO::Net::ServerSocket::create(&six_events, six_any);
+	if (!six || six->getFD() == -1 || !six->listen()) return 1;
+
+	const uint16_t port = six->getLocalPort();
+	EXO_ASSERT(port != 0);
+
+	InetSocketAddress four_any("0.0.0.0", port,
+	                           Samurai::IO::Net::InetAddress::Version::IPv4);
+	auto four = Samurai::IO::Net::ServerSocket::create(&four_events, four_any);
+
+	EXO_ASSERT(four);
+	EXO_ASSERT(four->getFD() != -1);
+	EXO_ASSERT(four->listen());
+	EXO_ASSERT(four->getLocalPort() == port);
+	return 1;
+});
+
+/* The same for datagrams, which is the other half of what a peer port is. */
+EXO_TEST(datagramsocket_both_wildcards_can_hold_the_same_port,
+{
+	InetSocketAddress six_any("::", 0, Samurai::IO::Net::InetAddress::Version::IPv6);
+	auto six = Samurai::IO::Net::DatagramSocket::create(nullptr, six_any);
+	if (!six || six->getFD() == -1 || !six->listen()) return 1;
+
+	const uint16_t port = six->getLocalPort();
+	EXO_ASSERT(port != 0);
+
+	InetSocketAddress four_any("0.0.0.0", port,
+	                           Samurai::IO::Net::InetAddress::Version::IPv4);
+	auto four = Samurai::IO::Net::DatagramSocket::create(nullptr, four_any);
+
+	EXO_ASSERT(four);
+	EXO_ASSERT(four->listen());
+	return 1;
+});
