@@ -943,6 +943,8 @@ void Samurai::IO::Net::Socket::EventHostFound(const Samurai::IO::Net::InetAddres
 
 	addr = std::make_unique<InetSocketAddress>(*resolved_addr, port);
 
+	const std::shared_ptr<SocketBase> keep = weak_from_this().lock();
+
 	state = SocketState::HostFound;
 	if (eventHandler) eventHandler->EventHostFound(this);
 	if (autoConnectAfterLookup) connect();

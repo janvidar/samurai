@@ -382,7 +382,17 @@ class Socket :
 		   says nothing keeps the process default. */
 		std::optional<bool> allow_untrusted;
 
+		/**
+		 * A name resolved, which for the peer's own name reaches the application.
+		 *
+		 * A reference is held across that call for the reason the note above
+		 * EventTimeout() gives: the application may drop the last one it has, and
+		 * a resolver drain holds nothing to keep this socket alive the way a
+		 * monitor dispatch does - so both the flag read afterwards and the connect
+		 * that follows it would be reaching into a freed object.
+		 */
 		void EventHostFound(const InetAddress* addr) override;
+
 		void EventHostError(Samurai::IO::Net::DNS::Resolver::Error error) override;
 		void EventTimeout(Samurai::Timer* timer) override;
 		
