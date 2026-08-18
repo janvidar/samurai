@@ -24,11 +24,11 @@ class Resolver {
 	public:
 		enum class Error
 		{
-			NotFound,       //< "Host not found"
-			NoAddress,      //< "Hostname exists, but has no address"
-			ServerError,    //< "A name server error occured"
-			TryAgain,       //< "A temporary name server error occured"
-			Unknown         //< "Unknown resolve error"
+			NotFound,       //< the name does not resolve
+			NoAddress,      //< the name exists, but carries no address
+			ServerError,    //< a name server error
+			TryAgain,       //< a temporary name server error
+			Unknown         //< anything else
 		};
 		
 		virtual ~Resolver();
@@ -55,6 +55,16 @@ class Resolver {
 	protected:
 		Samurai::IO::Net::ResolveEventHandler* eventHandler;
 };
+
+
+/**
+ * Why a lookup failed, worded to follow the name it failed for.
+ *
+ * Which kind it was decides what the reader should do: a name that does not
+ * exist is a typo to correct, and a temporary name server error is the same
+ * lookup worth trying again.
+ */
+const char* toString(Resolver::Error error);
 
 
 }

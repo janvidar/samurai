@@ -24,6 +24,20 @@ Samurai::IO::Net::DNS::Resolver::~Resolver()
 	eventHandler = nullptr;
 }
 
+const char* Samurai::IO::Net::DNS::toString(Samurai::IO::Net::DNS::Resolver::Error error)
+{
+	switch (error)
+	{
+		case Resolver::Error::NotFound:    return "no such host";
+		case Resolver::Error::NoAddress:   return "the name has no address";
+		case Resolver::Error::ServerError: return "a name server error";
+		case Resolver::Error::TryAgain:    return "a temporary name server error";
+		case Resolver::Error::Unknown:     break;
+	}
+
+	return "an unknown resolver error";
+}
+
 /*
  * NOTE: which backend answers depends on the process-wide proxy.
  *

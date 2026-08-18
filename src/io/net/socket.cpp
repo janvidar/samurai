@@ -10,6 +10,7 @@
 #include <samurai/io/net/socket.h>
 #include <memory>
 #include <samurai/error.h>
+#include <samurai/io/net/dns/resolver.h>
 #include <samurai/io/net/socketaddress.h>
 #include <samurai/io/net/socketevent.h>
 #include <samurai/io/net/socketmonitor.h>
@@ -953,18 +954,37 @@ void Samurai::IO::Net::Socket::EventHostFound(const Samurai::IO::Net::InetAddres
 }
 
 
-void Samurai::IO::Net::Socket::EventHostError(Samurai::IO::Net::DNS::Resolver::Error /*error*/) {
+void Samurai::IO::Net::Socket::EventHostError(Samurai::IO::Net::DNS::Resolver::Error error) {
 	/* Which name failed matters to whoever has to fix it: a proxy that cannot be
 	   found is a configuration error, and reporting it as the peer not being
 	   found sends the reader looking in the wrong place. */
 	const bool was_proxy = (lookup_target == LookupTarget::Proxy);
 	lookup_target = LookupTarget::Peer;
 
+	/*
+	 * The name and the kind of failure, because a lookup is reported to somebody
+	 * who has to act on it: a program resolving one name per address family -
+	 * which is what a reachability check does - fails identically for either
+	 * without the name, and a temporary name server error is worth trying again
+	 * where a name that does not exist never is. Read before close(), which
+	 * releases the address the name is held on.
+	 */
+	const std::string name = was_proxy ? proxy.getHost() : getPeerName();
+
+	std::string message = was_proxy ? "the proxy" : "the host";
+	if (!name.empty())
+	{
+		message += ' ';
+		message += name;
+	}
+	message += " could not be resolved: ";
+	message += Samurai::IO::Net::DNS::toString(error);
+
 	state = SocketState::Invalid;
 	close();
 	if (eventHandler)
 		eventHandler->EventError(this, Samurai::IO::Net::SocketError::HostNotFound,
-		                         was_proxy ? "Proxy host not found." : "Host not found.");
+		                         message.c_str());
 }
 
 
