@@ -1076,25 +1076,80 @@ EXO_TEST(xml_reader_refuses_too_many_attributes,
 });
 
 /*
- * Character data is counted per element and across the runs it was written in, so
- * text either side of a child adds up rather than each piece being measured on
- * its own. A per-run cap would let a document carry any amount of data by
- * breaking it up.
+ * Character data is measured one run at a time, and the runs an element was
+ * written in are not added up: the whitespace before every entry of a list is
+ * character data, so a total would measure how many lines a document was laid out
+ * over rather than anything it says. What the total costs is bounded by
+ * maxDocumentSize, which no run can expand past.
  */
-EXO_TEST(xml_reader_counts_an_elements_text_across_its_runs,
+EXO_TEST(xml_reader_measures_each_run_of_text_on_its_own,
 {
 	Recorder r;
 	XmlReader::Limits limits;
 	limits.maxTextLength = 8;
 
-	/* Four runs of three, which is over the cap only when they are added up. */
-	EXO_ASSERT(XmlReader::parse("<a>aaa<b/>bbb<c/>ccc<d/>ddd</a>", r, limits)
+	/* One run over the cap is refused. */
+	EXO_ASSERT(XmlReader::parse("<a>aaaaaaaaaaaa</a>", r, limits)
 		== XmlError::SizeExceeded);
 
-	/* And within it when they are not. */
+	/* Four runs of three are not, however much they come to together. */
 	Recorder ok;
-	EXO_ASSERT(XmlReader::parse("<a>aaa<b/>bbb</a>", ok, limits) == XmlError::Ok);
-	EXO_ASSERT(ok.allText() == "aaabbb");
+	EXO_ASSERT(XmlReader::parse("<a>aaa<b/>bbb<c/>ccc<d/>ddd</a>", ok, limits)
+		== XmlError::Ok);
+	EXO_ASSERT(ok.allText() == "aaabbbcccddd");
+	return 1;
+});
+
+/*
+ * An attribute value is measured on its own too, and not against the text of the
+ * element it is written inside. It is the element's own name for something, not
+ * data written into the enclosing one.
+ */
+EXO_TEST(xml_reader_measures_an_attribute_value_on_its_own,
+{
+	Recorder r;
+	XmlReader::Limits limits;
+	limits.maxTextLength = 8;
+
+	EXO_ASSERT(XmlReader::parse("<a>tex<b x=\"12345678\"/>t</a>", r, limits)
+		== XmlError::Ok);
+
+	Recorder over;
+	EXO_ASSERT(XmlReader::parse("<a><b x=\"123456789\"/></a>", over, limits)
+		== XmlError::SizeExceeded);
+	return 1;
+});
+
+/*
+ * What this all exists for: a share file list is one <File/> per line, and the
+ * newline and the indent in front of each of them are character data inside the
+ * directory that encloses them. Counted as one element's text, a directory of a
+ * few thousand files is refused as too large - so a list is read here at a size
+ * a real share reaches, under the cap the file list handler actually sets.
+ */
+EXO_TEST(xml_reader_reads_a_file_list_of_many_entries,
+{
+	std::string list = "<FileListing Version=\"1\">\n\t<Directory Name=\"Music\">\n";
+	for (int n = 0; n < 20000; n++)
+	{
+		list += "\t\t<File Name=\"track" + std::to_string(n)
+			+ ".mp3\" Size=\"4096\" TTH=\"" + std::string(39, 'A') + "\"/>\n";
+	}
+	list += "\t</Directory>\n</FileListing>\n";
+
+	Recorder r;
+	XmlReader::Limits limits;
+	limits.maxDocumentSize = list.size();
+	limits.maxElements     = 20002;
+	limits.maxTextLength   = 4096;
+
+	EXO_ASSERT(XmlReader::parse(list, r, limits) == XmlError::Ok);
+
+	size_t files = 0;
+	for (const std::string& event : r.events)
+		if (event.compare(0, 11, "start File ") == 0) files++;
+
+	EXO_ASSERT_EQ_UINT(files, 20000u);
 	return 1;
 });
 

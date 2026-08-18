@@ -168,7 +168,7 @@ class XmlDocument final
 			size_t maxDepth        = 32;
 			size_t maxElements     = 8192;
 			size_t maxAttributes   = 32;        /**< per element */
-			size_t maxTextLength   = 64 * 1024; /**< per element */
+			size_t maxTextLength   = 64 * 1024; /**< per run, and per attribute value */
 			size_t maxNameLength   = 256;
 		};
 
@@ -255,8 +255,9 @@ class XmlContentHandler
  *
  * Nothing is retained, so the same Limits bound a document far larger than one
  * XmlDocument would hold - raise maxDocumentSize, maxElements and maxDepth to
- * suit what is being read, and note that maxTextLength still counts the whole of
- * one element's character data even though none of it is kept.
+ * suit what is being read. maxTextLength needs no raising for a larger document:
+ * it bounds one run of character data, not the total an element encloses, which
+ * maxDocumentSize bounds.
  */
 class XmlReader final
 {

@@ -165,14 +165,10 @@ class Samurai::IO::XmlParser
 		XmlError append_reference(std::string& out);
 		XmlError append_text(std::string& out, std::string_view chunk);
 
-		/* Character data is bounded per element, and an element's data is
-		   whatever was written inside it however many pieces that took - so the
-		   running total belongs with the element rather than with the piece. */
 		struct Open
 		{
 			std::string prefix;
 			std::string name;
-			size_t text_length = 0;
 		};
 
 		XmlError emit(std::string_view chunk);
@@ -188,30 +184,31 @@ class Samurai::IO::XmlParser
 };
 
 
-/* One run of character data, counted against the element it belongs to. */
+/* One run of character data. */
 Samurai::IO::XmlError Samurai::IO::XmlParser::emit(std::string_view chunk)
 {
 	if (chunk.empty()) return XmlError::Ok;
 
-	stack.back().text_length += chunk.size();
 	return sink.characters(chunk);
 }
 
 
 /*
- * The cap is on an element's character data, not on the run being assembled: an
- * element's data is whatever was written inside it, however many runs that took,
- * so what has already been reported for this element counts towards it.
+ * The cap is on the string being assembled - one run of character data, or one
+ * attribute value - and not on the sum of what an element was written with.
  *
- * Attribute values are assembled through here as well, where there is no element
- * open to count against - the value on its own is what the cap applies to.
+ * The sum is already bounded by maxDocumentSize, since nothing here expands to
+ * more than it was written as: a reference is at least as long as the character
+ * it stands for. What that leaves to bound is the one string held at a time,
+ * which is what this is. Summing across an element instead measures the markup
+ * an element encloses rather than any text it carries - the newline and the
+ * indent before every entry of a list are character data too, so a document laid
+ * out over enough lines exceeds any per-element cap however little it says.
  */
 Samurai::IO::XmlError Samurai::IO::XmlParser::append_text(std::string& out,
                                                           std::string_view chunk)
 {
-	const size_t reported = stack.empty() ? 0 : stack.back().text_length;
-
-	if (reported + out.size() + chunk.size() > limits.maxTextLength)
+	if (out.size() + chunk.size() > limits.maxTextLength)
 		return XmlError::SizeExceeded;
 
 	out.append(chunk);
@@ -500,7 +497,7 @@ Samurai::IO::XmlError Samurai::IO::XmlParser::parse_element()
 	 * start and an end with nothing between, and a sink that is told about it
 	 * has to see the same nesting either way.
 	 */
-	stack.push_back(Open{ prefix, name, 0 });
+	stack.push_back(Open{ prefix, name });
 
 	const XmlError opened = sink.open(std::move(prefix), std::move(name),
 		std::move(attributes));
