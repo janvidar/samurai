@@ -4,6 +4,7 @@
  */
 
 #include <samurai/timer.h>
+#include <atomic>
 #include <samurai/eventloop.h>
 
 #include <algorithm>
@@ -19,7 +20,7 @@ namespace {
  */
 uint64_t next_serial()
 {
-	static uint64_t counter = 0;
+	static std::atomic<uint64_t> counter{0};
 	return ++counter;
 }
 
