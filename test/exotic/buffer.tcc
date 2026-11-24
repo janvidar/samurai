@@ -476,3 +476,19 @@ EXO_TEST(buffer_a_refused_growth_does_not_lose_the_live_bytes,
 
 	return buf.size() == 3 && buf.copyRange(0, 3) == "789";
 });
+
+/*
+ * Appending nothing is allowed, to an empty buffer as to any other, and with no
+ * pointer at all - an empty datagram arrives as exactly that. It used to take
+ * &buf[0] of a buffer with no storage, which a checked build aborts on.
+ */
+EXO_TEST(buffer_appending_nothing_changes_nothing,
+{
+	Samurai::IO::Buffer buf;
+	if (!buf.append(static_cast<const char*>(nullptr), 0) || buf.size() != 0) return false;
+
+	buf.append("abc", 3);
+	if (!buf.append(static_cast<const char*>(nullptr), 0)) return false;
+
+	return buf.size() == 3 && buf.copyRange(0, 3) == "abc";
+});

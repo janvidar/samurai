@@ -67,6 +67,9 @@ Samurai::IO::Buffer::~Buffer() {
 }
 
 bool Samurai::IO::Buffer::append(const char* data, size_t len_) {
+	/* Nothing to copy, and nowhere to copy it to: an empty buffer has no &buf[0]. */
+	if (!len_) return true;
+
 	/* Tested before the comparison below, which would otherwise wrap and read
 	   as "it already fits" - taking the memcpy with an unbounded length. */
 	const bool overflows = len_ > SIZE_MAX - len;
