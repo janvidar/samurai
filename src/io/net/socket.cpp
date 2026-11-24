@@ -667,7 +667,13 @@ void Samurai::IO::Net::Socket::internal_connect_addr()
 			}
 		}
 
-		if (local_port || local_address) {
+		/*
+		 * A shareable socket binds even with no port asked for. A port connect()
+		 * assigns may be handed to other connections too, from any process, and
+		 * the first of those that did not ask to share it keeps every later bind
+		 * to it out; one taken by bind() is never handed out that way.
+		 */
+		if (local_port || local_address || reuse_local_port) {
 			/* The same family as the peer, since that is what the descriptor is. */
 			const bool six = addr->getSockAddrFamily() == AF_INET6;
 
