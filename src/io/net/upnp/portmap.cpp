@@ -210,7 +210,7 @@ Samurai::IO::Net::UPnP::mapPortBlocking(Samurai::EventLoop& loop, Protocol proto
 	std::unique_ptr<Gateway> gateway = reach_gateway(loop, state, deadline);
 	if (!gateway) return state.result;
 
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(loop, &state, gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&state, gateway.get());
 	if (!mapper) { state.result.error = Error::NoService; return state.result; }
 
 	Mapping mapping;
@@ -247,7 +247,7 @@ Samurai::IO::Net::UPnP::unmapPortBlocking(Samurai::EventLoop& loop, Protocol pro
 	std::unique_ptr<Gateway> gateway = reach_gateway(loop, state, deadline);
 	if (!gateway) return state.result;
 
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(loop, &state, gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&state, gateway.get());
 	if (!mapper) { state.result.error = Error::NoService; return state.result; }
 
 	MappingKey key;
@@ -277,7 +277,7 @@ Samurai::IO::Net::UPnP::getExternalAddressBlocking(Samurai::EventLoop& loop,
 	std::unique_ptr<Gateway> gateway = reach_gateway(loop, state, deadline);
 	if (!gateway) return state.result;
 
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(loop, &state, gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&state, gateway.get());
 	if (!mapper) { state.result.error = Error::NoService; return state.result; }
 
 	mapper->getExternalAddress();

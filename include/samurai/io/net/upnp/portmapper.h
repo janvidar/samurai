@@ -132,12 +132,10 @@ class PortMapper final
 			uint16_t conflictRetries = 8;
 		};
 
-		/** 'loop' is the one 'gateway' was made on. */
-		static std::unique_ptr<PortMapper> create(Samurai::EventLoop& loop,
-		                                          PortMapperEventHandler* eh,
+		/** Runs on the loop 'gateway' was made on, so the two cannot disagree. */
+		static std::unique_ptr<PortMapper> create(PortMapperEventHandler* eh,
 		                                          Gateway* gateway);
-		static std::unique_ptr<PortMapper> create(Samurai::EventLoop& loop,
-		                                          PortMapperEventHandler* eh,
+		static std::unique_ptr<PortMapper> create(PortMapperEventHandler* eh,
 		                                          Gateway* gateway,
 		                                          const Options& options);
 
@@ -182,8 +180,7 @@ class PortMapper final
 		const Options& getOptions() const { return options; }
 
 	private:
-		PortMapper(Samurai::EventLoop& loop, PortMapperEventHandler* eh, Gateway* gateway,
-		           const Options& options);
+		PortMapper(PortMapperEventHandler* eh, Gateway* gateway, const Options& options);
 
 		/** What one public call turned into, and how far it has got. */
 		struct Request;

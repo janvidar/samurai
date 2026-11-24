@@ -86,7 +86,7 @@ class Lister
 
 			printf("\n");
 
-			mapper = PortMapper::create(loop, this, found);
+			mapper = PortMapper::create(this, found);
 			if (!mapper) { finished = true; return; }
 
 			mapper->getExternalAddress();

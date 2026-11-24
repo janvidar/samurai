@@ -245,6 +245,9 @@ class Gateway final
 
 		~Gateway() override;
 
+		/** The loop this gateway was made on, and so what everything acting through it runs on. */
+		Samurai::EventLoop& getLoop() const { return loop; }
+
 		Gateway(const Gateway&) = delete;
 		Gateway& operator=(const Gateway&) = delete;
 

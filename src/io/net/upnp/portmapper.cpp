@@ -67,27 +67,25 @@ Samurai::IO::Net::UPnP::MappingKey Samurai::IO::Net::UPnP::Mapping::key() const
 
 
 std::unique_ptr<Samurai::IO::Net::UPnP::PortMapper>
-Samurai::IO::Net::UPnP::PortMapper::create(Samurai::EventLoop& loop, PortMapperEventHandler* eh,
-                                           Gateway* gateway)
+Samurai::IO::Net::UPnP::PortMapper::create(PortMapperEventHandler* eh, Gateway* gateway)
 {
 	const Options options;
-	return create(loop, eh, gateway, options);
+	return create(eh, gateway, options);
 }
 
 
 std::unique_ptr<Samurai::IO::Net::UPnP::PortMapper>
-Samurai::IO::Net::UPnP::PortMapper::create(Samurai::EventLoop& loop, PortMapperEventHandler* eh,
-                                           Gateway* gateway, const Options& options)
+Samurai::IO::Net::UPnP::PortMapper::create(PortMapperEventHandler* eh, Gateway* gateway,
+                                           const Options& options)
 {
 	if (!gateway) return nullptr;
-	return std::unique_ptr<PortMapper>(new PortMapper(loop, eh, gateway, options));
+	return std::unique_ptr<PortMapper>(new PortMapper(eh, gateway, options));
 }
 
 
-Samurai::IO::Net::UPnP::PortMapper::PortMapper(Samurai::EventLoop& loop_,
-                                               PortMapperEventHandler* eh,
-                                               Gateway* owner, const Options& opts)
-	: loop(loop_), eventHandler(eh), gateway(owner), options(opts)
+Samurai::IO::Net::UPnP::PortMapper::PortMapper(PortMapperEventHandler* eh, Gateway* owner,
+                                               const Options& opts)
+	: loop(owner->getLoop()), eventHandler(eh), gateway(owner), options(opts)
 {
 }
 

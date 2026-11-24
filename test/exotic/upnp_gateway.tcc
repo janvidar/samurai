@@ -737,7 +737,7 @@ EXO_TEST(upnp_gateway_gets_the_external_address,
 		"<NewExternalIPAddress>203.0.113.7</NewExternalIPAddress>")));
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 	if (!mapper) return false;
 
 	mapper->getExternalAddress();
@@ -752,7 +752,7 @@ EXO_TEST(upnp_mapper_adds_a_mapping,
 	if (!fix.ready) return false;
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	Mapping mapping;
 	mapping.protocol = Protocol::TCP;
@@ -777,7 +777,7 @@ EXO_TEST(upnp_mapper_sends_the_arguments_in_order,
 	if (!fix.ready) return false;
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	Mapping mapping;
 	mapping.internalPort = 8080;
@@ -813,7 +813,7 @@ EXO_TEST(upnp_mapper_escapes_the_description,
 	if (!fix.ready) return false;
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	Mapping mapping;
 	mapping.internalPort = 8080;
@@ -834,7 +834,7 @@ EXO_TEST(upnp_mapper_deletes_a_mapping,
 	if (!fix.ready) return false;
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	MappingKey key;
 	key.protocol = Protocol::TCP;
@@ -862,7 +862,7 @@ EXO_TEST(upnp_mapper_reads_a_specific_mapping,
 			"<NewLeaseDuration>3600</NewLeaseDuration>")));
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	MappingKey key;
 	key.externalPort = 8080;
@@ -886,7 +886,7 @@ EXO_TEST(upnp_mapper_reports_a_conflict,
 	fix.fake.always("AddPortMapping", fault(718, "ConflictInMappingEntry"));
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	Mapping mapping;
 	mapping.internalPort = 8080;
@@ -912,7 +912,7 @@ EXO_TEST(upnp_mapper_reports_a_fault_carried_on_a_200,
 	fix.fake.always("AddPortMapping", fault(718, "ConflictInMappingEntry"));
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	Mapping mapping;
 	mapping.internalPort = 8080;
@@ -931,7 +931,7 @@ EXO_TEST(upnp_mapper_keeps_an_unrecognised_error_code,
 	fix.fake.always("AddPortMapping", fault(4242, "VendorSpecific"));
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	Mapping mapping;
 	mapping.internalPort = 8080;
@@ -957,7 +957,7 @@ EXO_TEST(upnp_mapper_retries_a_refused_lease_as_permanent,
 	fix.fake.script("AddPortMapping", ok(soap_response("AddPortMapping", "")));
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	Mapping mapping;
 	mapping.internalPort = 8080;
@@ -985,7 +985,7 @@ EXO_TEST(upnp_mapper_does_not_loop_on_a_repeated_lease_refusal,
 	fix.fake.always("AddPortMapping", fault(725, "OnlyPermanentLeasesSupported"));
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	Mapping mapping;
 	mapping.internalPort = 8080;
@@ -1007,7 +1007,7 @@ EXO_TEST(upnp_mapper_skips_the_lease_once_it_is_known_to_be_refused,
 	fix.gateway->setPermanentLeasesOnly(true);
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	Mapping mapping;
 	mapping.internalPort = 8080;
@@ -1035,7 +1035,7 @@ EXO_TEST(upnp_mapper_uses_add_any_port_mapping_on_a_version_2_device,
 		"<NewReservedPort>40001</NewReservedPort>")));
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	Mapping mapping;
 	mapping.internalPort = 8080;
@@ -1057,7 +1057,7 @@ EXO_TEST(upnp_mapper_falls_back_when_add_any_is_not_implemented,
 	fix.fake.always("AddPortMapping", ok(soap_response("AddPortMapping", "")));
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	Mapping mapping;
 	mapping.internalPort = 8080;
@@ -1083,7 +1083,7 @@ EXO_TEST(upnp_mapper_walks_past_a_conflict_when_choosing_any_port,
 	fix.fake.script("AddPortMapping", ok(soap_response("AddPortMapping", "")));
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	Mapping mapping;
 	mapping.internalPort = 8080;
@@ -1109,7 +1109,7 @@ EXO_TEST(upnp_mapper_gives_up_after_enough_conflicts,
 
 	MapperRecorder events;
 	std::unique_ptr<PortMapper> mapper =
-		PortMapper::create(*loop, &events, fix.gateway.get(), options);
+		PortMapper::create(&events, fix.gateway.get(), options);
 
 	Mapping mapping;
 	mapping.internalPort = 8080;
@@ -1153,7 +1153,7 @@ EXO_TEST(upnp_mapper_lists_until_the_index_runs_out,
 		fault(713, "SpecifiedArrayIndexInvalid"));
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	mapper->listMappings();
 	if (!upnp_pump([&] { return events.done(); })) return false;
@@ -1184,7 +1184,7 @@ EXO_TEST(upnp_mapper_stops_listing_at_the_limit,
 			"<NewLeaseDuration>0</NewLeaseDuration>")));
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	mapper->listMappings(3);
 	if (!upnp_pump([&] { return events.done(); })) return false;
@@ -1201,7 +1201,7 @@ EXO_TEST(upnp_mapper_lists_an_empty_table,
 		fault(713, "SpecifiedArrayIndexInvalid"));
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	mapper->listMappings();
 	if (!upnp_pump([&] { return events.done(); })) return false;
@@ -1226,7 +1226,7 @@ EXO_TEST(upnp_mapper_renews_a_finite_lease,
 
 	MapperRecorder events;
 	std::unique_ptr<PortMapper> mapper =
-		PortMapper::create(*loop, &events, fix.gateway.get(), options);
+		PortMapper::create(&events, fix.gateway.get(), options);
 
 	Mapping mapping;
 	mapping.internalPort = 8080;
@@ -1258,7 +1258,7 @@ EXO_TEST(upnp_mapper_stops_renewing_after_a_conflict,
 
 	MapperRecorder events;
 	std::unique_ptr<PortMapper> mapper =
-		PortMapper::create(*loop, &events, fix.gateway.get(), options);
+		PortMapper::create(&events, fix.gateway.get(), options);
 
 	Mapping mapping;
 	mapping.internalPort = 8080;
@@ -1282,7 +1282,7 @@ EXO_TEST(upnp_mapper_does_not_renew_when_told_not_to,
 
 	MapperRecorder events;
 	std::unique_ptr<PortMapper> mapper =
-		PortMapper::create(*loop, &events, fix.gateway.get(), options);
+		PortMapper::create(&events, fix.gateway.get(), options);
 
 	Mapping mapping;
 	mapping.internalPort = 8080;
@@ -1306,7 +1306,7 @@ EXO_TEST(upnp_mapper_shutdown_deletes_what_it_added,
 	if (!fix.ready) return false;
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	Mapping mapping;
 	mapping.internalPort = 8080;
@@ -1332,7 +1332,7 @@ EXO_TEST(upnp_mapper_destructor_does_not_delete_anything,
 
 	MapperRecorder events;
 	{
-		std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+		std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 		Mapping mapping;
 		mapping.internalPort = 8080;
@@ -1355,7 +1355,7 @@ EXO_TEST(upnp_mapper_destroyed_in_flight_reports_nothing,
 
 	MapperRecorder events;
 	{
-		std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+		std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 		Mapping mapping;
 		mapping.internalPort = 8080;
@@ -1376,7 +1376,7 @@ EXO_TEST(upnp_gateway_cancel_reports_queued_actions,
 	fix.fake.never_answer = true;
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	Mapping mapping;
 	mapping.internalPort = 8080;
@@ -1402,7 +1402,7 @@ EXO_TEST(upnp_gateway_never_has_two_actions_in_flight,
 		"<NewExternalIPAddress>203.0.113.7</NewExternalIPAddress>")));
 
 	MapperRecorder events;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &events, fix.gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&events, fix.gateway.get());
 
 	/* Queued together, so overlapping them is what would happen if nothing
 	   serialised them. */
@@ -1633,7 +1633,7 @@ EXO_TEST(upnp_blocking_refuses_a_nested_call,
 	if (!gateway_events.found) return false;
 
 	Nested nested;
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(*loop, &nested, gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(&nested, gateway.get());
 	mapper->getExternalAddress();
 
 	if (!upnp_pump([&] { return nested.ran; })) return false;

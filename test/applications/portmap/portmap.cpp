@@ -67,7 +67,7 @@ class Listing
 	protected:
 		void EventGatewayFound(Gateway* found) override
 		{
-			mapper = PortMapper::create(loop, this, found);
+			mapper = PortMapper::create(this, found);
 			if (!mapper) { finished = true; return; }
 			mapper->listMappings();
 		}
