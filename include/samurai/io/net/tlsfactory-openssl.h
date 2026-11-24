@@ -14,9 +14,12 @@ namespace Samurai {
 namespace IO {
 namespace Net {
 
+class TlsContext;
+
 class OpenSSL final : public TlsFactory {
 	public:
-		OpenSSL();
+		/** Presenting 'context''s keys, or the process's where it is null or has none. */
+		explicit OpenSSL(TlsContext* context = nullptr);
 		~OpenSSL() override;
 
 		/* Releases raw pointers in its destructor, so the implicit copy
@@ -38,6 +41,10 @@ class OpenSSL final : public TlsFactory {
 		size_t pending() const override;
 
 	protected:
+		SSL_CTX* sharedContext(bool client);
+
+		TlsContext* context;
+
 		/* The context is shared between connections of a role and is not owned
 		   here - see ssl_shared_context(). Only the session is. */
 		SSL *ssl;

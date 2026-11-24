@@ -9,6 +9,7 @@
 #include <samurai/io/net/bandwidth.h>
 #include <samurai/io/net/socketmonitor.h>
 #include <samurai/io/net/socketbase.h>
+#include <samurai/io/net/tlscontext.h>
 #include <samurai/io/net/dns/resolver-pool.h>
 
 Samurai::EventLoop::EventLoop()
@@ -17,7 +18,8 @@ Samurai::EventLoop::EventLoop()
 }
 
 Samurai::EventLoop::EventLoop(std::unique_ptr<IO::Net::SocketMonitor> monitor)
-	: poll(std::move(monitor))
+	: keys(std::make_unique<IO::Net::TlsContext>())
+	, poll(std::move(monitor))
 	, timerManager(std::make_unique<TimerManager>())
 	, counters(std::make_unique<IO::Net::BandwidthManager>())
 	, messageHandler(std::make_unique<MessageHandler>())
@@ -53,6 +55,7 @@ Samurai::IO::Net::SocketMonitor& Samurai::EventLoop::monitor() { return *poll; }
 Samurai::TimerManager& Samurai::EventLoop::timers() { return *timerManager; }
 Samurai::MessageHandler& Samurai::EventLoop::messages() { return *messageHandler; }
 Samurai::IO::Net::BandwidthManager& Samurai::EventLoop::bandwidth() { return *counters; }
+Samurai::IO::Net::TlsContext& Samurai::EventLoop::tls() { return *keys; }
 
 Samurai::IO::Net::DNS::ResolverPool& Samurai::EventLoop::resolver()
 {

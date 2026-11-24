@@ -5,6 +5,7 @@
 
 #include <samurai/samurai.h>
 #include <samurai/io/net/tlsfactory.h>
+#include <samurai/io/net/tlscontext.h>
 #include <samurai/io/file.h>
 
 
@@ -110,4 +111,22 @@ void Samurai::IO::Net::TlsFactory::clearTrustAnchors()
 const std::vector<std::string>& Samurai::IO::Net::TlsFactory::getTrustAnchors()
 {
 	return trust_anchors;
+}
+
+
+void Samurai::IO::Net::TlsContext::setKeys(const char* private_key, const char* certificate)
+{
+	pem_key = std::make_unique<Samurai::IO::File>(private_key);
+	pem_cert = std::make_unique<Samurai::IO::File>(certificate);
+	generation++;
+}
+
+Samurai::IO::File* Samurai::IO::Net::TlsContext::getPrivateKey() const
+{
+	return pem_key ? pem_key.get() : TlsFactory::getPrivateKey();
+}
+
+Samurai::IO::File* Samurai::IO::Net::TlsContext::getCertificate() const
+{
+	return pem_cert ? pem_cert.get() : TlsFactory::getCertificate();
 }

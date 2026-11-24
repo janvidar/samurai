@@ -7,6 +7,7 @@
 #include <samurai/samurai.h>
 #include <samurai/error.h>
 #include <samurai/io/net/tlsfactory-openssl.h>
+#include <samurai/io/net/tlscontext.h>
 #include <samurai/io/net/socketglue.h>
 #include <samurai/io/file.h>
 
@@ -21,6 +22,8 @@
 #include <openssl/rand.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
+
+#include <mutex>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -155,9 +158,8 @@ static std::optional<Samurai::IO::Net::TlsFactory::Sha256Digest> sha256_of(X509*
 	return digest;
 }
 
-std::optional<Samurai::IO::Net::TlsFactory::Sha256Digest> Samurai::IO::Net::TlsFactory::getOwnCertificateSHA256()
+static std::optional<Samurai::IO::Net::TlsFactory::Sha256Digest> ssl_certificate_sha256(Samurai::IO::File* pem)
 {
-	Samurai::IO::File* pem = TlsFactory::getCertificate();
 	if (!pem || !pem->exists()) return std::nullopt;
 
 	BIO* bio = BIO_new_file(pem->getName().c_str(), "r");
@@ -183,6 +185,16 @@ std::optional<Samurai::IO::Net::TlsFactory::Sha256Digest> Samurai::IO::Net::TlsF
 	auto found = sha256_of(cert);
 	X509_free(cert);
 	return found;
+}
+
+std::optional<Samurai::IO::Net::TlsFactory::Sha256Digest> Samurai::IO::Net::TlsFactory::getOwnCertificateSHA256()
+{
+	return ssl_certificate_sha256(TlsFactory::getCertificate());
+}
+
+std::optional<Samurai::IO::Net::TlsFactory::Sha256Digest> Samurai::IO::Net::TlsContext::getOwnCertificateSHA256() const
+{
+	return ssl_certificate_sha256(getCertificate());
 }
 
 static bool ssl_failure(const char* what)
@@ -516,7 +528,7 @@ const char* SSL_CIPHER_POLICY =
    for by sending one that goes nowhere. */
 #define SSL_VERIFY_DEPTH 9
 
-SSL_CTX* ssl_build_context(bool client)
+SSL_CTX* ssl_build_context(bool client, Samurai::IO::File* cert, Samurai::IO::File* pkey)
 {
 	SSL_CTX* ctx = SSL_CTX_new(client ? TLS_client_method() : TLS_server_method());
 	if (!ctx)
@@ -599,9 +611,6 @@ SSL_CTX* ssl_build_context(bool client)
 	 * signed by an intermediate is useless to a peer that does not already hold
 	 * that intermediate, and the file is read the same way either way.
 	 */
-	Samurai::IO::File* cert = Samurai::IO::Net::TlsFactory::getCertificate();
-	Samurai::IO::File* pkey = Samurai::IO::Net::TlsFactory::getPrivateKey();
-
 	if (cert && cert->exists())
 	{
 		if (SSL_CTX_use_certificate_chain_file(ctx, cert->getName().c_str()) != 1)
@@ -650,7 +659,9 @@ SSL_CTX* ssl_shared_context(bool client, unsigned long now)
 	}
 
 	SSL_CTX*& slot = client ? shared.client : shared.server;
-	if (!slot) slot = ssl_build_context(client);
+	if (!slot)
+		slot = ssl_build_context(client, Samurai::IO::Net::TlsFactory::getCertificate(),
+		                         Samurai::IO::Net::TlsFactory::getPrivateKey());
 	return slot;
 }
 
@@ -669,6 +680,7 @@ SSL_CTX* ssl_shared_context(bool client, unsigned long now)
  * contract the shared context above already has.
  */
 BIO_METHOD* bio_method = nullptr;
+std::mutex bio_method_lock;
 
 socket_t bio_descriptor(BIO* bio)
 {
@@ -737,6 +749,7 @@ long bio_ctrl(BIO* bio, int cmd, [[maybe_unused]] long argument, void* pointer)
 
 BIO_METHOD* ssl_bio_method()
 {
+	std::lock_guard<std::mutex> guard(bio_method_lock);
 	if (bio_method) return bio_method;
 
 	bio_method = BIO_meth_new(
@@ -758,11 +771,33 @@ BIO_METHOD* ssl_bio_method()
 
 void ssl_release_bio_method()
 {
+	std::lock_guard<std::mutex> guard(bio_method_lock);
 	if (bio_method) BIO_meth_free(bio_method);
 	bio_method = nullptr;
 }
 
 }
+
+struct Samurai::IO::Net::TlsContext::Cache
+{
+	SSL_CTX* client = nullptr;
+	SSL_CTX* server = nullptr;
+	unsigned long generation = 0;
+	unsigned long anchors = 0;
+
+	void release()
+	{
+		if (client) SSL_CTX_free(client);
+		if (server) SSL_CTX_free(server);
+		client = nullptr;
+		server = nullptr;
+	}
+
+	~Cache() { release(); }
+};
+
+Samurai::IO::Net::TlsContext::TlsContext() = default;
+Samurai::IO::Net::TlsContext::~TlsContext() = default;
 
 bool Samurai::IO::Net::TlsFactory::global_init()
 {
@@ -780,10 +815,30 @@ bool Samurai::IO::Net::TlsFactory::global_deinit()
 }
 
 
-Samurai::IO::Net::OpenSSL::OpenSSL()
+Samurai::IO::Net::OpenSSL::OpenSSL(TlsContext* context_)
 {
+	context = context_;
 	ssl = nullptr;
 	verify_peer = false;
+}
+
+SSL_CTX* Samurai::IO::Net::OpenSSL::sharedContext(bool client)
+{
+	if (!context || !context->hasKeys()) return ssl_shared_context(client, configGeneration());
+
+	if (!context->cache) context->cache = std::make_unique<TlsContext::Cache>();
+	TlsContext::Cache& cache = *context->cache;
+
+	if (cache.generation != context->generation || cache.anchors != configGeneration())
+	{
+		cache.release();
+		cache.generation = context->generation;
+		cache.anchors = configGeneration();
+	}
+
+	SSL_CTX*& slot = client ? cache.client : cache.server;
+	if (!slot) slot = ssl_build_context(client, context->getCertificate(), context->getPrivateKey());
+	return slot;
 }
 
 Samurai::IO::Net::OpenSSL::~OpenSSL()
@@ -802,7 +857,7 @@ Samurai::IO::Net::TlsFactory::TlsStatus Samurai::IO::Net::OpenSSL::initialize(
 
 	const bool client = (mode == Samurai::IO::Net::TlsFactory::TlsOperation::Client);
 
-	SSL_CTX* ctx = ssl_shared_context(client, configGeneration());
+	SSL_CTX* ctx = sharedContext(client);
 	if (!ctx) return Samurai::IO::Net::TlsFactory::TlsStatus::Error;
 
 	ssl = SSL_new(ctx);

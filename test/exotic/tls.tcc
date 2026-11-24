@@ -5,6 +5,7 @@
 
 #include <samurai/io/net/tlsfactory.h>
 #include <samurai/io/net/tlsfactory-openssl.h>
+#include <samurai/io/net/tlscontext.h>
 #include <samurai/io/file.h>
 
 #include "testkeys.h"
@@ -1599,4 +1600,104 @@ EXO_TEST(tls_a_context_that_could_not_be_built_is_tried_again,
 	EXO_ASSERT(client.initialize(TlsOperation::Client, pair.fd[1]) == TlsStatus::Ok);
 	EXO_ASSERT(tls_handshake(server, client));
 	return 1;
+});
+
+/* ------------------------------------------------------------------------- */
+/* Keys held by a context rather than by the process                         */
+/* ------------------------------------------------------------------------- */
+
+namespace {
+
+/* The fingerprint of what a server made with 'context' presents to a client. */
+static std::optional<Tls::Sha256Digest> served_by(Samurai::IO::Net::TlsContext* context)
+{
+	SocketPair pair;
+	if (!pair.valid()) return std::nullopt;
+
+	Samurai::IO::Net::OpenSSL server(context);
+	Samurai::IO::Net::OpenSSL client;
+	server.setAllowUntrusted(true);
+	client.setAllowUntrusted(true);
+
+	if (server.initialize(TlsOperation::Server, pair.fd[0]) != TlsStatus::Ok) return std::nullopt;
+	if (client.initialize(TlsOperation::Client, pair.fd[1]) != TlsStatus::Ok) return std::nullopt;
+	if (!tls_handshake(server, client)) return std::nullopt;
+	return client.getPeerCertificateSHA256();
+}
+
+}
+
+EXO_TEST(tls_context_without_keys_stands_on_the_process_keys,
+{
+	if (!tls_test_keys_claimed().ready) return false;
+
+	Samurai::IO::Net::TlsContext context;
+	EXO_ASSERT(!context.hasKeys());
+	EXO_ASSERT(context.getCertificate() == Tls::getCertificate());
+	EXO_ASSERT(context.getPrivateKey() == Tls::getPrivateKey());
+
+	Tls::Sha256Digest expected{};
+	EXO_ASSERT(tls_expected_fingerprint(tls_test_keys().cert_path, expected));
+
+	const auto served = served_by(&context);
+	EXO_ASSERT(served.has_value() && *served == expected);
+	return true;
+});
+
+EXO_TEST(tls_two_contexts_present_two_certificates,
+{
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
+
+	GeneratedKeys first("context-one", "127.0.0.1");
+	GeneratedKeys second("context-two", "127.0.0.1");
+	EXO_ASSERT(first.ok && second.ok);
+
+	Tls::Sha256Digest one{};
+	Tls::Sha256Digest two{};
+	Tls::Sha256Digest process{};
+	EXO_ASSERT(tls_expected_fingerprint(first.cert_path, one));
+	EXO_ASSERT(tls_expected_fingerprint(second.cert_path, two));
+	EXO_ASSERT(tls_expected_fingerprint(tls_test_keys().cert_path, process));
+
+	Samurai::IO::Net::TlsContext a;
+	Samurai::IO::Net::TlsContext b;
+	a.setKeys(first.key_path.c_str(), first.cert_path.c_str());
+	b.setKeys(second.key_path.c_str(), second.cert_path.c_str());
+
+	/* Interleaved, so neither can be served from what the other built. */
+	const auto byA = served_by(&a);
+	const auto byB = served_by(&b);
+	const auto byA2 = served_by(&a);
+	EXO_ASSERT(byA.has_value() && *byA == one);
+	EXO_ASSERT(byB.has_value() && *byB == two);
+	EXO_ASSERT(byA2.has_value() && *byA2 == one);
+
+	EXO_ASSERT(a.getOwnCertificateSHA256() == std::optional<Tls::Sha256Digest>(one));
+	EXO_ASSERT(b.getOwnCertificateSHA256() == std::optional<Tls::Sha256Digest>(two));
+
+	/* And the process's keys are what a connection without a context still gets. */
+	const auto byProcess = served_by(nullptr);
+	EXO_ASSERT(byProcess.has_value() && *byProcess == process);
+	return true;
+});
+
+EXO_TEST(tls_context_takes_new_keys_for_new_connections,
+{
+	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
+
+	GeneratedKeys first("rekey-one", "127.0.0.1");
+	GeneratedKeys second("rekey-two", "127.0.0.1");
+	EXO_ASSERT(first.ok && second.ok);
+
+	Tls::Sha256Digest two{};
+	EXO_ASSERT(tls_expected_fingerprint(second.cert_path, two));
+
+	Samurai::IO::Net::TlsContext context;
+	context.setKeys(first.key_path.c_str(), first.cert_path.c_str());
+	EXO_ASSERT(served_by(&context).has_value());
+
+	context.setKeys(second.key_path.c_str(), second.cert_path.c_str());
+	const auto served = served_by(&context);
+	EXO_ASSERT(served.has_value() && *served == two);
+	return true;
 });

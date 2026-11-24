@@ -19,6 +19,7 @@ namespace Net {
 class SocketMonitor;
 class SocketBase;
 class BandwidthManager;
+class TlsContext;
 namespace DNS { class ResolverPool; }
 }
 }
@@ -55,6 +56,9 @@ class EventLoop {
 		MessageHandler& messages();
 		IO::Net::BandwidthManager& bandwidth();
 
+		/** The keys every TLS connection made on this loop presents. */
+		IO::Net::TlsContext& tls();
+
 		/** Started on first use, since it runs threads of its own. */
 		IO::Net::DNS::ResolverPool& resolver();
 
@@ -73,6 +77,7 @@ class EventLoop {
 
 		/* In this order, so they go in the reverse one: the resolver's notifier
 		   is a socket, and every socket leaves the monitor on its way out. */
+		std::unique_ptr<IO::Net::TlsContext> keys;
 		std::unique_ptr<IO::Net::SocketMonitor> poll;
 		std::unique_ptr<TimerManager> timerManager;
 		std::unique_ptr<IO::Net::BandwidthManager> counters;

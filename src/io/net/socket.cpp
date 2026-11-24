@@ -16,6 +16,8 @@
 #include <samurai/io/net/socketmonitor.h>
 #include <samurai/io/net/tlsfactory.h>
 #include <samurai/io/net/tlsfactory-openssl.h>
+#include <samurai/io/net/tlscontext.h>
+#include <samurai/eventloop.h>
 
 #include <stdio.h>
 #include <sys/time.h>
@@ -1055,7 +1057,7 @@ bool Samurai::IO::Net::Socket::TLSInitialize(bool server) {
 		return false;
 	}
 
-	tls = std::make_unique<OpenSSL>();
+	tls = std::make_unique<OpenSSL>(getLoop() ? &getLoop()->tls() : nullptr);
 
 	if (allow_untrusted) tls->setAllowUntrusted(*allow_untrusted);
 
