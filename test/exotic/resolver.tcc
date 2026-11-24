@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <samurai/eventloop.h>
 #include <samurai/io/net/dns/resolver.h>
 #include <samurai/io/net/dns/resolver-pool.h>
 #include <samurai/io/net/inetaddress.h>
@@ -14,6 +15,19 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+static std::unique_ptr<Samurai::EventLoop> loop;
+
+EXO_SETUP({
+	loop = std::make_unique<Samurai::EventLoop>();
+	return loop->isValid() ? 1 : 0;
+});
+
+EXO_TEARDOWN({
+	loop.reset();
+	return 1;
+});
+
 
 /*
  * Lookups run on worker threads and are reported on the loop thread. Every case
@@ -59,23 +73,21 @@ class Recorder : public Samurai::IO::Net::ResolveEventHandler
 template<typename Predicate>
 void resolver_pump_until(Predicate done, size_t max_passes = 400, int ms = 5)
 {
-	Samurai::IO::Net::SocketMonitor* monitor = Samurai::IO::Net::SocketMonitor::getInstance();
 	for (size_t n = 0; n < max_passes && !done(); n++)
-		monitor->wait(ms);
+		loop->wait(ms);
 }
 
 void resolver_pump(size_t passes, int ms = 5)
 {
-	Samurai::IO::Net::SocketMonitor* monitor = Samurai::IO::Net::SocketMonitor::getInstance();
 	for (size_t n = 0; n < passes; n++)
-		monitor->wait(ms);
+		loop->wait(ms);
 }
 
 /* Let workers retire quickly so the scale-down cases do not wait out the
    production timeout. */
 void useShortIdleTimeout()
 {
-	ResolverPool::getInstance()->setIdleTimeout(std::chrono::milliseconds(100));
+	loop->resolver().setIdleTimeout(std::chrono::milliseconds(100));
 }
 
 }
@@ -84,7 +96,7 @@ EXO_TEST(resolver_pool_resolves_localhost, {
 	useShortIdleTimeout();
 	Recorder recorder;
 
-	std::unique_ptr<Resolver> resolver = Resolver::getHostByName(&recorder, "localhost");
+	std::unique_ptr<Resolver> resolver = Resolver::getHostByName(*loop, &recorder, "localhost");
 	if (!resolver) return false;
 
 	resolver_pump_until([&]() { return recorder.found || recorder.errors; });
@@ -97,7 +109,7 @@ EXO_TEST(resolver_pool_reports_on_the_loop_thread, {
 	Recorder recorder;
 	const std::thread::id loop_thread = std::this_thread::get_id();
 
-	std::unique_ptr<Resolver> resolver = Resolver::getHostByName(&recorder, "localhost");
+	std::unique_ptr<Resolver> resolver = Resolver::getHostByName(*loop, &recorder, "localhost");
 	if (!resolver) return false;
 
 	resolver_pump_until([&]() { return recorder.found || recorder.errors; });
@@ -110,7 +122,7 @@ EXO_TEST(resolver_pool_reports_a_name_that_does_not_resolve, {
 	Recorder recorder;
 
 	std::unique_ptr<Resolver> resolver =
-		Resolver::getHostByName(&recorder, "samurai-no-such-host.invalid");
+		Resolver::getHostByName(*loop, &recorder, "samurai-no-such-host.invalid");
 	if (!resolver) return false;
 
 	resolver_pump_until([&]() { return recorder.found || recorder.errors; });
@@ -121,7 +133,7 @@ EXO_TEST(resolver_pool_reports_a_name_that_does_not_resolve, {
 EXO_TEST(resolver_pool_rejects_an_empty_name, {
 	Recorder recorder;
 
-	std::unique_ptr<Resolver> resolver = Resolver::getHostByName(&recorder, "");
+	std::unique_ptr<Resolver> resolver = Resolver::getHostByName(*loop, &recorder, "");
 	if (!resolver) return false;
 
 	/* Refused outright, without troubling a worker. */
@@ -137,7 +149,7 @@ EXO_TEST(resolver_pool_cancelled_before_completion_never_reports, {
 	Recorder recorder;
 
 	{
-		std::unique_ptr<Resolver> resolver = Resolver::getHostByName(&recorder, "localhost");
+		std::unique_ptr<Resolver> resolver = Resolver::getHostByName(*loop, &recorder, "localhost");
 		if (!resolver) return false;
 	}
 
@@ -153,7 +165,7 @@ EXO_TEST(resolver_pool_cancels_queued_requests_too, {
 	{
 		std::vector<std::unique_ptr<Resolver>> resolvers;
 		for (size_t n = 0; n < 16; n++)
-			resolvers.push_back(Resolver::getHostByName(&recorder, "localhost"));
+			resolvers.push_back(Resolver::getHostByName(*loop, &recorder, "localhost"));
 	}
 
 	resolver_pump(40);
@@ -166,9 +178,9 @@ EXO_TEST(resolver_pool_cancelling_one_leaves_the_others, {
 	Recorder kept;
 	Recorder dropped;
 
-	std::unique_ptr<Resolver> live = Resolver::getHostByName(&kept, "localhost");
+	std::unique_ptr<Resolver> live = Resolver::getHostByName(*loop, &kept, "localhost");
 	{
-		std::unique_ptr<Resolver> doomed = Resolver::getHostByName(&dropped, "localhost");
+		std::unique_ptr<Resolver> doomed = Resolver::getHostByName(*loop, &dropped, "localhost");
 	}
 
 	resolver_pump_until([&]() { return kept.found || kept.errors; });
@@ -184,7 +196,7 @@ EXO_TEST(resolver_pool_handles_several_lookups_at_once, {
 	for (size_t n = 0; n < count; n++)
 	{
 		recorders.push_back(std::make_unique<Recorder>());
-		resolvers.push_back(Resolver::getHostByName(recorders.back().get(), "localhost"));
+		resolvers.push_back(Resolver::getHostByName(*loop, recorders.back().get(), "localhost"));
 	}
 
 	resolver_pump_until([&]() {
@@ -200,7 +212,7 @@ EXO_TEST(resolver_pool_handles_several_lookups_at_once, {
 
 /* The cap is a cap, however much arrives at once. */
 EXO_TEST(resolver_pool_never_exceeds_its_worker_limit, {
-	ResolverPool* pool = ResolverPool::getInstance();
+	ResolverPool* pool = &loop->resolver();
 	pool->setMaxWorkers(4);
 
 	std::vector<std::unique_ptr<Recorder>> recorders;
@@ -210,7 +222,7 @@ EXO_TEST(resolver_pool_never_exceeds_its_worker_limit, {
 	for (size_t n = 0; n < 32; n++)
 	{
 		recorders.push_back(std::make_unique<Recorder>());
-		resolvers.push_back(Resolver::getHostByName(recorders.back().get(), "localhost"));
+		resolvers.push_back(Resolver::getHostByName(*loop, recorders.back().get(), "localhost"));
 		if (pool->getWorkerCount() > peak) peak = pool->getWorkerCount();
 	}
 
@@ -226,12 +238,12 @@ EXO_TEST(resolver_pool_never_exceeds_its_worker_limit, {
 
 /* Idle workers give their threads back, and a later lookup brings one along. */
 EXO_TEST(resolver_pool_retires_idle_workers_and_starts_them_again, {
-	ResolverPool* pool = ResolverPool::getInstance();
+	ResolverPool* pool = &loop->resolver();
 	pool->setIdleTimeout(std::chrono::milliseconds(100));
 
 	{
 		Recorder recorder;
-		std::unique_ptr<Resolver> resolver = Resolver::getHostByName(&recorder, "localhost");
+		std::unique_ptr<Resolver> resolver = Resolver::getHostByName(*loop, &recorder, "localhost");
 		resolver_pump_until([&]() { return recorder.found || recorder.errors; });
 	}
 
@@ -239,7 +251,7 @@ EXO_TEST(resolver_pool_retires_idle_workers_and_starts_them_again, {
 	if (pool->getWorkerCount() != 0) return false;
 
 	Recorder again;
-	std::unique_ptr<Resolver> resolver = Resolver::getHostByName(&again, "localhost");
+	std::unique_ptr<Resolver> resolver = Resolver::getHostByName(*loop, &again, "localhost");
 	resolver_pump_until([&]() { return again.found || again.errors; });
 
 	return again.found == 1;
@@ -247,7 +259,7 @@ EXO_TEST(resolver_pool_retires_idle_workers_and_starts_them_again, {
 
 /* An address literal is already resolved, so it never reaches the pool. */
 EXO_TEST(resolver_pool_is_not_used_for_an_address_literal, {
-	ResolverPool* pool = ResolverPool::getInstance();
+	ResolverPool* pool = &loop->resolver();
 	resolver_pump_until([&]() { return pool->getWorkerCount() == 0; }, 200, 10);
 
 	Samurai::IO::Net::InetAddress addr("127.0.0.1");
@@ -268,7 +280,7 @@ EXO_TEST(resolver_pool_reverse_resolves_the_loopback_address, {
 	Recorder recorder;
 	Samurai::IO::Net::InetAddress addr("127.0.0.1");
 
-	std::unique_ptr<Resolver> resolver = Resolver::getNameByAddress(&recorder, &addr);
+	std::unique_ptr<Resolver> resolver = Resolver::getNameByAddress(*loop, &recorder, &addr);
 	if (!resolver) return false;
 
 	resolver_pump_until([&]() { return recorder.found || recorder.errors; });
@@ -285,7 +297,7 @@ EXO_TEST(resolver_pool_reverse_reports_on_the_loop_thread, {
 	Samurai::IO::Net::InetAddress addr("127.0.0.1");
 	const std::thread::id loop_thread = std::this_thread::get_id();
 
-	std::unique_ptr<Resolver> resolver = Resolver::getNameByAddress(&recorder, &addr);
+	std::unique_ptr<Resolver> resolver = Resolver::getNameByAddress(*loop, &recorder, &addr);
 	if (!resolver) return false;
 
 	resolver_pump_until([&]() { return recorder.found || recorder.errors; });
@@ -298,7 +310,7 @@ EXO_TEST(resolver_pool_reverse_reports_an_address_with_no_name, {
 	Recorder recorder;
 	Samurai::IO::Net::InetAddress addr("192.0.2.1");
 
-	std::unique_ptr<Resolver> resolver = Resolver::getNameByAddress(&recorder, &addr);
+	std::unique_ptr<Resolver> resolver = Resolver::getNameByAddress(*loop, &recorder, &addr);
 	if (!resolver) return false;
 
 	resolver_pump_until([&]() { return recorder.found || recorder.errors; });
@@ -310,7 +322,7 @@ EXO_TEST(resolver_pool_reverse_rejects_an_unset_address, {
 	Recorder recorder;
 	Samurai::IO::Net::InetAddress addr;
 
-	std::unique_ptr<Resolver> resolver = Resolver::getNameByAddress(&recorder, &addr);
+	std::unique_ptr<Resolver> resolver = Resolver::getNameByAddress(*loop, &recorder, &addr);
 	if (!resolver) return false;
 
 	return recorder.errors == 1 && recorder.last_error == Resolver::Error::NotFound;
@@ -321,7 +333,7 @@ EXO_TEST(resolver_pool_reverse_can_be_cancelled, {
 	Samurai::IO::Net::InetAddress addr("127.0.0.1");
 
 	{
-		std::unique_ptr<Resolver> resolver = Resolver::getNameByAddress(&recorder, &addr);
+		std::unique_ptr<Resolver> resolver = Resolver::getNameByAddress(*loop, &recorder, &addr);
 		if (!resolver) return false;
 	}
 

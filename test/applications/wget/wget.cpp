@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
+#include <samurai/eventloop.h>
 #include <samurai/io/net/proxy.h>
 #include <samurai/io/net/socket.h>
 #include <samurai/io/net/socketevent.h>
@@ -24,11 +25,11 @@ class Connection : public Samurai::IO::Net::SocketEventHandler {
 		std::shared_ptr<Samurai::IO::Net::Socket> socket;
 			
 	public:
-		Connection(const Samurai::IO::Net::URL& url) {
+		Connection(Samurai::EventLoop& loop, const Samurai::IO::Net::URL& url) {
 			/* getHostname() rather than getHost().toString(), which reformats a
 			   literal, and getEffectivePort() rather than getPort(), which is 0
 			   for an "https://host" that names no port. */
-			socket = Samurai::IO::Net::Socket::create(this, url.getHostname(),
+			socket = Samurai::IO::Net::Socket::create(loop, this, url.getHostname(),
 			                                          url.getEffectivePort());
 		}
 		
@@ -160,11 +161,12 @@ int main(int argc, char** argv) {
 
 	printf("Url: '%s'\n", url.toString().c_str());
 
-	Connection con(url);
+	Samurai::EventLoop loop;
+	Connection con(loop, url);
 	con.connect();
 	while (running)
 	{
-		Samurai::IO::Net::SocketMonitor::getInstance()->wait(10000);
+		loop.wait(10000);
 	}
 	
 }

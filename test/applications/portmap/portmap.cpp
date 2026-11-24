@@ -3,7 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
-#include <samurai/io/net/socketmonitor.h>
+#include <samurai/eventloop.h>
 #include <samurai/io/net/upnp/gateway.h>
 #include <samurai/io/net/upnp/portmap.h>
 #include <samurai/io/net/upnp/portmapper.h>
@@ -50,14 +50,16 @@ class Listing
 	, public PortMapperEventHandler
 {
 	public:
+		explicit Listing(Samurai::EventLoop& loop_) : loop(loop_) { }
+
 		bool finished = false;
 		bool ok = false;
 
 		void start(const Samurai::IO::Net::URL& location)
 		{
 			gateway = location.isValid()
-				? Gateway::describe(this, location)
-				: Gateway::discover(this);
+				? Gateway::describe(loop, this, location)
+				: Gateway::discover(loop, this);
 
 			if (!gateway) finished = true;
 		}
@@ -65,7 +67,7 @@ class Listing
 	protected:
 		void EventGatewayFound(Gateway* found) override
 		{
-			mapper = PortMapper::create(this, found);
+			mapper = PortMapper::create(loop, this, found);
 			if (!mapper) { finished = true; return; }
 			mapper->listMappings();
 		}
@@ -111,6 +113,7 @@ class Listing
 		}
 
 	private:
+		Samurai::EventLoop& loop;
 		std::unique_ptr<Gateway> gateway;
 		std::unique_ptr<PortMapper> mapper;
 };
@@ -126,22 +129,17 @@ void report(const MapResult& result)
 		printf("Failed: %s\n", toString(result.error));
 }
 
-int run_listing(const Samurai::IO::Net::URL& location, int timeout_ms)
+int run_listing(Samurai::EventLoop& loop, const Samurai::IO::Net::URL& location, int timeout_ms)
 {
-	Listing listing;
+	Listing listing(loop);
 	listing.start(location);
-
-	Samurai::IO::Net::SocketMonitor* monitor =
-		Samurai::IO::Net::SocketMonitor::getInstance();
-	Samurai::TimerManager* timers = Samurai::TimerManager::getInstance();
 
 	const Samurai::Timer::clock::time_point deadline =
 		Samurai::Timer::clock::now() + std::chrono::milliseconds(timeout_ms);
 
 	while (!listing.finished && Samurai::Timer::clock::now() < deadline)
 	{
-		monitor->wait(50);
-		timers->process();
+		loop.wait(50);
 	}
 
 	if (!listing.finished) { printf("Gave up waiting.\n"); return 1; }
@@ -205,10 +203,12 @@ int main(int argc, char** argv)
 	   answer one or a caller that keeps the URL in its configuration. */
 	if (location.isValid()) setBlockingGateway(location);
 
+	Samurai::EventLoop loop;
+
 	if (!strcmp(command, "external"))
 	{
 		const MapResult result =
-			getExternalAddressBlocking(std::chrono::milliseconds(timeout_ms));
+			getExternalAddressBlocking(loop, std::chrono::milliseconds(timeout_ms));
 		report(result);
 		if (!result.ok()) return 1;
 
@@ -216,7 +216,7 @@ int main(int argc, char** argv)
 		return 0;
 	}
 
-	if (!strcmp(command, "list")) return run_listing(location, timeout_ms);
+	if (!strcmp(command, "list")) return run_listing(loop, location, timeout_ms);
 
 	if (n >= argc) { usage(argv[0]); return 1; }
 
@@ -226,7 +226,7 @@ int main(int argc, char** argv)
 	if (!strcmp(command, "add"))
 	{
 		const MapResult result = mapPortBlocking(
-			protocol, (uint16_t) port,
+			loop, protocol, (uint16_t) port,
 			external_given ? external : (uint16_t) port,
 			description, std::chrono::seconds(lease),
 			std::chrono::milliseconds(timeout_ms));
@@ -241,7 +241,7 @@ int main(int argc, char** argv)
 
 	if (!strcmp(command, "del"))
 	{
-		const MapResult result = unmapPortBlocking(protocol, (uint16_t) port,
+		const MapResult result = unmapPortBlocking(loop, protocol, (uint16_t) port,
 			std::chrono::milliseconds(timeout_ms));
 
 		report(result);

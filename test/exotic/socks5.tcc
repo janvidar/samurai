@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <samurai/eventloop.h>
 #include <samurai/io/net/dns/resolver.h>
 #include <samurai/io/net/proxy.h>
 #include <samurai/io/net/socks5.h>
@@ -20,6 +21,19 @@
 #include <memory>
 #include <string>
 #include <vector>
+
+static std::unique_ptr<Samurai::EventLoop> loop;
+
+EXO_SETUP({
+	loop = std::make_unique<Samurai::EventLoop>();
+	return loop->isValid() ? 1 : 0;
+});
+
+EXO_TEARDOWN({
+	loop.reset();
+	return 1;
+});
+
 
 /*
  * SOCKS5, at two levels.
@@ -67,14 +81,13 @@ struct ProxyDefaultGuard
 template<typename Fn>
 static bool pump(Fn done, int timeout_ms = SOCKS_TEST_TIMEOUT_MS)
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
 	const auto deadline = std::chrono::steady_clock::now()
 		+ std::chrono::milliseconds(timeout_ms);
 
 	while (!done())
 	{
 		if (std::chrono::steady_clock::now() > deadline) return done();
-		monitor->wait(10);
+		loop->wait(10);
 	}
 	return true;
 }
@@ -833,7 +846,7 @@ class StubProxy
 		StubProxy()
 		{
 			InetSocketAddress any((uint16_t) 0);
-			server = Samurai::IO::Net::ServerSocket::create(this, any);
+			server = Samurai::IO::Net::ServerSocket::create(*loop, this, any);
 			if (!server || server->getFD() == -1) return;
 			if (!server->listen()) return;
 			port = server->getLocalPort();
@@ -1140,10 +1153,10 @@ struct ProxyFixture
 	explicit ProxyFixture(const char* peer = "no-such-host.invalid",
 	                      uint16_t peer_port = 80)
 	{
-		baseline = SocketMonitor::getInstance()->size();
+		baseline = loop->monitor().size();
 		if (!stub.ready()) return;
 
-		client = Socket::create(&events, std::string(peer), peer_port);
+		client = Socket::create(*loop, &events, std::string(peer), peer_port);
 		if (!client) return;
 
 		client->setProxy(stub.settings());
@@ -1154,7 +1167,7 @@ struct ProxyFixture
 	~ProxyFixture()
 	{
 		client.reset();
-		pump([&] { return SocketMonitor::getInstance()->size() <= baseline; }, 1000);
+		pump([&] { return loop->monitor().size() <= baseline; }, 1000);
 	}
 
 	ProxyFixture(const ProxyFixture&) = delete;
@@ -1378,7 +1391,7 @@ EXO_TEST(socks5_a_peer_given_as_an_address_object_still_names_a_peer,
 	StubProxy stub;
 	if (!stub.ready()) return false;
 
-	const size_t baseline = SocketMonitor::getInstance()->size();
+	const size_t baseline = loop->monitor().size();
 	bool connected = false;
 
 	{
@@ -1391,7 +1404,7 @@ EXO_TEST(socks5_a_peer_given_as_an_address_object_still_names_a_peer,
 		if (!peer.getHostname().empty()) return false;
 
 		ClientRecorder events;
-		auto client = Socket::create(&events, peer, (uint16_t) 80);
+		auto client = Socket::create(*loop, &events, peer, (uint16_t) 80);
 		if (!client) return false;
 
 		client->setProxy(stub.settings());
@@ -1400,7 +1413,7 @@ EXO_TEST(socks5_a_peer_given_as_an_address_object_still_names_a_peer,
 		connected = events.connected;
 	}
 
-	pump([&] { return SocketMonitor::getInstance()->size() <= baseline; }, 1000);
+	pump([&] { return loop->monitor().size() <= baseline; }, 1000);
 
 	return connected
 		/* And as an address, not as a name. */
@@ -1428,14 +1441,14 @@ EXO_TEST(socks5_the_process_default_reaches_a_socket_made_after_it,
 	StubProxy stub;
 	if (!stub.ready()) return false;
 
-	const size_t baseline = SocketMonitor::getInstance()->size();
+	const size_t baseline = loop->monitor().size();
 	bool settled = false;
 
 	{
 		ClientRecorder events;
 		ProxySettings::setDefault(stub.settings());
 
-		auto client = Socket::create(&events, std::string("example.com"), (uint16_t) 80);
+		auto client = Socket::create(*loop, &events, std::string("example.com"), (uint16_t) 80);
 		if (!client) return false;
 
 		client->connect();
@@ -1444,7 +1457,7 @@ EXO_TEST(socks5_the_process_default_reaches_a_socket_made_after_it,
 		if (!settled || !events.connected) return false;
 	}
 
-	pump([&] { return SocketMonitor::getInstance()->size() <= baseline; }, 1000);
+	pump([&] { return loop->monitor().size() <= baseline; }, 1000);
 	return stub.request_target == "example.com";
 });
 
@@ -1455,21 +1468,21 @@ EXO_TEST(socks5_a_socket_made_before_the_default_moved_is_not_proxied,
 	StubProxy stub;
 	if (!stub.ready()) return false;
 
-	const size_t baseline = SocketMonitor::getInstance()->size();
+	const size_t baseline = loop->monitor().size();
 
 	ClientRecorder events;
 	ProxySettings::clearDefault();
 
 	/* Settings are copied when the socket is constructed, so moving the default
 	   afterwards must not reach back into it. */
-	auto client = Socket::create(&events, std::string("example.com"), (uint16_t) 80);
+	auto client = Socket::create(*loop, &events, std::string("example.com"), (uint16_t) 80);
 	if (!client) return false;
 
 	ProxySettings::setDefault(stub.settings());
 	const bool proxied = client->isProxied();
 
 	client.reset();
-	pump([&] { return SocketMonitor::getInstance()->size() <= baseline; }, 1000);
+	pump([&] { return loop->monitor().size() <= baseline; }, 1000);
 
 	return !proxied;
 });
@@ -1480,7 +1493,7 @@ EXO_TEST(socks5_setting_no_proxy_overrides_a_proxied_default,
 	ProxySettings::setDefault(ProxySettings::tor());
 
 	ClientRecorder events;
-	auto client = Socket::create(&events, std::string("example.com"), (uint16_t) 80);
+	auto client = Socket::create(*loop, &events, std::string("example.com"), (uint16_t) 80);
 	if (!client) return false;
 
 	if (!client->isProxied()) return false;
@@ -1499,14 +1512,14 @@ EXO_TEST(socks5_an_accepted_socket_is_never_proxied,
 	StubProxy stub;
 	if (!stub.ready()) return false;
 
-	const size_t baseline = SocketMonitor::getInstance()->size();
+	const size_t baseline = loop->monitor().size();
 	bool accepted_unproxied = false;
 
 	{
 		ProxySettings::clearDefault();
 
 		ClientRecorder events;
-		auto client = Socket::create(&events, std::string("127.0.0.1"), stub.getPort());
+		auto client = Socket::create(*loop, &events, std::string("127.0.0.1"), stub.getPort());
 		if (!client) return false;
 
 		client->connect();
@@ -1519,7 +1532,7 @@ EXO_TEST(socks5_an_accepted_socket_is_never_proxied,
 		accepted_unproxied = events.connected;
 	}
 
-	pump([&] { return SocketMonitor::getInstance()->size() <= baseline; }, 1000);
+	pump([&] { return loop->monitor().size() <= baseline; }, 1000);
 	return accepted_unproxied;
 });
 
@@ -1584,20 +1597,20 @@ EXO_TEST(socks5_a_lookup_goes_to_the_proxy_when_tor_extensions_are_on,
 	proxy.setTorExtensions(true);
 	ProxySettings::setDefault(proxy);
 
-	const size_t baseline = SocketMonitor::getInstance()->size();
+	const size_t baseline = loop->monitor().size();
 	ResolveRecorder events;
 
 	{
 		/* An unresolvable name again: an answer at all proves the question went
 		   to the proxy rather than to the system resolver. */
 		std::unique_ptr<Samurai::IO::Net::DNS::Resolver> resolver =
-			Samurai::IO::Net::DNS::Resolver::getHostByName(&events, "no-such-host.invalid");
+			Samurai::IO::Net::DNS::Resolver::getHostByName(*loop, &events, "no-such-host.invalid");
 
 		if (!resolver) return false;
 		pump([&] { return events.found || events.failed; });
 	}
 
-	pump([&] { return SocketMonitor::getInstance()->size() <= baseline; }, 1000);
+	pump([&] { return loop->monitor().size() <= baseline; }, 1000);
 
 	return events.found
 		&& !events.failed
@@ -1618,19 +1631,19 @@ EXO_TEST(socks5_a_reverse_lookup_goes_to_the_proxy_too,
 	proxy.setTorExtensions(true);
 	ProxySettings::setDefault(proxy);
 
-	const size_t baseline = SocketMonitor::getInstance()->size();
+	const size_t baseline = loop->monitor().size();
 	ResolveRecorder events;
 	InetAddress queried("198.51.100.7");
 
 	{
 		std::unique_ptr<Samurai::IO::Net::DNS::Resolver> resolver =
-			Samurai::IO::Net::DNS::Resolver::getNameByAddress(&events, &queried);
+			Samurai::IO::Net::DNS::Resolver::getNameByAddress(*loop, &events, &queried);
 
 		if (!resolver) return false;
 		pump([&] { return events.found || events.failed; });
 	}
 
-	pump([&] { return SocketMonitor::getInstance()->size() <= baseline; }, 1000);
+	pump([&] { return loop->monitor().size() <= baseline; }, 1000);
 
 	/* The name travels attached to the address that was asked about rather than
 	   replacing it, which is how the pooled resolver reports one too. */
@@ -1653,18 +1666,18 @@ EXO_TEST(socks5_a_lookup_does_not_go_to_the_proxy_unless_asked,
 	   left to answer as it always has. */
 	ProxySettings::setDefault(stub.settings());
 
-	const size_t baseline = SocketMonitor::getInstance()->size();
+	const size_t baseline = loop->monitor().size();
 	ResolveRecorder events;
 
 	{
 		std::unique_ptr<Samurai::IO::Net::DNS::Resolver> resolver =
-			Samurai::IO::Net::DNS::Resolver::getHostByName(&events, "no-such-host.invalid");
+			Samurai::IO::Net::DNS::Resolver::getHostByName(*loop, &events, "no-such-host.invalid");
 
 		if (!resolver) return false;
 		pump([&] { return events.found || events.failed; });
 	}
 
-	pump([&] { return SocketMonitor::getInstance()->size() <= baseline; }, 2000);
+	pump([&] { return loop->monitor().size() <= baseline; }, 2000);
 
 	return events.failed && !stub.request_seen && stub.greeting.empty();
 });
@@ -1682,18 +1695,18 @@ EXO_TEST(socks5_a_lookup_falls_back_when_the_proxy_is_named_rather_than_numbered
 	proxy.setTorExtensions(true);
 	ProxySettings::setDefault(proxy);
 
-	const size_t baseline = SocketMonitor::getInstance()->size();
+	const size_t baseline = loop->monitor().size();
 	ResolveRecorder events;
 
 	{
 		std::unique_ptr<Samurai::IO::Net::DNS::Resolver> resolver =
-			Samurai::IO::Net::DNS::Resolver::getHostByName(&events, "no-such-host.invalid");
+			Samurai::IO::Net::DNS::Resolver::getHostByName(*loop, &events, "no-such-host.invalid");
 
 		if (!resolver) return false;
 		pump([&] { return events.found || events.failed; });
 	}
 
-	pump([&] { return SocketMonitor::getInstance()->size() <= baseline; }, 2000);
+	pump([&] { return loop->monitor().size() <= baseline; }, 2000);
 
 	/* Answered by the pool, which cannot resolve it, and the stub was never
 	   contacted. */

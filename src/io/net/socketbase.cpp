@@ -5,6 +5,7 @@
 
 #include <samurai/samurai.h>
 #include <samurai/io/net/socketbase.h>
+#include <samurai/eventloop.h>
 #include <memory>
 #include <samurai/error.h>
 #include <samurai/io/net/inetaddress.h>
@@ -13,39 +14,51 @@
 #include <samurai/io/net/bandwidth.h>
 
 
-Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::SocketAddress& addr_, SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(SocketState::Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(SocketMonitor::Triggers::None), monitored(false), progress(0), type(type_) {
+Samurai::IO::Net::SocketBase::SocketBase(Samurai::EventLoop& loop_, const Samurai::IO::Net::SocketAddress& addr_, SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(SocketState::Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(SocketMonitor::Triggers::None), monitored(false), progress(0), type(type_), loop(&loop_) {
 
 	if (const Samurai::IO::Net::InetSocketAddress* isa =
 		dynamic_cast<const Samurai::IO::Net::InetSocketAddress*>(&addr_))
 		addr = std::make_unique<Samurai::IO::Net::InetSocketAddress>(*isa);
 	
-	bandwidthManager = Samurai::IO::Net::BandwidthManager::getInstance();
+	bandwidthManager = &loop_.bandwidth();
+	loop_.join(this);
 }
 
 
-Samurai::IO::Net::SocketBase::SocketBase(socket_t sd_, const Samurai::IO::Net::SocketAddress& addr_, SocketType type_) : sd(sd_), addr(nullptr), state(SocketState::Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(SocketMonitor::Triggers::None), monitored(false), progress(0), type(type_)
+Samurai::IO::Net::SocketBase::SocketBase(Samurai::EventLoop& loop_, socket_t sd_, const Samurai::IO::Net::SocketAddress& addr_, SocketType type_) : sd(sd_), addr(nullptr), state(SocketState::Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(SocketMonitor::Triggers::None), monitored(false), progress(0), type(type_), loop(&loop_)
 {
 	if (const Samurai::IO::Net::InetSocketAddress* isa =
 		dynamic_cast<const Samurai::IO::Net::InetSocketAddress*>(&addr_))
 		addr = std::make_unique<Samurai::IO::Net::InetSocketAddress>(*isa);
 
-	bandwidthManager = Samurai::IO::Net::BandwidthManager::getInstance();
+	bandwidthManager = &loop_.bandwidth();
+	loop_.join(this);
 }
 
-Samurai::IO::Net::SocketBase::SocketBase(const Samurai::IO::Net::InetAddress& addr_, uint16_t port_, SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(SocketState::Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(SocketMonitor::Triggers::None), monitored(false), progress(0), type(type_) {
+Samurai::IO::Net::SocketBase::SocketBase(Samurai::EventLoop& loop_, const Samurai::IO::Net::InetAddress& addr_, uint16_t port_, SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(SocketState::Connected), ia(nullptr), local_ia(nullptr),  monitor_trigger(SocketMonitor::Triggers::None), monitored(false), progress(0), type(type_), loop(&loop_) {
 	addr = std::make_unique<Samurai::IO::Net::InetSocketAddress>(addr_, port_);
 
-	bandwidthManager = Samurai::IO::Net::BandwidthManager::getInstance();
+	bandwidthManager = &loop_.bandwidth();
+	loop_.join(this);
 }
 
 
-Samurai::IO::Net::SocketBase::SocketBase(SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(SocketState::Disconnected), ia(nullptr), local_ia(nullptr), monitor_trigger(SocketMonitor::Triggers::None), monitored(false), progress(0), type(type_)
+Samurai::IO::Net::SocketBase::SocketBase(Samurai::EventLoop& loop_, SocketType type_) : sd(INVALID_SOCKET), addr(nullptr), state(SocketState::Disconnected), ia(nullptr), local_ia(nullptr), monitor_trigger(SocketMonitor::Triggers::None), monitored(false), progress(0), type(type_), loop(&loop_)
 {
-	bandwidthManager = Samurai::IO::Net::BandwidthManager::getInstance();
+	bandwidthManager = &loop_.bandwidth();
+	loop_.join(this);
 }
 
 Samurai::IO::Net::SocketBase::~SocketBase() {
 	disableMonitor();
+	if (loop) loop->leave(this);
+}
+
+void Samurai::IO::Net::SocketBase::detachFromLoop()
+{
+	monitored = false;
+	bandwidthManager = nullptr;
+	loop = nullptr;
 }
 
 const Samurai::IO::Net::InetAddress* Samurai::IO::Net::SocketBase::getLocalAddress() const {
@@ -418,22 +431,22 @@ void Samurai::IO::Net::SocketBase::close() {
 void Samurai::IO::Net::SocketBase::setMonitor(Samurai::IO::Net::SocketMonitor::Triggers trigger)
 {
 	monitor_trigger = trigger;
+	if (!loop) return;
+
 	if (monitored)
 	{
-		SocketMonitor::getInstance()->modify(this);
+		loop->monitor().modify(this);
 	} else {
-		SocketMonitor::getInstance()->add(this);
+		loop->monitor().add(this);
 		monitored = true;
 	}
 }
 
 void Samurai::IO::Net::SocketBase::disableMonitor()
 {
-	if (monitored)
-	{
-		SocketMonitor::getInstance()->remove(this);
-		monitored = false;
-	}
+	if (monitored && loop)
+		loop->monitor().remove(this);
+	monitored = false;
 }
 
 bool Samurai::IO::Net::SocketBase::createDescriptor(int af)

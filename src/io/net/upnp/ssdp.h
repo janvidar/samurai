@@ -145,7 +145,8 @@ class Search final
 		 *         only outright failure - a host where some interfaces refuse
 		 *         still searches the rest.
 		 */
-		static std::unique_ptr<Search> start(SearchEventHandler* eh, const Options& options);
+		static std::unique_ptr<Search> start(Samurai::EventLoop& loop, SearchEventHandler* eh,
+		                                     const Options& options);
 
 		~Search() override;
 
@@ -161,7 +162,7 @@ class Search final
 		size_t getLegCount() const;
 
 	private:
-		explicit Search(SearchEventHandler* eh, const Options& options);
+		Search(Samurai::EventLoop& loop, SearchEventHandler* eh, const Options& options);
 
 		bool internal_open();
 		void internal_sendRound();
@@ -181,6 +182,7 @@ class Search final
 			std::string host;
 		};
 
+		Samurai::EventLoop& loop;
 		SearchEventHandler* eventHandler;
 		Options options;
 

@@ -10,6 +10,9 @@
 #include <memory>
 
 namespace Samurai {
+
+class EventLoop;
+
 namespace IO {
 namespace Net {
 
@@ -35,7 +38,7 @@ class Resolver {
 		
 	public:
 		/**
-		 * Start a lookup.
+		 * Start a lookup, answered on 'loop'.
 		 *
 		 * The caller owns the returned resolver and must keep it alive until
 		 * the event handler has been called: an asynchronous backend needs the
@@ -43,8 +46,8 @@ class Resolver {
 		 *
 		 * @return null if no backend could be started.
 		 */
-		static std::unique_ptr<Resolver> getHostByName(Samurai::IO::Net::ResolveEventHandler*, const char* name);
-		static std::unique_ptr<Resolver> getNameByAddress(Samurai::IO::Net::ResolveEventHandler*, InetAddress* address);
+		static std::unique_ptr<Resolver> getHostByName(Samurai::EventLoop& loop, Samurai::IO::Net::ResolveEventHandler*, const char* name);
+		static std::unique_ptr<Resolver> getNameByAddress(Samurai::EventLoop& loop, Samurai::IO::Net::ResolveEventHandler*, InetAddress* address);
 		
 	protected:
 		Resolver(Samurai::IO::Net::ResolveEventHandler*);

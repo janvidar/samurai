@@ -1,3 +1,4 @@
+#include <samurai/eventloop.h>
 #include <string>
 #include <samurai/stdc.h>
 #include <samurai/io/net/inetaddress.h>
@@ -7,7 +8,8 @@
 
 EXO_TEST(inet_init,
 {
-	return Samurai::IO::Net::SocketMonitor::getInstance() != 0;
+	Samurai::EventLoop loop;
+	return loop.isValid();
 });
 
 

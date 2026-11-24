@@ -12,6 +12,8 @@
 #include <samurai/error.h>
 #include <samurai/io/net/socketmonitor.h>
 
+namespace Samurai { class EventLoop; }
+
 namespace Samurai {
 namespace IO {
 namespace Net {
@@ -80,11 +82,14 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 	public:
 		enum class SocketType { Stream, Datagram };
 		
-		SocketBase(const Samurai::IO::Net::InetAddress& addr, uint16_t port, SocketType = SocketType::Stream);
-		SocketBase(socket_t sd_, const Samurai::IO::Net::SocketAddress& addr, SocketType = SocketType::Stream);
-		SocketBase(const Samurai::IO::Net::SocketAddress& addr, SocketType = SocketType::Stream);
-		SocketBase(SocketType = SocketType::Stream);
+		SocketBase(Samurai::EventLoop& loop, const Samurai::IO::Net::InetAddress& addr, uint16_t port, SocketType = SocketType::Stream);
+		SocketBase(Samurai::EventLoop& loop, socket_t sd_, const Samurai::IO::Net::SocketAddress& addr, SocketType = SocketType::Stream);
+		SocketBase(Samurai::EventLoop& loop, const Samurai::IO::Net::SocketAddress& addr, SocketType = SocketType::Stream);
+		explicit SocketBase(Samurai::EventLoop& loop, SocketType = SocketType::Stream);
 		virtual ~SocketBase();
+
+		/** The loop this socket was made on; null once that loop has gone. */
+		Samurai::EventLoop* getLoop() const { return loop; }
 
 		/* Releases raw pointers in its destructor, so the implicit copy
 		 * operations would release them a second time. */
@@ -295,8 +300,15 @@ class SocketBase : public std::enable_shared_from_this<SocketBase> {
 		uint64_t progress;
 		SocketType type;
 		Samurai::IO::Net::BandwidthManager* bandwidthManager;
-		
+
+	private:
+		Samurai::EventLoop* loop;
+
+		/* By a loop going before this socket: nothing of it may be touched again. */
+		void detachFromLoop();
+
 	friend class SocketMonitor;
+	friend class Samurai::EventLoop;
 };
 
 }

@@ -10,12 +10,6 @@
  * A function-local static is initialised once, and without the check-then-assign
  * race the raw pointer version had.
  */
-Samurai::IO::Net::BandwidthManager* Samurai::IO::Net::BandwidthManager::getInstance()
-{
-	static Samurai::IO::Net::BandwidthManager manager;
-	return &manager;
-}
-
 Samurai::IO::Net::BandwidthManager::BandwidthManager() {
 
 }

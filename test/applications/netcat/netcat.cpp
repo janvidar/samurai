@@ -22,12 +22,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#include <samurai/eventloop.h>
 #include <samurai/io/net/proxy.h>
 #include <samurai/io/net/socket.h>
 #include <samurai/io/net/datagram.h>
 #include <samurai/io/net/serversocket.h>
 #include <samurai/io/net/socketevent.h>
-#include <samurai/io/net/socketmonitor.h>
 #include <samurai/io/buffer.h>
 
 static bool running = true;
@@ -59,19 +59,23 @@ class Connection :
 	public Samurai::IO::Net::DatagramEventHandler
 {
 	protected:
+		Samurai::EventLoop& loop;
 		std::shared_ptr<Samurai::IO::Net::SocketBase> socket;
 		std::shared_ptr<Samurai::IO::Net::ServerSocket> server;
 		std::shared_ptr<Samurai::IO::Net::DatagramSocket> udp;
 
 	public:
-		Connection(char* host, int port)
+		Connection(Samurai::EventLoop& loop_, char* host, int port)
+			: loop(loop_)
 		{
-			socket = Samurai::IO::Net::Socket::create(this, host, port);
+			socket = Samurai::IO::Net::Socket::create(loop, this, host, port);
 			server = 0;
 			udp = 0;
 		}
 
-		Connection() {
+		explicit Connection(Samurai::EventLoop& loop_)
+			: loop(loop_)
+		{
 			socket = 0;
 			server = 0;
 			udp = 0;
@@ -93,7 +97,7 @@ class Connection :
 			if (arg_udp)
 			{
 				udp.reset();
-				udp = Samurai::IO::Net::DatagramSocket::create(this, localAddr, localport);
+				udp = Samurai::IO::Net::DatagramSocket::create(loop, this, localAddr, localport);
 				if (!udp->listen())
 				{
 					error("could not bind to port. Disabling service");
@@ -104,7 +108,7 @@ class Connection :
 				Samurai::IO::Net::InetSocketAddress bindAddr(localAddr, localport);
 
 				server.reset();
-				server = Samurai::IO::Net::ServerSocket::create(this, localAddr, localport);
+				server = Samurai::IO::Net::ServerSocket::create(loop, this, localAddr, localport);
 				if (!server->listen())
 				{
 					error("could not bind to port. Disabling service");
@@ -473,16 +477,16 @@ int main(int argc, char** argv) {
 	parse_args(argc, argv);
 	if (!apply_proxy_args(argv[0])) return 1;
 
-	Samurai::IO::Net::SocketMonitor* monitor = Samurai::IO::Net::SocketMonitor::getInstance();
+	Samurai::EventLoop loop;
 
 	Connection* con = 0;
 
 	if (!arg_listen)
 	{
-		con = new Connection(arg_addr, arg_port);
+		con = new Connection(loop, arg_addr, arg_port);
 		con->connect();
 	} else {
-		con = new Connection();
+		con = new Connection(loop);
 		con->listen(arg_local_port, arg_local_addr);
 	}
 
@@ -505,8 +509,7 @@ int main(int argc, char** argv) {
 
 	while (running)
 	{
-		monitor->wait(10);
-		Samurai::MessageHandler::getInstance()->process();
+		loop.wait(10);
 
 #ifdef SAMURAI_POSIX
 		int pollret = poll(&pfd, 1, 50);

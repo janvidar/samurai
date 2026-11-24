@@ -179,10 +179,10 @@ bool Samurai::IO::Net::UPnP::Ssdp::parseReply(std::string_view datagram,
 
 
 std::unique_ptr<Samurai::IO::Net::UPnP::Ssdp::Search>
-Samurai::IO::Net::UPnP::Ssdp::Search::start(SearchEventHandler* eh,
+Samurai::IO::Net::UPnP::Ssdp::Search::start(Samurai::EventLoop& loop, SearchEventHandler* eh,
                                             const Options& options)
 {
-	std::unique_ptr<Search> self(new Search(eh, options));
+	std::unique_ptr<Search> self(new Search(loop, eh, options));
 	if (!self->internal_open()) return nullptr;
 
 	self->deadline = Samurai::Timer::clock::now() + options.timeout;
@@ -190,14 +190,14 @@ Samurai::IO::Net::UPnP::Ssdp::Search::start(SearchEventHandler* eh,
 
 	/* One repeating timer drives both the retransmission rounds and the
 	   deadline. The prototype's loop enforced neither. */
-	self->ticker = std::make_unique<Samurai::Timer>(self.get(), options.interval, false);
+	self->ticker = std::make_unique<Samurai::Timer>(loop, self.get(), options.interval, false);
 	return self;
 }
 
 
-Samurai::IO::Net::UPnP::Ssdp::Search::Search(SearchEventHandler* eh,
+Samurai::IO::Net::UPnP::Ssdp::Search::Search(Samurai::EventLoop& loop_, SearchEventHandler* eh,
                                              const Options& opts)
-	: eventHandler(eh), options(opts)
+	: loop(loop_), eventHandler(eh), options(opts)
 {
 }
 
@@ -254,7 +254,7 @@ bool Samurai::IO::Net::UPnP::Ssdp::Search::internal_open()
 
 			const Samurai::IO::Net::InetAddress bind_address(is_ipv6 ? "::" : "0.0.0.0");
 			std::shared_ptr<Samurai::IO::Net::MulticastSocket> socket =
-				Samurai::IO::Net::MulticastSocket::create(this, bind_address, (uint16_t) 0);
+				Samurai::IO::Net::MulticastSocket::create(loop, this, bind_address, (uint16_t) 0);
 
 			if (!socket || socket->getFD() == INVALID_SOCKET) continue;
 			if (!socket->listen()) continue;

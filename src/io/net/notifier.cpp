@@ -31,8 +31,8 @@ bool set_nonblocking(socket_t sd)
 
 }
 
-Samurai::IO::Net::Notifier::Notifier(std::function<void()> on_notified)
-	: SocketBase(SocketType::Stream)
+Samurai::IO::Net::Notifier::Notifier(Samurai::EventLoop& loop_, std::function<void()> on_notified)
+	: SocketBase(loop_, SocketType::Stream)
 	, writer(INVALID_SOCKET)
 	, callback(std::move(on_notified))
 {

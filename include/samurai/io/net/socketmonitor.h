@@ -16,6 +16,7 @@
 #include <string_view>
 
 namespace Samurai {
+class TimerManager;
 namespace IO {
 namespace Net {
 
@@ -36,21 +37,12 @@ class SocketMonitor
 		SocketMonitor(const SocketMonitor&) = delete;
 		SocketMonitor& operator=(const SocketMonitor&) = delete;	
 	
-		/**
-		 * Return the current socket monitor.
-		 * If none is created yet, one will be created automatically.
-		 * If one wish to create a custom socket monitor, it must
-		 * be created and inserted with SetMonitor before getInstance()
-		 * is called for the first time (at least to have a defined result).
-		 */
-		static SocketMonitor* getInstance();
-		
-		/**
-		 * Set a custom, or specialized socket monitor.
-		 * If one already is created, this will fail and return false.
-		 */
-		static bool setSocketMonitor(SocketMonitor* monitor);
-		
+		/** The best backend this platform has, or null where none works. */
+		static std::unique_ptr<SocketMonitor> createDefault();
+
+		/** Whose timers wait() fires, and lets cut the poll short; set by the loop. */
+		void setTimers(Samurai::TimerManager* timers) { timerManager = timers; }
+
 		enum class Triggers : unsigned
 		{
 			None   = 0x00,
@@ -234,7 +226,7 @@ class SocketMonitor
 
 	protected:
 		explicit SocketMonitor(std::string_view name);
-		static SocketMonitor* socket_monitor;
+		Samurai::TimerManager* timerManager = nullptr;
 		std::string_view name;
 
 		std::map<socket_t, Watch> registry;

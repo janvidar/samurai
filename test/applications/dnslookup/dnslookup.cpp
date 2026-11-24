@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <samurai/io/net/socketmonitor.h>
+#include <samurai/eventloop.h>
 #include <samurai/io/net/socketevent.h>
 #include <samurai/io/net/inetaddress.h>
 #include <samurai/io/net/dns/resolver.h>
@@ -20,11 +20,11 @@ using namespace Samurai::IO::Net;
 class DNSResolver : public ResolveEventHandler {
 	public:
 	
-		void lookup(const char* host)
+		void lookup(Samurai::EventLoop& loop, const char* host)
 		{
 			/* Held for the duration of the lookup: an asynchronous backend
 			   needs the resolver to outlive this call. */
-			m_resolver = Samurai::IO::Net::DNS::Resolver::getHostByName(this, host);
+			m_resolver = Samurai::IO::Net::DNS::Resolver::getHostByName(loop, this, host);
 		}
 	
 		void EventHostFound(const InetAddress* addr) {
@@ -57,12 +57,12 @@ int main(int argc, char** argv) {
 		exit(-1);
 	}
 	
-	SocketMonitor* monitor = SocketMonitor::getInstance();
+	Samurai::EventLoop loop;
 	DNSResolver resolver;
 	
-	resolver.lookup(host);
+	resolver.lookup(loop, host);
 	while (running) {
-		monitor->wait(25);
+		loop.wait(25);
 	}
 }
 

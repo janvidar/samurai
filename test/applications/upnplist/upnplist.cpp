@@ -3,7 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
-#include <samurai/io/net/socketmonitor.h>
+#include <samurai/eventloop.h>
 #include <samurai/io/net/upnp/gateway.h>
 #include <samurai/io/net/upnp/portmapper.h>
 #include <samurai/timer.h>
@@ -33,6 +33,8 @@ class Lister
 	, public PortMapperEventHandler
 {
 	public:
+		explicit Lister(Samurai::EventLoop& loop_) : loop(loop_) { }
+
 		bool finished = false;
 
 		void run(const Samurai::IO::Net::URL& location, int seconds)
@@ -41,8 +43,8 @@ class Lister
 			options.searchTimeout = std::chrono::seconds(seconds);
 
 			gateway = location.isValid()
-				? Gateway::describe(this, location, options)
-				: Gateway::discover(this, options);
+				? Gateway::describe(loop, this, location, options)
+				: Gateway::discover(loop, this, options);
 
 			if (!gateway)
 			{
@@ -84,7 +86,7 @@ class Lister
 
 			printf("\n");
 
-			mapper = PortMapper::create(this, found);
+			mapper = PortMapper::create(loop, this, found);
 			if (!mapper) { finished = true; return; }
 
 			mapper->getExternalAddress();
@@ -137,6 +139,7 @@ class Lister
 		}
 
 	private:
+		Samurai::EventLoop& loop;
 		std::unique_ptr<Gateway> gateway;
 		std::unique_ptr<PortMapper> mapper;
 };
@@ -175,12 +178,9 @@ int main(int argc, char** argv)
 		}
 	}
 
-	Lister lister;
+	Samurai::EventLoop loop;
+	Lister lister(loop);
 	lister.run(location, seconds);
-
-	Samurai::IO::Net::SocketMonitor* monitor =
-		Samurai::IO::Net::SocketMonitor::getInstance();
-	Samurai::TimerManager* timers = Samurai::TimerManager::getInstance();
 
 	/* A bound wait, so a gateway that stops answering mid-exchange does not
 	   leave this running for ever - which is what the old loop did. */
@@ -189,8 +189,7 @@ int main(int argc, char** argv)
 
 	while (!lister.finished && Samurai::Timer::clock::now() < deadline)
 	{
-		monitor->wait(50);
-		timers->process();
+		loop.wait(50);
 	}
 
 	if (!lister.finished) printf("Gave up waiting.\n");

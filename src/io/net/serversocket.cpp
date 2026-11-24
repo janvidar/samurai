@@ -50,9 +50,9 @@ constexpr int ACCEPT_BACKOFF_MS = 250;
 class AcceptBackoff : public Samurai::TimerListener
 {
 	public:
-		explicit AcceptBackoff(std::weak_ptr<Samurai::IO::Net::SocketBase> listener_)
+		AcceptBackoff(Samurai::EventLoop& loop, std::weak_ptr<Samurai::IO::Net::SocketBase> listener_)
 			: listener(std::move(listener_))
-			, timer(this, std::chrono::milliseconds(ACCEPT_BACKOFF_MS), true)
+			, timer(loop, this, std::chrono::milliseconds(ACCEPT_BACKOFF_MS), true)
 		{
 		}
 
@@ -71,21 +71,19 @@ class AcceptBackoff : public Samurai::TimerListener
 
 }
 
-Samurai::IO::Net::ServerSocket::ServerSocket() : eventHandler(nullptr) {}
-
-Samurai::IO::Net::ServerSocket::ServerSocket(ServerSocketEventHandler* eh, const Samurai::IO::Net::SocketAddress& addr_) :
-	Samurai::IO::Net::SocketBase(addr_, SocketType::Stream), eventHandler(eh)
+Samurai::IO::Net::ServerSocket::ServerSocket(Samurai::EventLoop& loop_, ServerSocketEventHandler* eh, const Samurai::IO::Net::SocketAddress& addr_) :
+	Samurai::IO::Net::SocketBase(loop_, addr_, SocketType::Stream), eventHandler(eh)
 {
 	internal_create();
 }
 
-Samurai::IO::Net::ServerSocket::ServerSocket(Samurai::IO::Net::ServerSocketEventHandler* eh, const Samurai::IO::Net::InetAddress& addr_, uint16_t port_) : Samurai::IO::Net::SocketBase(Samurai::IO::Net::InetSocketAddress(addr_, port_), SocketType::Stream), eventHandler(eh)
+Samurai::IO::Net::ServerSocket::ServerSocket(Samurai::EventLoop& loop_, Samurai::IO::Net::ServerSocketEventHandler* eh, const Samurai::IO::Net::InetAddress& addr_, uint16_t port_) : Samurai::IO::Net::SocketBase(loop_, Samurai::IO::Net::InetSocketAddress(addr_, port_), SocketType::Stream), eventHandler(eh)
 {
 	internal_create();
 }
 
-Samurai::IO::Net::ServerSocket::ServerSocket(ServerSocketEventHandler* eh, uint16_t port_) :
-	Samurai::IO::Net::SocketBase(Samurai::IO::Net::InetSocketAddress(port_), SocketType::Stream), eventHandler(eh)
+Samurai::IO::Net::ServerSocket::ServerSocket(Samurai::EventLoop& loop_, ServerSocketEventHandler* eh, uint16_t port_) :
+	Samurai::IO::Net::SocketBase(loop_, Samurai::IO::Net::InetSocketAddress(port_), SocketType::Stream), eventHandler(eh)
 {
 	internal_create();
 }
@@ -172,7 +170,7 @@ void Samurai::IO::Net::ServerSocket::internal_accept() {
 		if (error == EMFILE || error == ENFILE) {
 			QERR("Out of file descriptors accepting a connection; pausing the listener");
 			disableMonitor();
-			new AcceptBackoff(weak_from_this());
+			new AcceptBackoff(*getLoop(), weak_from_this());
 			return;
 		}
 
@@ -202,7 +200,7 @@ void Samurai::IO::Net::ServerSocket::internal_accept() {
 
 	// Create a new socket based on the connected client,
 	// and hand it over to the eventHandler.
-	std::shared_ptr<Socket> sock = Socket::create(new_sd, n_addr);
+	std::shared_ptr<Socket> sock = Socket::create(*getLoop(), new_sd, n_addr);
 
 	// accept() does not inherit O_NONBLOCK from the listening socket.
 	if (!sock->setNonBlocking(true))

@@ -81,6 +81,7 @@ exotic_add_tests(autotest
         exotic/buffer.tcc
         exotic/buffer_binary.tcc
         exotic/compression.tcc
+        exotic/eventloop.tcc
         exotic/file.tcc
         exotic/hash_sha.tcc
         exotic/hash_tiger.tcc

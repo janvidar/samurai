@@ -59,11 +59,10 @@ class Socket :
 		}
 
 	protected:
-		Socket();
-		Socket(socket_t, const SocketAddress& addr);
-		Socket(SocketEventHandler* eh, const SocketAddress& addr);
-		Socket(SocketEventHandler* eh, const InetAddress& addr, uint16_t port);
-		Socket(SocketEventHandler* eh, const std::string& address, uint16_t port);
+		Socket(Samurai::EventLoop& loop, socket_t, const SocketAddress& addr);
+		Socket(Samurai::EventLoop& loop, SocketEventHandler* eh, const SocketAddress& addr);
+		Socket(Samurai::EventLoop& loop, SocketEventHandler* eh, const InetAddress& addr, uint16_t port);
+		Socket(Samurai::EventLoop& loop, SocketEventHandler* eh, const std::string& address, uint16_t port);
 	public:
 		~Socket() override;
 

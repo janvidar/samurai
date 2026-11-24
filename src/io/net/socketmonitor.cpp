@@ -11,6 +11,8 @@
 #include <samurai/io/net/socket.h>
 #include <samurai/io/net/serversocket.h>
 #include <samurai/io/net/socketmonitor.h>
+
+#include <mutex>
 #include <memory>
 #include <samurai/io/net/datagram.h>
 #include <samurai/timer.h>
@@ -47,6 +49,13 @@ constexpr unsigned SPIN_LIMIT = 64;
  */
 constexpr int SPIN_BACKOFF_MS = 250;
 
+/*
+ * The TLS library's own state is the process's, not a loop's: set up by the first
+ * monitor and torn down by the last, so one loop going does not take it from another.
+ */
+std::mutex tls_users_lock;
+int tls_users = 0;
+
 }
 
 Samurai::IO::Net::SocketMonitor::SocketMonitor(std::string_view name_) : name(name_)
@@ -61,13 +70,17 @@ Samurai::IO::Net::SocketMonitor::SocketMonitor(std::string_view name_) : name(na
 	}
 #endif
 
-	Samurai::IO::Net::TlsFactory::global_init();
+	std::lock_guard<std::mutex> guard(tls_users_lock);
+	if (tls_users++ == 0) Samurai::IO::Net::TlsFactory::global_init();
 }
 
 
 Samurai::IO::Net::SocketMonitor::~SocketMonitor()
 {
-	Samurai::IO::Net::TlsFactory::global_deinit();
+	{
+		std::lock_guard<std::mutex> guard(tls_users_lock);
+		if (--tls_users == 0) Samurai::IO::Net::TlsFactory::global_deinit();
+	}
 
 #ifdef SAMURAI_WINSOCK
 	WSACleanup();
@@ -166,7 +179,7 @@ void Samurai::IO::Net::SocketMonitor::wait(int time_ms)
 	   and callers ask for whole seconds. */
 	if (!buffered)
 	{
-		const int next = Samurai::TimerManager::getInstance()->timeToNext();
+		const int next = timerManager ? timerManager->timeToNext() : -1;
 		if (next >= 0 && (timeout < 0 || next < timeout)) timeout = next;
 	}
 
@@ -181,7 +194,7 @@ void Samurai::IO::Net::SocketMonitor::wait(int time_ms)
 	/* After the poll has dispatched, so a timer callback acts on the freshest
 	   socket state, and unconditionally, so a deadline is still met on a pass
 	   where no descriptor had anything to report. */
-	Samurai::TimerManager::getInstance()->process();
+	if (timerManager) timerManager->process();
 
 	/* Rescanned rather than reusing the list gathered above: the poll just
 	   dispatched, and a handler may have consumed the buffered data, closed the
@@ -367,35 +380,6 @@ void Samurai::IO::Net::SocketMonitor::handleSocketEvent(Samurai::IO::Net::Socket
 	sock->handleMonitorEvent(trig);
 }
 
-Samurai::IO::Net::SocketMonitor* Samurai::IO::Net::SocketMonitor::socket_monitor = nullptr;
-
-
-bool Samurai::IO::Net::SocketMonitor::setSocketMonitor(Samurai::IO::Net::SocketMonitor* monitor)
-{
-	if (!monitor)
-	{
-		socket_monitor = nullptr;
-		return true;
-	}
-	
-	if (socket_monitor)
-		return false;
-	
-	if (!monitor->isValid())
-		return false;
-	
-	socket_monitor = monitor;
-	
-	QDBG("SocketMonitor: Using %.*s backend", (int) monitor->name.size(), monitor->name.data());
-	return true;
-}
-
-
-
-/*
- * Construct a backend and keep it only if it came up. The winner is released
- * from the unique_ptr deliberately: the chosen monitor is never destroyed.
- */
 template<typename T>
 static Samurai::IO::Net::SocketMonitor* tryBackend()
 {
@@ -440,23 +424,14 @@ static Samurai::IO::Net::SocketMonitor* createDefaultMonitor()
 }
 
 
-Samurai::IO::Net::SocketMonitor* Samurai::IO::Net::SocketMonitor::getInstance()
+std::unique_ptr<Samurai::IO::Net::SocketMonitor> Samurai::IO::Net::SocketMonitor::createDefault()
 {
-	if (socket_monitor)
-		return socket_monitor;
+	std::unique_ptr<Samurai::IO::Net::SocketMonitor> monitor(createDefaultMonitor());
 
-	/* Chosen once, and deliberately never destroyed: a socket outliving it
-	   calls disableMonitor() from its destructor, which comes back here. */
-	static Samurai::IO::Net::SocketMonitor* fallback = createDefaultMonitor();
-
-	setSocketMonitor(fallback);
-
-	if (!socket_monitor)
-	{
+	if (!monitor)
 		QERR("Unable to find a suitable socket monitor.");
-	}
+	else
+		QDBG("SocketMonitor: Using %.*s backend", (int) monitor->name.size(), monitor->name.data());
 
-	return socket_monitor;
+	return monitor;
 }
-
-

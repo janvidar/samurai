@@ -14,8 +14,8 @@
 namespace Samurai {
 
 
-// A standalone postMessage.
-void postMessage(size_t messageID, void* data, size_t arg1, size_t arg2);
+class EventLoop;
+class MessageHandler;
 
 
 
@@ -46,14 +46,22 @@ class Message {
 
 class MessageListener {
 	public:
-		MessageListener();
+		explicit MessageListener(EventLoop& loop);
 		virtual ~MessageListener();
+
+		MessageListener(const MessageListener&) = delete;
+		MessageListener& operator=(const MessageListener&) = delete;
 	
 		/**
 		 * Process a given message. Return TRUE if the message was processed, or
 		 * FALSE if the message was not processed by the listener.
 		 */
 		virtual bool EventMessage(const Message*) = 0;
+
+	private:
+		/* Null once the handler has gone before this listener did. */
+		MessageHandler* handler;
+		friend class MessageHandler;
 };
 
 /**
@@ -61,18 +69,16 @@ class MessageListener {
  * promptly by invoking the different message handlers.
  */
 class MessageHandler {
-	protected:
-		MessageHandler();
-		
-		
 	public:
+		MessageHandler();
+
+		/* Detaches every listener still registered, so a later ~MessageListener finds nothing to do. */
 		~MessageHandler();
 
 		/* Releases raw pointers in its destructor, so the implicit copy
 		 * operations would release them a second time. */
 		MessageHandler(const MessageHandler&) = delete;
 		MessageHandler& operator=(const MessageHandler&) = delete;
-		static MessageHandler* getInstance();
 		
 		void postMessage(size_t id, void* data, size_t arg1, size_t arg2);
 		void process();

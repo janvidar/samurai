@@ -79,23 +79,23 @@ class DatagramSocket : public SocketBase {
 
 	protected:
 
-		DatagramSocket(DatagramEventHandler* eh, const SocketAddress& bindAddr);
+		DatagramSocket(Samurai::EventLoop& loop, DatagramEventHandler* eh, const SocketAddress& bindAddr);
 	
 		/**
 		 * Set up a SocketType::Datagram Socket to bind on the local address and port.
 		 */
-		DatagramSocket(DatagramEventHandler* eh, const InetAddress& addr, uint16_t port);
+		DatagramSocket(Samurai::EventLoop& loop, DatagramEventHandler* eh, const InetAddress& addr, uint16_t port);
 		
 		/**
 		 * Set up a datagram socket to bind on any IP and the given port.
 		 */
-		DatagramSocket(DatagramEventHandler* eh, uint16_t port);
+		DatagramSocket(Samurai::EventLoop& loop, DatagramEventHandler* eh, uint16_t port);
 
 		/**
 		 * Set up a SocketType::Datagram Socket to bind on any address (0.0.0.0), and
 		 * any available OS-assigned port.
 		 */
-		DatagramSocket(DatagramEventHandler* eh, Samurai::IO::Net::InetAddress::Version version);
+		DatagramSocket(Samurai::EventLoop& loop, DatagramEventHandler* eh, Samurai::IO::Net::InetAddress::Version version);
 	public:
 		~DatagramSocket() override;
 
@@ -126,8 +126,6 @@ class DatagramSocket : public SocketBase {
 	protected:
 		void initialize() override;
 
-		DatagramSocket();
-		DatagramSocket(SocketAddress*);
 		
 		void handleMonitorEvent(SocketMonitor::Triggers trig) override;
 

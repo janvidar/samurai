@@ -4,7 +4,7 @@
  */
 
 #include <samurai/samurai.h>
-#include <samurai/io/net/socketmonitor.h>
+#include <samurai/eventloop.h>
 #include <samurai/io/net/interface.h>
 #include <memory>
 #include <samurai/io/net/inetaddress.h>
@@ -24,7 +24,8 @@ int main(int argc, char** argv)
 	}
 	
 #ifdef SAMURAI_WINDOWS
-	if (!Samurai::IO::Net::SocketMonitor::getInstance())
+	Samurai::EventLoop loop;
+	if (!loop.isValid())
 	{
 		fprintf(stderr, "Unable to initialize winsock\n");
 		exit(1);

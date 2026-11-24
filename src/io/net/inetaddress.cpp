@@ -487,7 +487,7 @@ void Samurai::IO::Net::InetAddress::EventHostError(Samurai::IO::Net::DNS::Resolv
 }
 
 
-void Samurai::IO::Net::InetAddress::lookup(ResolveEventHandler* eventHandler)
+void Samurai::IO::Net::InetAddress::lookup(Samurai::EventLoop& loop, ResolveEventHandler* eventHandler)
 {
 	if (eventHandler) dnsevent = eventHandler;
 
@@ -501,7 +501,7 @@ void Samurai::IO::Net::InetAddress::lookup(ResolveEventHandler* eventHandler)
 
 	resolver.reset();
 
-	resolver = Samurai::IO::Net::DNS::Resolver::getHostByName(this, hostname.c_str()); /* FIXME: std::string-ify */
+	resolver = Samurai::IO::Net::DNS::Resolver::getHostByName(loop, this, hostname.c_str()); /* FIXME: std::string-ify */
 }
 
 

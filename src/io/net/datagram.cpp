@@ -103,36 +103,26 @@ Samurai::IO::Buffer* Samurai::IO::Net::DatagramPacket::getBuffer() {
 	return buffer.get();
 }
 
-Samurai::IO::Net::DatagramSocket::DatagramSocket(DatagramEventHandler* eh, InetAddress::Version version) : SocketBase(SocketType::Datagram), eventHandler(eh), myPacket(nullptr)
+Samurai::IO::Net::DatagramSocket::DatagramSocket(Samurai::EventLoop& loop_, DatagramEventHandler* eh, InetAddress::Version version) : SocketBase(loop_, SocketType::Datagram), eventHandler(eh), myPacket(nullptr)
 {
 	int af = (version == InetAddress::Version::IPv4 ? AF_INET : version == InetAddress::Version::IPv6 ? AF_INET6 : AF_UNSPEC);
 	createDescriptor(af);
 }
 
-/*
- * NOTE: there is no useful datagram socket to build without an address family,
- * so this leaves the socket unbound and says so; listen() and send() refuse an
- * INVALID_SOCKET.
- */
-Samurai::IO::Net::DatagramSocket::DatagramSocket() : SocketBase(SocketType::Datagram), eventHandler(nullptr), myPacket(nullptr) {
-	QERR("DatagramSocket: default-constructed sockets have no address family "
-	     "and cannot be used; construct with an address, port or version");
-}
-
-Samurai::IO::Net::DatagramSocket::DatagramSocket(Samurai::IO::Net::DatagramEventHandler* eh, const Samurai::IO::Net::SocketAddress& bindAddr)
-	: SocketBase(bindAddr, SocketType::Datagram), eventHandler(eh), myPacket(nullptr)
+Samurai::IO::Net::DatagramSocket::DatagramSocket(Samurai::EventLoop& loop_, Samurai::IO::Net::DatagramEventHandler* eh, const Samurai::IO::Net::SocketAddress& bindAddr)
+	: SocketBase(loop_, bindAddr, SocketType::Datagram), eventHandler(eh), myPacket(nullptr)
 {
 	internal_create();
 }
 
-Samurai::IO::Net::DatagramSocket::DatagramSocket(DatagramEventHandler* eh, const Samurai::IO::Net::InetAddress& bindaddr, uint16_t bindport)
-	: SocketBase(bindaddr, bindport, SocketType::Datagram), eventHandler(eh), myPacket(nullptr)
+Samurai::IO::Net::DatagramSocket::DatagramSocket(Samurai::EventLoop& loop_, DatagramEventHandler* eh, const Samurai::IO::Net::InetAddress& bindaddr, uint16_t bindport)
+	: SocketBase(loop_, bindaddr, bindport, SocketType::Datagram), eventHandler(eh), myPacket(nullptr)
 {
 	internal_create();
 }
 
-Samurai::IO::Net::DatagramSocket::DatagramSocket(DatagramEventHandler* eh, uint16_t bindport)
-	: SocketBase(Samurai::IO::Net::InetAddress("0.0.0.0"), bindport, SocketType::Datagram), eventHandler(eh), myPacket(nullptr)
+Samurai::IO::Net::DatagramSocket::DatagramSocket(Samurai::EventLoop& loop_, DatagramEventHandler* eh, uint16_t bindport)
+	: SocketBase(loop_, Samurai::IO::Net::InetAddress("0.0.0.0"), bindport, SocketType::Datagram), eventHandler(eh), myPacket(nullptr)
 {
 	internal_create();
 }

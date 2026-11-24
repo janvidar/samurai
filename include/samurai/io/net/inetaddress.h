@@ -13,6 +13,8 @@
 // FIXME: std::string-ify this class!
 
 namespace Samurai {
+	class EventLoop;
+
 	namespace IO {
 		namespace Net {
 			namespace DNS {
@@ -110,9 +112,9 @@ namespace Samurai {
 
 
 					/**
-					 * Start lookup hostname
+					 * Start looking up the hostname, answered on 'loop'.
 					 */
-					void lookup(ResolveEventHandler* eventHandler = nullptr);
+					void lookup(Samurai::EventLoop& loop, ResolveEventHandler* eventHandler = nullptr);
 					
 					
 				protected:

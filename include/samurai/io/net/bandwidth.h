@@ -38,7 +38,6 @@ class BandwidthManager {
 		size_t getSendBps();
 		size_t getRecvBps();
 		
-		static BandwidthManager* getInstance();
 
 	protected:
 		size_t count_accepted = 0;

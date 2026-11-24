@@ -29,8 +29,8 @@
 #include <sys/uio.h>
 #endif
 
-Samurai::IO::Net::Socket::Socket(Samurai::IO::Net::SocketEventHandler* eh, const std::string& address_, uint16_t port_) :
-	SocketBase(),
+Samurai::IO::Net::Socket::Socket(Samurai::EventLoop& loop_, Samurai::IO::Net::SocketEventHandler* eh, const std::string& address_, uint16_t port_) :
+	SocketBase(loop_),
 	address(nullptr),
 	port(port_),
 	autoConnectAfterLookup(false),
@@ -48,8 +48,8 @@ Samurai::IO::Net::Socket::Socket(Samurai::IO::Net::SocketEventHandler* eh, const
 	address = std::make_unique<InetAddress>(address_);
 }
 
-Samurai::IO::Net::Socket::Socket(SocketEventHandler* eh, const InetAddress& addr_, uint16_t port_) :
-	SocketBase(),
+Samurai::IO::Net::Socket::Socket(Samurai::EventLoop& loop_, SocketEventHandler* eh, const InetAddress& addr_, uint16_t port_) :
+	SocketBase(loop_),
 	address(nullptr),
 	port(port_),
 	autoConnectAfterLookup(false),
@@ -69,8 +69,8 @@ Samurai::IO::Net::Socket::Socket(SocketEventHandler* eh, const InetAddress& addr
 	address = std::make_unique<InetAddress>(addr_);
 }
 
-Samurai::IO::Net::Socket::Socket(socket_t sd_, const Samurai::IO::Net::SocketAddress& addr_) :
-	SocketBase(sd_, addr_, SocketType::Stream),
+Samurai::IO::Net::Socket::Socket(Samurai::EventLoop& loop_, socket_t sd_, const Samurai::IO::Net::SocketAddress& addr_) :
+	SocketBase(loop_, sd_, addr_, SocketType::Stream),
 	address(nullptr),
 	port(0),
 	autoConnectAfterLookup(false),
@@ -146,11 +146,19 @@ void Samurai::IO::Net::Socket::lookup() {
 		return;
 	}
 
+	if (!getLoop())
+	{
+		if (eventHandler)
+			eventHandler->EventError(this, Samurai::IO::Net::SocketError::HostNotFound,
+			                         "The event loop this socket was made on is gone");
+		return;
+	}
+
 	if (address) {
 		const std::shared_ptr<SocketBase> keep = weak_from_this().lock();
 
 		if (eventHandler) eventHandler->EventHostLookup(this);
-		address->lookup(this);
+		address->lookup(*getLoop(), this);
 	}
 }
 
@@ -542,6 +550,14 @@ void Samurai::IO::Net::Socket::connect()
 {
 	if (!(state == SocketState::Disconnected || state == SocketState::HostFound)) return;
 
+	if (!getLoop())
+	{
+		if (eventHandler)
+			eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown,
+			                         "The event loop this socket was made on is gone");
+		return;
+	}
+
 	/*
 	 * This is the branch that stops the leak. Directly, a name has to become an
 	 * address before there is anything to connect to; through a proxy it does
@@ -605,7 +621,7 @@ void Samurai::IO::Net::Socket::internal_connect_proxy()
 		   proxied socket and reports EventHostLookup - an event about the peer
 		   that the application did not ask for and this is not. */
 		lookup_target = LookupTarget::Proxy;
-		proxy_address->lookup(this);
+		proxy_address->lookup(*getLoop(), this);
 		return;
 	}
 
@@ -707,7 +723,7 @@ void Samurai::IO::Net::Socket::internal_connect_addr()
 	timer.reset();
 
 	int ret = ::connect(sd, addr->getSockAddr(), addr->getSockAddrSize());
-	timer = std::make_unique<Samurai::Timer>(this, connect_timeout, true);
+	timer = std::make_unique<Samurai::Timer>(*getLoop(), this, connect_timeout, true);
 	if (ret == -1) {
 		if (Samurai::IO::Net::net_error() == EINPROGRESS) {
 			state = SocketState::Connecting;

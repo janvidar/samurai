@@ -59,11 +59,12 @@ class SocksResolver final
 		 *         the case when no proxy is set, when Tor extensions are off,
 		 *         and when the proxy is named rather than numbered.
 		 */
-		static std::unique_ptr<Resolver> forward(ResolveEventHandler* eh, const char* name);
-		static std::unique_ptr<Resolver> reverse(ResolveEventHandler* eh,
+		static std::unique_ptr<Resolver> forward(Samurai::EventLoop& loop, ResolveEventHandler* eh,
+		                                         const char* name);
+		static std::unique_ptr<Resolver> reverse(Samurai::EventLoop& loop, ResolveEventHandler* eh,
 		                                         const InetAddress& address);
 
-		explicit SocksResolver(ResolveEventHandler* eh);
+		SocksResolver(Samurai::EventLoop& loop, ResolveEventHandler* eh);
 		~SocksResolver() override;
 
 		SocksResolver(const SocksResolver&) = delete;
@@ -105,6 +106,7 @@ class SocksResolver final
 
 		void internal_teardown();
 
+		Samurai::EventLoop& loop;
 		ProxySettings settings;
 		std::shared_ptr<Socket> socket;
 		std::unique_ptr<Socks5Handshake> handshake;

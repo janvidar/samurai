@@ -217,11 +217,11 @@ class Gateway final
 		 * exists.
 		 *
 		 * The handler is never called from inside this: a failure is reported on
-		 * the next turn of the event loop, so the caller has always stored the
+		 * the next turn of 'loop', so the caller has always stored the
 		 * pointer by the time it hears about it.
 		 */
-		static std::unique_ptr<Gateway> discover(GatewayEventHandler* eh);
-		static std::unique_ptr<Gateway> discover(GatewayEventHandler* eh,
+		static std::unique_ptr<Gateway> discover(Samurai::EventLoop& loop, GatewayEventHandler* eh);
+		static std::unique_ptr<Gateway> discover(Samurai::EventLoop& loop, GatewayEventHandler* eh,
 		                                         const Options& options);
 
 		/**
@@ -230,16 +230,16 @@ class Gateway final
 		 * This is the entry point for a caller that has the gateway's URL from
 		 * configuration, and the one the tests drive.
 		 */
-		static std::unique_ptr<Gateway> describe(GatewayEventHandler* eh,
+		static std::unique_ptr<Gateway> describe(Samurai::EventLoop& loop, GatewayEventHandler* eh,
 		                                         const URL& location);
-		static std::unique_ptr<Gateway> describe(GatewayEventHandler* eh,
+		static std::unique_ptr<Gateway> describe(Samurai::EventLoop& loop, GatewayEventHandler* eh,
 		                                         const URL& location,
 		                                         const Options& options);
 
 		/** Skip both, and be ready immediately, from what was cached. */
-		static std::unique_ptr<Gateway> attach(GatewayEventHandler* eh,
+		static std::unique_ptr<Gateway> attach(Samurai::EventLoop& loop, GatewayEventHandler* eh,
 		                                       const GatewayInfo& info);
-		static std::unique_ptr<Gateway> attach(GatewayEventHandler* eh,
+		static std::unique_ptr<Gateway> attach(Samurai::EventLoop& loop, GatewayEventHandler* eh,
 		                                       const GatewayInfo& info,
 		                                       const Options& options);
 
@@ -289,7 +289,7 @@ class Gateway final
 		bool getPermanentLeasesOnly() const { return permanent_leases_only; }
 
 	private:
-		Gateway(GatewayEventHandler* eh, const Options& options);
+		Gateway(Samurai::EventLoop& loop, GatewayEventHandler* eh, const Options& options);
 
 		/* HTTP::RequestEventHandler */
 		void EventHttpResponse(Samurai::IO::Net::HTTP::Client*,
@@ -313,6 +313,7 @@ class Gateway final
 		void internal_finishAction(Action* action);
 		void internal_cancelAction(Action* action);
 
+		Samurai::EventLoop& loop;
 		GatewayEventHandler* eventHandler;
 		Options options;
 		State state = State::Idle;

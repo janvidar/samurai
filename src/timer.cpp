@@ -4,6 +4,7 @@
  */
 
 #include <samurai/timer.h>
+#include <samurai/eventloop.h>
 
 #include <algorithm>
 #include <chrono>
@@ -24,34 +25,33 @@ uint64_t next_serial()
 
 }
 
-Samurai::Timer::Timer(Samurai::TimerListener* listener, time_t timeout_seconds, bool singleShot)
+Samurai::Timer::Timer(Samurai::EventLoop& loop, Samurai::TimerListener* listener, time_t timeout_seconds, bool singleShot)
 	: callback(listener)
 	, single_shot(singleShot)
 	, interval(std::chrono::seconds(timeout_seconds))
 	, due(clock::now() + std::chrono::seconds(timeout_seconds))
 	, serial(next_serial())
+	, manager(&loop.timers())
 {
-	if (Samurai::TimerManager::getInstance())
-		Samurai::TimerManager::getInstance()->add(this);
+	manager->add(this);
 }
 
 
-Samurai::Timer::Timer(Samurai::TimerListener* listener, std::chrono::milliseconds timeout, bool singleShot)
+Samurai::Timer::Timer(Samurai::EventLoop& loop, Samurai::TimerListener* listener, std::chrono::milliseconds timeout, bool singleShot)
 	: callback(listener)
 	, single_shot(singleShot)
 	, interval(timeout)
 	, due(clock::now() + timeout)
 	, serial(next_serial())
+	, manager(&loop.timers())
 {
-	if (Samurai::TimerManager::getInstance())
-		Samurai::TimerManager::getInstance()->add(this);
+	manager->add(this);
 }
 
 
 Samurai::Timer::~Timer()
 {
-	if (Samurai::TimerManager::getInstance())
-		Samurai::TimerManager::getInstance()->remove(this);
+	if (manager) manager->remove(this);
 }
 
 
@@ -59,8 +59,7 @@ void Samurai::Timer::reset()
 {
 	due = clock::now() + interval;
 
-	if (Samurai::TimerManager::getInstance())
-		Samurai::TimerManager::getInstance()->schedule(this);
+	if (manager) manager->schedule(this);
 }
 
 
@@ -72,14 +71,12 @@ void Samurai::Timer::internal_fire(clock::time_point now)
 	 */
 	if (single_shot)
 	{
-		if (Samurai::TimerManager::getInstance())
-			Samurai::TimerManager::getInstance()->remove(this);
+		if (manager) manager->remove(this);
 	}
 	else
 	{
 		due = now + interval;
-		if (Samurai::TimerManager::getInstance())
-			Samurai::TimerManager::getInstance()->schedule(this);
+		if (manager) manager->schedule(this);
 	}
 
 	if (callback) callback->EventTimeout(this);
@@ -93,6 +90,7 @@ Samurai::TimerManager::TimerManager()
 
 Samurai::TimerManager::~TimerManager()
 {
+	for (Timer* timer : live) timer->manager = nullptr;
 }
 
 
@@ -195,14 +193,4 @@ int Samurai::TimerManager::timeToNext() const
 	 * through it.
 	 */
 	return (int) std::chrono::ceil<std::chrono::milliseconds>(best - now).count();
-}
-
-
-Samurai::TimerManager* Samurai::TimerManager::getInstance()
-{
-	/* Function-local static: initialised once, thread-safely, and without the
-	   check-then-assign race the raw pointer version had - which also never
-	   freed the manager. */
-	static Samurai::TimerManager manager;
-	return &manager;
 }

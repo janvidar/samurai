@@ -63,7 +63,7 @@ class Notifier final : public SocketBase {
 		void notify();
 
 	protected:
-		explicit Notifier(std::function<void()> on_notified);
+		Notifier(Samurai::EventLoop& loop, std::function<void()> on_notified);
 
 		void initialize() override;
 		void handleMonitorEvent(SocketMonitor::Triggers trig) override;

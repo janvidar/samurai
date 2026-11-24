@@ -37,12 +37,13 @@ bool usable(const Samurai::IO::Net::ProxySettings& settings)
 
 /* static */
 std::unique_ptr<Samurai::IO::Net::DNS::Resolver>
-Samurai::IO::Net::DNS::SocksResolver::forward(Samurai::IO::Net::ResolveEventHandler* eh,
+Samurai::IO::Net::DNS::SocksResolver::forward(Samurai::EventLoop& loop,
+                                              Samurai::IO::Net::ResolveEventHandler* eh,
                                               const char* name)
 {
 	if (!name || !usable(Samurai::IO::Net::ProxySettings::getDefault())) return nullptr;
 
-	auto resolver = std::make_unique<SocksResolver>(eh);
+	auto resolver = std::make_unique<SocksResolver>(loop, eh);
 	resolver->lookup(name);
 	return resolver;
 }
@@ -50,19 +51,21 @@ Samurai::IO::Net::DNS::SocksResolver::forward(Samurai::IO::Net::ResolveEventHand
 
 /* static */
 std::unique_ptr<Samurai::IO::Net::DNS::Resolver>
-Samurai::IO::Net::DNS::SocksResolver::reverse(Samurai::IO::Net::ResolveEventHandler* eh,
+Samurai::IO::Net::DNS::SocksResolver::reverse(Samurai::EventLoop& loop,
+                                              Samurai::IO::Net::ResolveEventHandler* eh,
                                               const Samurai::IO::Net::InetAddress& address)
 {
 	if (!usable(Samurai::IO::Net::ProxySettings::getDefault())) return nullptr;
 
-	auto resolver = std::make_unique<SocksResolver>(eh);
+	auto resolver = std::make_unique<SocksResolver>(loop, eh);
 	resolver->lookupAddress(address);
 	return resolver;
 }
 
 
-Samurai::IO::Net::DNS::SocksResolver::SocksResolver(Samurai::IO::Net::ResolveEventHandler* eh)
+Samurai::IO::Net::DNS::SocksResolver::SocksResolver(Samurai::EventLoop& loop_, Samurai::IO::Net::ResolveEventHandler* eh)
 	: Samurai::IO::Net::DNS::Resolver(eh)
+	, loop(loop_)
 	, settings(Samurai::IO::Net::ProxySettings::getDefault())
 {
 }
@@ -129,7 +132,7 @@ void Samurai::IO::Net::DNS::SocksResolver::internal_start(
 	}
 
 	InetAddress proxy_host(settings.getHost());
-	socket = Socket::create(this, proxy_host, settings.getPort());
+	socket = Socket::create(loop, this, proxy_host, settings.getPort());
 
 	if (!socket)
 	{
@@ -144,7 +147,7 @@ void Samurai::IO::Net::DNS::SocksResolver::internal_start(
 	socket->setProxy(ProxySettings());
 	socket->setConnectTimeout(SOCKS_RESOLVE_TIMEOUT);
 
-	deadline = std::make_unique<Samurai::Timer>(this, SOCKS_RESOLVE_TIMEOUT, true);
+	deadline = std::make_unique<Samurai::Timer>(loop, this, SOCKS_RESOLVE_TIMEOUT, true);
 	socket->connect();
 }
 
@@ -152,7 +155,7 @@ void Samurai::IO::Net::DNS::SocksResolver::internal_start(
 void Samurai::IO::Net::DNS::SocksResolver::internal_fail_later(Samurai::IO::Net::DNS::Resolver::Error why)
 {
 	deferred_error = why;
-	deferred = std::make_unique<Samurai::Timer>(this, std::chrono::milliseconds(0), true);
+	deferred = std::make_unique<Samurai::Timer>(loop, this, std::chrono::milliseconds(0), true);
 }
 
 

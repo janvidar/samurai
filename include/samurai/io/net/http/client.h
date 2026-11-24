@@ -151,8 +151,9 @@ class Client final
 			std::optional<ProxySettings> proxy;
 		};
 
-		explicit Client(RequestEventHandler* eh);
-		Client(RequestEventHandler* eh, const Options& options);
+		/** Its socket and timer are made on 'loop'. */
+		Client(Samurai::EventLoop& loop, RequestEventHandler* eh);
+		Client(Samurai::EventLoop& loop, RequestEventHandler* eh, const Options& options);
 		~Client() override;
 
 		/* Owns a socket and a timer, and is registered as their handler, so a
@@ -225,6 +226,7 @@ class Client final
 		void internal_fail(Status why, const char* msg);
 		void internal_teardown();
 
+		Samurai::EventLoop& loop;
 		RequestEventHandler* eventHandler;
 		Options options;
 
@@ -276,18 +278,19 @@ class Client final
 };
 
 /**
- * Perform one request, driving the socket monitor until it completes.
+ * Perform one request on 'loop', driving its sockets and timers until it
+ * completes. Messages posted to the loop are left for its owner to deliver.
  *
  * MUST NOT be called from inside an event handler, nor from a thread already
- * running the event loop: it dispatches that loop's events re-entrantly, and a
+ * running that loop: it dispatches that loop's events re-entrantly, and a
  * handler running inside another handler can destroy the socket whose callback
  * is on the stack.
  */
-Status fetch(Method method, const URL& url, const Headers& extra,
+Status fetch(Samurai::EventLoop& loop, Method method, const URL& url, const Headers& extra,
              std::string_view body, Response& response,
              std::chrono::milliseconds timeout = std::chrono::seconds(10));
 
-Status get(const URL& url, Response& response,
+Status get(Samurai::EventLoop& loop, const URL& url, Response& response,
            std::chrono::milliseconds timeout = std::chrono::seconds(10));
 
 }

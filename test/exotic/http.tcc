@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <samurai/eventloop.h>
 #include "testkeys.h"
 
 #include <samurai/io/buffer.h>
@@ -20,6 +21,19 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+static std::unique_ptr<Samurai::EventLoop> loop;
+
+EXO_SETUP({
+	loop = std::make_unique<Samurai::EventLoop>();
+	return loop->isValid() ? 1 : 0;
+});
+
+EXO_TEARDOWN({
+	loop.reset();
+	return 1;
+});
+
 
 /*
  * Most of this drives ResponseParser directly, which needs no socket: it is
@@ -166,7 +180,7 @@ class CannedServer
 		explicit CannedServer(std::string canned) : reply(std::move(canned))
 		{
 			Samurai::IO::Net::InetSocketAddress any((uint16_t) 0);
-			server = Samurai::IO::Net::ServerSocket::create(this, any);
+			server = Samurai::IO::Net::ServerSocket::create(*loop, this, any);
 			if (!server || server->getFD() == -1) return;
 			if (!server->listen()) return;
 			port = server->getLocalPort();
@@ -303,7 +317,7 @@ class SequenceServer
 			: replies(std::move(canned))
 		{
 			Samurai::IO::Net::InetSocketAddress any((uint16_t) 0);
-			server = Samurai::IO::Net::ServerSocket::create(this, any);
+			server = Samurai::IO::Net::ServerSocket::create(*loop, this, any);
 			if (!server || server->getFD() == -1) return;
 			if (!server->listen()) return;
 			port = server->getLocalPort();
@@ -396,7 +410,7 @@ class TlsCannedServer
 			if (!tls_test_keys_claimed().ready) return;
 
 			Samurai::IO::Net::InetSocketAddress any((uint16_t) 0);
-			server = Samurai::IO::Net::ServerSocket::create(this, any);
+			server = Samurai::IO::Net::ServerSocket::create(*loop, this, any);
 			if (!server || server->getFD() == -1) return;
 			if (!server->listen()) return;
 			port = server->getLocalPort();
@@ -487,18 +501,13 @@ class ClientRecorder : public RequestEventHandler
 template<typename Fn>
 bool http_pump(Fn done, int timeout_ms = 5000)
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
-	Samurai::TimerManager* timers = Samurai::TimerManager::getInstance();
-
 	const auto deadline = std::chrono::steady_clock::now()
 		+ std::chrono::milliseconds(timeout_ms);
 
 	while (!done())
 	{
 		if (std::chrono::steady_clock::now() > deadline) return done();
-		monitor->wait(5);
-		/* Driven here too, so these pass whether or not wait() does it. */
-		timers->process();
+		loop->wait(5);
 	}
 	return true;
 }
@@ -954,7 +963,7 @@ EXO_TEST(http_tostring_names_every_status,
 EXO_TEST(http_client_rejects_a_bad_url,
 {
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 	client.get(URL("not a url"));
 
 	return events.done && !events.ok && events.status == Status::InvalidUrl;
@@ -964,7 +973,7 @@ EXO_TEST(http_client_rejects_a_bad_url,
 EXO_TEST(http_client_rejects_a_non_http_scheme,
 {
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 	client.get(URL("ftp://example.org/"));
 
 	return events.done && events.status == Status::InvalidUrl;
@@ -978,7 +987,7 @@ EXO_TEST(http_client_accepts_the_https_scheme,
 	 * trying to connect, which a rejected scheme never would.
 	 */
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 	client.get(URL("https://127.0.0.1:1/"));
 
 	http_pump([&] { return events.done; });
@@ -993,7 +1002,7 @@ EXO_TEST(http_client_fetches_over_tls,
 	ClientRecorder events;
 	Client::Options options;
 	options.allowUntrustedCertificate = true;
-	Client client(&events, options);
+	Client client(*loop, &events, options);
 	client.get(server.url("/over-tls"));
 
 	http_pump([&] { return events.done; });
@@ -1016,7 +1025,7 @@ EXO_TEST(http_client_refuses_an_unverifiable_certificate_by_default,
 	if (!server.ready()) return false;
 
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 	client.get(server.url("/over-tls"));
 
 	http_pump([&] { return events.done; });
@@ -1046,7 +1055,7 @@ EXO_TEST(http_client_accepts_a_verifiable_certificate,
 
 	ClientRecorder events;
 	/* Default options: allowUntrustedCertificate is false. */
-	Client client(&events);
+	Client client(*loop, &events);
 	client.get(server.url("/verified"));
 
 	http_pump([&] { return events.done; });
@@ -1067,7 +1076,7 @@ EXO_TEST(http_client_still_refuses_the_same_certificate_without_the_anchor,
 	Samurai::IO::Net::TlsFactory::clearTrustAnchors();
 
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 	client.get(server.url("/verified"));
 
 	http_pump([&] { return events.done; });
@@ -1091,7 +1100,7 @@ EXO_TEST(http_client_over_https_to_a_plain_server_times_out,
 	Client::Options options;
 	options.allowUntrustedCertificate = true;
 	options.timeout = std::chrono::milliseconds(300);
-	Client client(&events, options);
+	Client client(*loop, &events, options);
 	client.get(URL("https://127.0.0.1:" + std::to_string(server.getPort()) + "/"));
 
 	http_pump([&] { return events.done; });
@@ -1105,7 +1114,7 @@ EXO_TEST(http_client_fetches_from_a_local_server,
 	if (!server.ready()) return false;
 
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 	client.get(server.url("/rootDesc.xml"));
 
 	if (!http_pump([&] { return events.done; })) return false;
@@ -1121,7 +1130,7 @@ EXO_TEST(http_client_sends_the_request_target_and_a_host_header,
 	if (!server.ready()) return false;
 
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 	client.get(server.url("/upnp/rootDesc.xml?x=1"));
 
 	if (!http_pump([&] { return events.done; })) return false;
@@ -1140,7 +1149,7 @@ EXO_TEST(http_client_posts_a_body_with_a_content_length,
 	if (!server.ready()) return false;
 
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 	client.post(server.url("/ctl/IPConn"), "text/xml; charset=\"utf-8\"", "<envelope/>");
 
 	if (!http_pump([&] { return events.done; })) return false;
@@ -1164,7 +1173,7 @@ EXO_TEST(http_client_sends_an_extra_header_verbatim,
 	extra.set("SOAPAction", "\"urn:schemas-upnp-org:service:WANIPConnection:1#AddPortMapping\"");
 
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 	client.request(Method::Post, server.url("/ctl"), extra, "<x/>");
 
 	if (!http_pump([&] { return events.done; })) return false;
@@ -1180,7 +1189,7 @@ EXO_TEST(http_client_reads_a_close_delimited_body,
 	if (!server.ready()) return false;
 
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 	client.get(server.url("/x"));
 
 	if (!http_pump([&] { return events.done; })) return false;
@@ -1193,7 +1202,7 @@ EXO_TEST(http_client_reads_a_chunked_body,
 	if (!server.ready()) return false;
 
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 	client.get(server.url("/x"));
 
 	if (!http_pump([&] { return events.done; })) return false;
@@ -1207,7 +1216,7 @@ EXO_TEST(http_client_reports_a_five_hundred_as_a_response,
 	if (!server.ready()) return false;
 
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 	client.post(server.url("/ctl"), "text/xml", "<x/>");
 
 	if (!http_pump([&] { return events.done; })) return false;
@@ -1223,7 +1232,7 @@ EXO_TEST(http_client_reports_a_disconnect_before_the_response,
 	if (!server.ready()) return false;
 
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 	client.get(server.url("/x"));
 
 	if (!http_pump([&] { return events.done; })) return false;
@@ -1240,7 +1249,7 @@ EXO_TEST(http_client_times_out_against_a_server_that_never_replies,
 	options.timeout = std::chrono::milliseconds(300);
 
 	ClientRecorder events;
-	Client client(&events, options);
+	Client client(*loop, &events, options);
 	client.get(server.url("/x"));
 
 	if (!http_pump([&] { return events.done; })) return false;
@@ -1262,7 +1271,7 @@ EXO_TEST(http_client_reports_a_refused_connection,
 	options.timeout = std::chrono::milliseconds(1000);
 
 	ClientRecorder events;
-	Client client(&events, options);
+	Client client(*loop, &events, options);
 	client.get(URL("http://127.0.0.1:" + std::to_string(unused) + "/x"));
 
 	if (!http_pump([&] { return events.done; })) return false;
@@ -1278,7 +1287,7 @@ EXO_TEST(http_client_abort_delivers_no_event,
 	if (!server.ready()) return false;
 
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 	client.get(server.url("/x"));
 	client.abort();
 
@@ -1295,10 +1304,10 @@ EXO_TEST(http_client_destroyed_in_flight_is_safe,
 
 	ClientRecorder events;
 	{
-		Client client(&events);
+		Client client(*loop, &events);
 		client.get(server.url("/x"));
 		/* One pass, so the connect is under way but the answer has not come. */
-		SocketMonitor::getInstance()->wait(1);
+		loop->monitor().wait(1);
 	}
 
 	http_pump([&] { return false; }, 200);
@@ -1311,7 +1320,7 @@ EXO_TEST(http_client_can_be_reused_for_a_second_request,
 	if (!first.ready()) return false;
 
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 
 	client.get(first.url("/one"));
 	if (!http_pump([&] { return events.done; })) return false;
@@ -1337,7 +1346,7 @@ EXO_TEST(http_client_reports_the_local_address_while_connected,
 	if (!server.ready()) return false;
 
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 	client.get(server.url("/x"));
 
 	/* Waiting for the request to have gone out, which means connected. */
@@ -1354,7 +1363,7 @@ EXO_TEST(http_client_uses_one_connection_per_request,
 	if (!server.ready()) return false;
 
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 
 	for (int n = 0; n < 3; n++)
 	{
@@ -1373,7 +1382,7 @@ EXO_TEST(http_blocking_fetch_returns_the_body,
 	if (!server.ready()) return false;
 
 	Response response;
-	const Status status = get(server.url("/x"), response,
+	const Status status = get(*loop, server.url("/x"), response,
 	                          std::chrono::milliseconds(3000));
 
 	return status == Status::Ok
@@ -1388,7 +1397,7 @@ EXO_TEST(http_blocking_fetch_reports_a_timeout,
 	if (!server.ready()) return false;
 
 	Response response;
-	const Status status = get(server.url("/x"), response,
+	const Status status = get(*loop, server.url("/x"), response,
 	                          std::chrono::milliseconds(300));
 
 	return status == Status::RequestTimeout;
@@ -1406,7 +1415,7 @@ EXO_TEST(http_client_does_not_follow_a_redirect_by_default,
 	if (!server.ready()) return false;
 
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 	client.get(server.url("/start"));
 
 	http_pump([&] { return events.done; });
@@ -1426,7 +1435,7 @@ EXO_TEST(http_client_follows_a_redirect_when_allowed,
 	ClientRecorder events;
 	Client::Options options;
 	options.maxRedirects = 5;
-	Client client(&events, options);
+	Client client(*loop, &events, options);
 	client.get(server.url("/start"));
 
 	http_pump([&] { return events.done; });
@@ -1448,7 +1457,7 @@ EXO_TEST(http_client_resolves_a_relative_redirect,
 	ClientRecorder events;
 	Client::Options options;
 	options.maxRedirects = 5;
-	Client client(&events, options);
+	Client client(*loop, &events, options);
 	client.get(server.url("/a/b"));
 
 	http_pump([&] { return events.done; });
@@ -1469,7 +1478,7 @@ EXO_TEST(http_client_stops_after_the_redirect_limit,
 	ClientRecorder events;
 	Client::Options options;
 	options.maxRedirects = 3;
-	Client client(&events, options);
+	Client client(*loop, &events, options);
 	client.get(server.url("/start"));
 
 	http_pump([&] { return events.done; });
@@ -1489,7 +1498,7 @@ EXO_TEST(http_client_returns_a_redirect_with_no_location,
 	ClientRecorder events;
 	Client::Options options;
 	options.maxRedirects = 5;
-	Client client(&events, options);
+	Client client(*loop, &events, options);
 	client.get(server.url("/start"));
 
 	http_pump([&] { return events.done; });
@@ -1509,7 +1518,7 @@ EXO_TEST(http_client_turns_a_post_into_a_get_on_303,
 	ClientRecorder events;
 	Client::Options options;
 	options.maxRedirects = 5;
-	Client client(&events, options);
+	Client client(*loop, &events, options);
 	client.post(server.url("/submit"), "text/plain", "a body");
 
 	http_pump([&] { return events.done; });
@@ -1530,7 +1539,7 @@ EXO_TEST(http_client_keeps_the_method_on_307,
 	ClientRecorder events;
 	Client::Options options;
 	options.maxRedirects = 5;
-	Client client(&events, options);
+	Client client(*loop, &events, options);
 	client.post(server.url("/submit"), "text/plain", "a body");
 
 	http_pump([&] { return events.done; });
@@ -1558,7 +1567,7 @@ EXO_TEST(http_client_refuses_a_redirect_from_https_to_http,
 	Client::Options options;
 	options.maxRedirects = 5;
 	options.allowUntrustedCertificate = true;
-	Client client(&events, options);
+	Client client(*loop, &events, options);
 	client.get(secure.url("/start"));
 
 	http_pump([&] { return events.done; });
@@ -1593,7 +1602,7 @@ EXO_TEST(http_client_honours_a_lowered_body_limit,
 	ClientRecorder events;
 	Client::Options options;
 	options.limits.maxBody = 4;
-	Client client(&events, options);
+	Client client(*loop, &events, options);
 	client.get(server.url("/"));
 
 	http_pump([&] { return events.done; });
@@ -1616,7 +1625,7 @@ EXO_TEST(http_client_honours_a_raised_body_limit,
 	ClientRecorder events;
 	Client::Options options;
 	options.limits.maxBody = 4 * 1024 * 1024;
-	Client client(&events, options);
+	Client client(*loop, &events, options);
 	client.get(server.url("/"));
 
 	http_pump([&] { return events.done; }, 15000);
@@ -1631,7 +1640,7 @@ EXO_TEST(http_client_uses_the_limits_in_force_at_request_time,
 	if (!server.ready()) return false;
 
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 	client.get(server.url("/"));
 	http_pump([&] { return events.done; });
 	if (!events.ok) return false;
@@ -1663,7 +1672,7 @@ bool haveSecondLoopbackAddress()
 {
 	Samurai::IO::Net::InetSocketAddress local(
 		Samurai::IO::Net::InetAddress("127.0.0.2"), (uint16_t) 0);
-	auto probe = Samurai::IO::Net::ServerSocket::create(nullptr, local);
+	auto probe = Samurai::IO::Net::ServerSocket::create(*loop, nullptr, local);
 	if (!probe) return false;
 
 	/* create() only got as far as a descriptor, and a descriptor is had for
@@ -1685,7 +1694,7 @@ EXO_TEST(http_client_binds_the_source_address_it_was_given,
 	options.localAddress = Samurai::IO::Net::InetAddress("127.0.0.2");
 
 	ClientRecorder events;
-	Client client(&events, options);
+	Client client(*loop, &events, options);
 	client.get(server.url("/"));
 
 	http_pump([&] { return events.done; });
@@ -1706,7 +1715,7 @@ EXO_TEST(http_client_without_the_option_is_unchanged,
 	if (!server.ready()) return false;
 
 	ClientRecorder events;
-	Client client(&events);
+	Client client(*loop, &events);
 	client.get(server.url("/"));
 
 	http_pump([&] { return events.done; });
@@ -1729,7 +1738,7 @@ EXO_TEST(http_client_fails_when_the_source_family_does_not_match,
 	options.localAddress = Samurai::IO::Net::InetAddress("::1");
 
 	ClientRecorder events;
-	Client client(&events, options);
+	Client client(*loop, &events, options);
 	client.get(server.url("/"));
 
 	http_pump([&] { return events.done; });
@@ -1746,7 +1755,7 @@ EXO_TEST(http_client_fails_when_the_source_address_is_not_local,
 	options.localAddress = Samurai::IO::Net::InetAddress("203.0.113.7");
 
 	ClientRecorder events;
-	Client client(&events, options);
+	Client client(*loop, &events, options);
 	client.get(server.url("/"));
 
 	http_pump([&] { return events.done; });

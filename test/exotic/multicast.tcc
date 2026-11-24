@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <samurai/eventloop.h>
 #include <samurai/io/net/multicast.h>
 #include <samurai/io/net/datagram.h>
 #include <samurai/io/net/inetaddress.h>
@@ -13,6 +14,19 @@
 #include <memory>
 #include <string>
 #include <vector>
+
+static std::unique_ptr<Samurai::EventLoop> loop;
+
+EXO_SETUP({
+	loop = std::make_unique<Samurai::EventLoop>();
+	return loop->isValid() ? 1 : 0;
+});
+
+EXO_TEARDOWN({
+	loop.reset();
+	return 1;
+});
+
 
 /*
  * MulticastSocket had no coverage at all. What is asserted here is the
@@ -30,7 +44,7 @@ using McastSocket = Samurai::IO::Net::MulticastSocket;
 
 static std::shared_ptr<McastSocket> make_multicast_socket()
 {
-	return McastSocket::create((Samurai::IO::Net::DatagramEventHandler*) nullptr,
+	return McastSocket::create(*loop, (Samurai::IO::Net::DatagramEventHandler*) nullptr,
 	                           (uint16_t) 0);
 }
 
@@ -367,7 +381,7 @@ namespace {
 
 static std::shared_ptr<McastSocket> make_ipv6_socket()
 {
-	return McastSocket::create((Samurai::IO::Net::DatagramEventHandler*) nullptr,
+	return McastSocket::create(*loop, (Samurai::IO::Net::DatagramEventHandler*) nullptr,
 	                           Samurai::IO::Net::InetAddress("::"), (uint16_t) 0);
 }
 
@@ -486,7 +500,7 @@ EXO_TEST(multicast_send_and_receive_over_loopback,
 
 	Recorder events;
 	std::shared_ptr<McastSocket> receiver =
-		McastSocket::create(&events, (uint16_t) 0);
+		McastSocket::create(*loop, &events, (uint16_t) 0);
 	if (!receiver || !receiver->listen()) return true;
 
 	const uint16_t port = receiver->getLocalPort();
@@ -506,9 +520,7 @@ EXO_TEST(multicast_send_and_receive_over_loopback,
 
 	if (sender->send(&packet) <= 0) return true;
 
-	Samurai::IO::Net::SocketMonitor* monitor =
-		Samurai::IO::Net::SocketMonitor::getInstance();
-	for (int n = 0; n < 200 && !events.got; n++) monitor->wait(5);
+	for (int n = 0; n < 200 && !events.got; n++) loop->wait(5);
 
 	/* A host with no multicast route delivers nothing, which is not a defect. */
 	if (!events.got) return true;

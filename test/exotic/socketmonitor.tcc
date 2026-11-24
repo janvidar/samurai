@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <samurai/eventloop.h>
 #include <samurai/io/net/socketmonitor.h>
 #include <samurai/io/net/socketbase.h>
 #include <samurai/io/net/socketaddress.h>
@@ -23,12 +24,24 @@
  * ever executing. select's stale-descriptor recovery in particular is the most
  * delicate logic in the group and had never been run.
  *
- * A backend is constructed directly here rather than through getInstance().
+ * A backend is constructed directly here rather than through an EventLoop.
  * add(), remove(), modify() and wait() are public and the registry is
- * per-instance, so a backend can be driven completely without touching the
- * singleton - which matters because sockets.tcc is one long stateful scenario
- * over it.
+ * per-instance, so a backend can be driven completely on its own.
  */
+
+/* What every SocketBase is made on. The probes are never registered with its
+   monitor, only with the backend each case builds. */
+static std::unique_ptr<Samurai::EventLoop> loop;
+
+EXO_SETUP({
+	loop = std::make_unique<Samurai::EventLoop>();
+	return loop->isValid() ? 1 : 0;
+});
+
+EXO_TEARDOWN({
+	loop.reset();
+	return 1;
+});
 
 using Triggers = Samurai::IO::Net::SocketMonitor::Triggers;
 
@@ -58,12 +71,12 @@ class ProbeSocket final : public Samurai::IO::Net::SocketBase
 		}
 
 		/* monitor_trigger is protected, and setMonitor() would route through
-		   the singleton, which is not the monitor under test. */
+		   the loop's monitor, which is not the one under test. */
 		void setTrigger(Triggers trig) { monitor_trigger = trig; }
 
 	private:
 		ProbeSocket(socket_t fd, const Samurai::IO::Net::SocketAddress& addr)
-			: Samurai::IO::Net::SocketBase(fd, addr) { }
+			: Samurai::IO::Net::SocketBase(*::loop, fd, addr) { }
 };
 
 /*

@@ -4,6 +4,7 @@
  */
 
 #include <samurai/samurai.h>
+#include <samurai/eventloop.h>
 #include <samurai/io/net/http/client.h>
 #include <samurai/io/net/inetaddress.h>
 #include <samurai/io/net/socketmonitor.h>
@@ -52,14 +53,14 @@ std::string host_header(const Samurai::IO::Net::URL& url)
 }
 
 
-Samurai::IO::Net::HTTP::Client::Client(RequestEventHandler* eh)
-	: eventHandler(eh)
+Samurai::IO::Net::HTTP::Client::Client(Samurai::EventLoop& loop_, RequestEventHandler* eh)
+	: loop(loop_), eventHandler(eh)
 {
 }
 
 
-Samurai::IO::Net::HTTP::Client::Client(RequestEventHandler* eh, const Options& opts)
-	: eventHandler(eh), options(opts)
+Samurai::IO::Net::HTTP::Client::Client(Samurai::EventLoop& loop_, RequestEventHandler* eh, const Options& opts)
+	: loop(loop_), eventHandler(eh), options(opts)
 {
 }
 
@@ -214,7 +215,7 @@ void Samurai::IO::Net::HTTP::Client::internal_start()
 	outgoing.append(head);
 	if (has_body) outgoing.append(body.data(), body.size());
 
-	socket = Socket::create(this, url.getHostname(), url.getEffectivePort());
+	socket = Socket::create(loop, this, url.getHostname(), url.getEffectivePort());
 	if (!socket)
 	{
 		internal_fail(Status::ConnectFailed, "could not create a socket");
@@ -239,7 +240,7 @@ void Samurai::IO::Net::HTTP::Client::internal_start()
 	   waited in. The socket's own connect timeout is set alongside so a stalled
 	   connect does not have to wait out the longer one. */
 	socket->setConnectTimeout(options.timeout);
-	deadline = std::make_unique<Samurai::Timer>(this, options.timeout, true);
+	deadline = std::make_unique<Samurai::Timer>(loop, this, options.timeout, true);
 
 	socket->connect();
 }
@@ -569,8 +570,8 @@ class BlockingHandler : public Samurai::IO::Net::HTTP::RequestEventHandler
 
 
 Samurai::IO::Net::HTTP::Status
-Samurai::IO::Net::HTTP::fetch(Method method, const URL& url, const Headers& extra,
-                              std::string_view body, Response& response,
+Samurai::IO::Net::HTTP::fetch(Samurai::EventLoop& loop, Method method, const URL& url,
+                              const Headers& extra, std::string_view body, Response& response,
                               std::chrono::milliseconds timeout)
 {
 	BlockingHandler handler;
@@ -578,27 +579,18 @@ Samurai::IO::Net::HTTP::fetch(Method method, const URL& url, const Headers& extr
 	Client::Options options;
 	options.timeout = timeout;
 
-	Client client(&handler, options);
+	Client client(loop, &handler, options);
 	client.request(method, url, extra, body);
-
-	Samurai::IO::Net::SocketMonitor* monitor =
-		Samurai::IO::Net::SocketMonitor::getInstance();
-	Samurai::TimerManager* timers = Samurai::TimerManager::getInstance();
 
 	const Samurai::Timer::clock::time_point limit =
 		Samurai::Timer::clock::now() + timeout + std::chrono::milliseconds(500);
 
-	/*
-	 * TimerManager is driven here as well as by wait(), which is what makes this
-	 * work whether or not the caller's loop would have. The slice is capped so
-	 * the outer bound is honoured even with no timer armed.
-	 */
+	/* The slice is capped so the outer bound is honoured even with no timer armed. */
 	while (!handler.done && Samurai::Timer::clock::now() < limit)
 	{
-		const int next = timers->timeToNext();
+		const int next = loop.timers().timeToNext();
 		const int slice = (next < 0 || next > 50) ? 50 : next;
-		monitor->wait(slice);
-		timers->process();
+		loop.monitor().wait(slice);
 	}
 
 	if (!handler.done)
@@ -613,9 +605,9 @@ Samurai::IO::Net::HTTP::fetch(Method method, const URL& url, const Headers& extr
 
 
 Samurai::IO::Net::HTTP::Status
-Samurai::IO::Net::HTTP::get(const URL& url, Response& response,
+Samurai::IO::Net::HTTP::get(Samurai::EventLoop& loop, const URL& url, Response& response,
                             std::chrono::milliseconds timeout)
 {
 	const Headers none;
-	return fetch(Method::Get, url, none, std::string_view(), response, timeout);
+	return fetch(loop, Method::Get, url, none, std::string_view(), response, timeout);
 }

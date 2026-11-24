@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <samurai/eventloop.h>
 #include <samurai/io/net/notifier.h>
 #include <samurai/io/net/socketmonitor.h>
 
@@ -10,6 +11,19 @@
 #include <chrono>
 #include <memory>
 #include <thread>
+
+static std::unique_ptr<Samurai::EventLoop> loop;
+
+EXO_SETUP({
+	loop = std::make_unique<Samurai::EventLoop>();
+	return loop->isValid() ? 1 : 0;
+});
+
+EXO_TEARDOWN({
+	loop.reset();
+	return 1;
+});
+
 
 /*
  * The notifier is how a thread that is not the loop gets the loop's attention.
@@ -27,11 +41,10 @@ using Samurai::IO::Net::Notifier;
 template<typename Predicate>
 size_t pump_until(Predicate done, size_t max_passes = 200, int ms = 5)
 {
-	Samurai::IO::Net::SocketMonitor* monitor = Samurai::IO::Net::SocketMonitor::getInstance();
 	size_t passes = 0;
 	while (passes < max_passes && !done())
 	{
-		monitor->wait(ms);
+		loop->wait(ms);
 		passes++;
 	}
 	return passes;
@@ -40,10 +53,10 @@ size_t pump_until(Predicate done, size_t max_passes = 200, int ms = 5)
 }
 
 EXO_TEST(notifier_constructs_and_registers, {
-	Samurai::IO::Net::SocketMonitor* monitor = Samurai::IO::Net::SocketMonitor::getInstance();
+	Samurai::IO::Net::SocketMonitor* monitor = &loop->monitor();
 	const size_t before = monitor->size();
 
-	std::shared_ptr<Notifier> notifier = Notifier::create(std::function<void()>());
+	std::shared_ptr<Notifier> notifier = Notifier::create(*loop, std::function<void()>());
 	if (!notifier) return false;
 
 	const bool registered = monitor->size() == before + 1
@@ -59,7 +72,7 @@ EXO_TEST(notifier_runs_its_callback_on_the_loop_thread, {
 	std::atomic<bool> fired{false};
 	std::thread::id ran_on;
 
-	std::shared_ptr<Notifier> notifier = Notifier::create(
+	std::shared_ptr<Notifier> notifier = Notifier::create(*loop, 
 		std::function<void()>([&]() {
 			ran_on = std::this_thread::get_id();
 			fired = true;
@@ -83,14 +96,14 @@ EXO_TEST(notifier_runs_its_callback_on_the_loop_thread, {
 EXO_TEST(notifier_wakes_a_wait_that_would_otherwise_block, {
 	std::atomic<bool> fired{false};
 
-	std::shared_ptr<Notifier> notifier = Notifier::create(
+	std::shared_ptr<Notifier> notifier = Notifier::create(*loop, 
 		std::function<void()>([&]() { fired = true; }));
 	if (!notifier) return false;
 
 	notifier->notify();
 
 	const auto start = std::chrono::steady_clock::now();
-	Samurai::IO::Net::SocketMonitor::getInstance()->wait(1000);
+	loop->monitor().wait(1000);
 	const auto elapsed = std::chrono::steady_clock::now() - start;
 
 	const bool prompt =
@@ -110,7 +123,7 @@ EXO_TEST(notifier_wakes_a_wait_that_would_otherwise_block, {
 EXO_TEST(notifier_coalesces_a_burst_into_fewer_callbacks, {
 	std::atomic<size_t> callbacks{0};
 
-	std::shared_ptr<Notifier> notifier = Notifier::create(
+	std::shared_ptr<Notifier> notifier = Notifier::create(*loop, 
 		std::function<void()>([&]() { callbacks++; }));
 	if (!notifier) return false;
 
@@ -132,7 +145,7 @@ EXO_TEST(notifier_coalesces_a_burst_into_fewer_callbacks, {
 EXO_TEST(notifier_accepts_concurrent_wakers, {
 	std::atomic<size_t> callbacks{0};
 
-	std::shared_ptr<Notifier> notifier = Notifier::create(
+	std::shared_ptr<Notifier> notifier = Notifier::create(*loop, 
 		std::function<void()>([&]() { callbacks++; }));
 	if (!notifier) return false;
 
@@ -155,7 +168,7 @@ EXO_TEST(notifier_accepts_concurrent_wakers, {
 EXO_TEST(notifier_stays_quiet_without_a_notification, {
 	std::atomic<size_t> callbacks{0};
 
-	std::shared_ptr<Notifier> notifier = Notifier::create(
+	std::shared_ptr<Notifier> notifier = Notifier::create(*loop, 
 		std::function<void()>([&]() { callbacks++; }));
 	if (!notifier) return false;
 

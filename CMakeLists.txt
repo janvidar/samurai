@@ -151,6 +151,7 @@ endif()
 
 set(SAMURAI_SOURCES
     src/os.cpp
+    src/eventloop.cpp
     src/messagehandler.cpp
     src/stdc.cpp
     src/timer.cpp

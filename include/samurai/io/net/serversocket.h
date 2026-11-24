@@ -47,17 +47,17 @@ class ServerSocket final : public SocketBase {
 		/**
 		 * Set up a socket and bind to the specified address.
 		 */
-		ServerSocket(Samurai::IO::Net::ServerSocketEventHandler* eh, const Samurai::IO::Net::SocketAddress& addr);
+		ServerSocket(Samurai::EventLoop& loop, Samurai::IO::Net::ServerSocketEventHandler* eh, const Samurai::IO::Net::SocketAddress& addr);
 		
 		/**
 		 * Set up a socket and bind to the specified port (on any IP).
 		 */
-		ServerSocket(Samurai::IO::Net::ServerSocketEventHandler* eh, uint16_t port);
+		ServerSocket(Samurai::EventLoop& loop, Samurai::IO::Net::ServerSocketEventHandler* eh, uint16_t port);
 		
 		/**
 		 * Set up a socket and bind to the specified address and port.
 		 */
-		ServerSocket(Samurai::IO::Net::ServerSocketEventHandler* eh, const Samurai::IO::Net::InetAddress& addr, uint16_t port);
+		ServerSocket(Samurai::EventLoop& loop, Samurai::IO::Net::ServerSocketEventHandler* eh, const Samurai::IO::Net::InetAddress& addr, uint16_t port);
 		
 	public:
 		~ServerSocket() override;
@@ -66,7 +66,6 @@ class ServerSocket final : public SocketBase {
 		bool listen(size_t backlog, std::error_code& ec);
 
 	protected:
-		ServerSocket();
 		void handleMonitorEvent(SocketMonitor::Triggers trig) override;
 		void internal_create();
 		void internal_accept();

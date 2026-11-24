@@ -17,15 +17,21 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 namespace Samurai {
+
+class EventLoop;
+
 namespace IO {
 namespace Net {
 
 class Notifier;
 
 namespace DNS {
+
+class PooledResolver;
 
 /**
  * Runs name lookups on worker threads and reports them on the loop thread.
@@ -72,9 +78,10 @@ class ResolverPool {
 			bool dead = false;
 		};
 
-		static ResolverPool* getInstance();
+		/** Reports on 'loop', which owns it; see EventLoop::resolver(). */
+		explicit ResolverPool(Samurai::EventLoop& loop);
 
-		ResolverPool();
+		/* Detaches every resolver still made on it, so a later ~PooledResolver finds nothing to do. */
 		~ResolverPool();
 
 		ResolverPool(const ResolverPool&) = delete;
@@ -109,6 +116,12 @@ class ResolverPool {
 		void drain();
 		void startOnce();
 
+		Samurai::EventLoop& loop;
+
+		/* Loop thread only. */
+		std::unordered_set<PooledResolver*> resolvers;
+		friend class PooledResolver;
+
 		mutable std::mutex m;
 		std::condition_variable cv_work;
 		std::condition_variable cv_sched;
@@ -134,7 +147,7 @@ class ResolverPool {
  */
 class PooledResolver final : public Resolver {
 	public:
-		explicit PooledResolver(Samurai::IO::Net::ResolveEventHandler* eventHandler);
+		PooledResolver(Samurai::EventLoop& loop, Samurai::IO::Net::ResolveEventHandler* eventHandler);
 		~PooledResolver() override;
 
 		void lookup(const char* name) override;
@@ -143,7 +156,11 @@ class PooledResolver final : public Resolver {
 		void lookupAddress(const Samurai::IO::Net::InetAddress& address);
 
 	private:
+		/* Null once the pool has gone before this resolver did. */
+		ResolverPool* pool;
 		std::shared_ptr<ResolverPool::Request> request;
+
+		friend class ResolverPool;
 };
 
 }

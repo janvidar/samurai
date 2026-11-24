@@ -6,28 +6,17 @@
 #include <algorithm>
 #include <samurai/samurai.h>
 #include <samurai/messagehandler.h>
+#include <samurai/eventloop.h>
 #include <memory>
-
-/*
- * A function-local static is initialised once, and without the check-then-assign
- * race the raw pointer version had.
- */
-Samurai::MessageHandler* Samurai::MessageHandler::getInstance()
-{
-	static Samurai::MessageHandler handler;
-	return &handler;
-}
-
-void Samurai::postMessage(size_t id, void* data, size_t arg1, size_t arg2)
-{
-	Samurai::MessageHandler::getInstance()->postMessage(id, data, arg1, arg2);
-}
 
 Samurai::MessageHandler::MessageHandler() {
 	busy = false;
 }
 
-Samurai::MessageHandler::~MessageHandler() = default;
+Samurai::MessageHandler::~MessageHandler()
+{
+	for (MessageListener* one : listener) one->handler = nullptr;
+}
 	
 void Samurai::MessageHandler::postMessage(size_t id, void* data, size_t arg1, size_t arg2)
 {
@@ -76,14 +65,15 @@ void Samurai::MessageHandler::removeMessageListener(Samurai::MessageListener* ha
 		listener.erase(it);
 }
 
-Samurai::MessageListener::MessageListener()
+Samurai::MessageListener::MessageListener(Samurai::EventLoop& loop)
+	: handler(&loop.messages())
 {
-	Samurai::MessageHandler::getInstance()->addMessageListener(this);
+	handler->addMessageListener(this);
 }
 
 Samurai::MessageListener::~MessageListener()
 {
-	Samurai::MessageHandler::getInstance()->removeMessageListener(this);
+	if (handler) handler->removeMessageListener(this);
 }
 
 

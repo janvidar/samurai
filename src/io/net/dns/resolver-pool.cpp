@@ -4,6 +4,7 @@
  */
 
 #include <samurai/samurai.h>
+#include <samurai/eventloop.h>
 #include <samurai/io/net/socketglue.h>
 #include <samurai/io/net/dns/resolver-pool.h>
 #include <samurai/io/net/notifier.h>
@@ -149,8 +150,9 @@ struct ResolverPool::Worker {
 }
 }
 
-Samurai::IO::Net::DNS::ResolverPool::ResolverPool()
-	: idle_timeout(std::chrono::seconds(2))
+Samurai::IO::Net::DNS::ResolverPool::ResolverPool(Samurai::EventLoop& loop_)
+	: loop(loop_)
+	, idle_timeout(std::chrono::seconds(2))
 	, max_workers(4)
 	, busy_workers(0)
 	, sched_wakeup(false)
@@ -161,6 +163,9 @@ Samurai::IO::Net::DNS::ResolverPool::ResolverPool()
 
 Samurai::IO::Net::DNS::ResolverPool::~ResolverPool()
 {
+	for (PooledResolver* resolver : resolvers) resolver->pool = nullptr;
+	resolvers.clear();
+
 	{
 		std::lock_guard<std::mutex> lock(m);
 		stopping = true;
@@ -180,18 +185,11 @@ Samurai::IO::Net::DNS::ResolverPool::~ResolverPool()
 	notifier.reset();
 }
 
-/* static */
-Samurai::IO::Net::DNS::ResolverPool* Samurai::IO::Net::DNS::ResolverPool::getInstance()
-{
-	static Samurai::IO::Net::DNS::ResolverPool pool;
-	return &pool;
-}
-
 void Samurai::IO::Net::DNS::ResolverPool::startOnce()
 {
 	if (started) return;
 
-	notifier = Samurai::IO::Net::Notifier::create(
+	notifier = Samurai::IO::Net::Notifier::create(loop,
 		std::function<void()>([this]() { drain(); }));
 
 	if (!notifier)
@@ -397,15 +395,18 @@ void Samurai::IO::Net::DNS::ResolverPool::drain()
 	}
 }
 
-Samurai::IO::Net::DNS::PooledResolver::PooledResolver(Samurai::IO::Net::ResolveEventHandler* eh)
+Samurai::IO::Net::DNS::PooledResolver::PooledResolver(Samurai::EventLoop& loop, Samurai::IO::Net::ResolveEventHandler* eh)
 	: Samurai::IO::Net::DNS::Resolver(eh)
+	, pool(&loop.resolver())
 {
+	pool->resolvers.insert(this);
 }
 
 Samurai::IO::Net::DNS::PooledResolver::~PooledResolver()
 {
-	if (request)
-		ResolverPool::getInstance()->cancel(request);
+	if (!pool) return;
+	if (request) pool->cancel(request);
+	pool->resolvers.erase(this);
 }
 
 void Samurai::IO::Net::DNS::PooledResolver::lookup(const char* name)
@@ -423,7 +424,8 @@ void Samurai::IO::Net::DNS::PooledResolver::lookup(const char* name)
 	request->query = name;
 	request->handler = eventHandler;
 
-	ResolverPool::getInstance()->submit(request);
+	if (pool) pool->submit(request);
+	else eventHandler->EventHostError(Error::ServerError);
 }
 
 void Samurai::IO::Net::DNS::PooledResolver::lookupAddress(const Samurai::IO::Net::InetAddress& address)
@@ -441,5 +443,6 @@ void Samurai::IO::Net::DNS::PooledResolver::lookupAddress(const Samurai::IO::Net
 	request->address = address;
 	request->handler = eventHandler;
 
-	ResolverPool::getInstance()->submit(request);
+	if (pool) pool->submit(request);
+	else eventHandler->EventHostError(Error::ServerError);
 }

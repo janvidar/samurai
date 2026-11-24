@@ -16,6 +16,8 @@
 namespace Samurai {
 
 	class Timer;
+	class TimerManager;
+	class EventLoop;
 
 class TimerListener {
 	public:
@@ -39,10 +41,10 @@ class Timer {
 		typedef std::chrono::steady_clock clock;
 
 		/** Second granularity, kept for source compatibility. */
-		Timer(TimerListener* listener, time_t timeout_seconds, bool single_shot);
+		Timer(EventLoop& loop, TimerListener* listener, time_t timeout_seconds, bool single_shot);
 
 		/** Sub-second granularity. */
-		Timer(TimerListener* listener, std::chrono::milliseconds timeout, bool single_shot);
+		Timer(EventLoop& loop, TimerListener* listener, std::chrono::milliseconds timeout, bool single_shot);
 
 		~Timer();
 
@@ -75,6 +77,9 @@ class Timer {
 		 */
 		uint64_t serial;
 
+		/* Null once the manager has gone before this timer did. */
+		TimerManager* manager;
+
 		friend class TimerManager;
 };
 
@@ -86,9 +91,12 @@ class Timer {
 class TimerManager {
 	public:
 		TimerManager();
+
+		/* Detaches every timer still registered, so a later ~Timer finds nothing to do. */
 		~TimerManager();
 
-		static TimerManager* getInstance();
+		TimerManager(const TimerManager&) = delete;
+		TimerManager& operator=(const TimerManager&) = delete;
 
 	public:
 		/** Fire every timer whose deadline has passed. */

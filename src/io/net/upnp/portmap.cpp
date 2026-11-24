@@ -4,29 +4,36 @@
  */
 
 #include <samurai/samurai.h>
+#include <samurai/eventloop.h>
 #include <samurai/io/net/socketmonitor.h>
 #include <samurai/io/net/upnp/gateway.h>
 #include <samurai/io/net/upnp/portmap.h>
 #include <samurai/timer.h>
 
+#include <mutex>
+
 namespace {
 
 /*
- * The cached gateway, kept as facts rather than as a live object: a singleton
- * holding a Gateway would own sockets that outlive the socket monitor at process
- * exit, and the order that happens in is not something this can control.
+ * The cached gateway, kept as facts rather than as a live object: a Gateway is
+ * bound to the loop it was made on and owns sockets on it, so a cached one would
+ * outlive that loop or be handed to a call driving another. Facts can be
+ * attached to whichever loop the next call is given.
  */
 Samurai::IO::Net::UPnP::GatewayInfo cached_gateway;
 
 /** Set by setBlockingGateway(), used instead of searching. */
 Samurai::IO::Net::URL configured_location("");
 
+/* Loops on different threads may each make a blocking call. */
+std::mutex cache_mutex;
+
 /*
  * Refuses a nested call rather than letting it recurse. This catches the common
  * accident - calling a blocking helper from inside a handler of this same
  * subsystem. A loop belonging to something else cannot be detected at all.
  */
-bool inside_blocking_call = false;
+thread_local bool inside_blocking_call = false;
 
 class Guard
 {
@@ -99,25 +106,20 @@ class Blocking
 };
 
 /**
- * Run the loop until 'done' or the deadline.
+ * Run the loop's sockets and timers until 'done' or the deadline.
  *
- * TimerManager is driven here as well as inside wait(), so this works whether or
- * not anything else would have. The slice is capped so the outer deadline is
- * honoured even when no timer is armed.
+ * The slice is capped so the outer deadline is honoured even when no timer is
+ * armed.
  */
 template<typename Predicate>
-void pump_until(Predicate done, Samurai::Timer::clock::time_point deadline)
+void pump_until(Samurai::EventLoop& loop, Predicate done,
+                Samurai::Timer::clock::time_point deadline)
 {
-	Samurai::IO::Net::SocketMonitor* monitor =
-		Samurai::IO::Net::SocketMonitor::getInstance();
-	Samurai::TimerManager* timers = Samurai::TimerManager::getInstance();
-
 	while (!done() && Samurai::Timer::clock::now() < deadline)
 	{
-		const int next = timers->timeToNext();
+		const int next = loop.timers().timeToNext();
 		const int slice = (next < 0 || next > 50) ? 50 : next;
-		monitor->wait(slice);
-		timers->process();
+		loop.monitor().wait(slice);
 	}
 }
 
@@ -127,18 +129,27 @@ void pump_until(Predicate done, Samurai::Timer::clock::time_point deadline)
  * @return null when none could be reached, with 'state' saying why.
  */
 std::unique_ptr<Samurai::IO::Net::UPnP::Gateway>
-reach_gateway(Blocking& state, Samurai::Timer::clock::time_point deadline)
+reach_gateway(Samurai::EventLoop& loop, Blocking& state,
+              Samurai::Timer::clock::time_point deadline)
 {
 	using namespace Samurai::IO::Net::UPnP;
 
+	GatewayInfo cached;
+	Samurai::IO::Net::URL location("");
+	{
+		const std::lock_guard<std::mutex> lock(cache_mutex);
+		cached = cached_gateway;
+		location = configured_location;
+	}
+
 	std::unique_ptr<Gateway> gateway;
 
-	if (cached_gateway.isValid() && !cached_gateway.hasExpired())
-		gateway = Gateway::attach(&state, cached_gateway);
-	else if (configured_location.isValid())
-		gateway = Gateway::describe(&state, configured_location);
+	if (cached.isValid() && !cached.hasExpired())
+		gateway = Gateway::attach(loop, &state, cached);
+	else if (location.isValid())
+		gateway = Gateway::describe(loop, &state, location);
 	else
-		gateway = Gateway::discover(&state);
+		gateway = Gateway::discover(loop, &state);
 
 	if (!gateway)
 	{
@@ -146,17 +157,19 @@ reach_gateway(Blocking& state, Samurai::Timer::clock::time_point deadline)
 		return nullptr;
 	}
 
-	pump_until([&state] { return state.ready || state.done; }, deadline);
+	pump_until(loop, [&state] { return state.ready || state.done; }, deadline);
 
 	if (!state.ready)
 	{
 		/* A stale cache is the likely cause of a failure that arrived at once,
 		   so it is dropped rather than left to fail the next call too. */
+		const std::lock_guard<std::mutex> lock(cache_mutex);
 		cached_gateway = GatewayInfo();
 		if (state.result.error == Error::None) state.result.error = Error::NoGateway;
 		return nullptr;
 	}
 
+	const std::lock_guard<std::mutex> lock(cache_mutex);
 	cached_gateway = gateway->info();
 	return gateway;
 }
@@ -166,6 +179,7 @@ reach_gateway(Blocking& state, Samurai::Timer::clock::time_point deadline)
 
 void Samurai::IO::Net::UPnP::setBlockingGateway(const URL& location)
 {
+	const std::lock_guard<std::mutex> lock(cache_mutex);
 	configured_location = location;
 	cached_gateway = GatewayInfo();
 }
@@ -173,13 +187,14 @@ void Samurai::IO::Net::UPnP::setBlockingGateway(const URL& location)
 
 void Samurai::IO::Net::UPnP::resetBlockingCache()
 {
+	const std::lock_guard<std::mutex> lock(cache_mutex);
 	cached_gateway = GatewayInfo();
 }
 
 
 Samurai::IO::Net::UPnP::MapResult
-Samurai::IO::Net::UPnP::mapPortBlocking(Protocol protocol, uint16_t internalPort,
-                                        uint16_t externalPort,
+Samurai::IO::Net::UPnP::mapPortBlocking(Samurai::EventLoop& loop, Protocol protocol,
+                                        uint16_t internalPort, uint16_t externalPort,
                                         std::string_view description,
                                         std::chrono::seconds lease,
                                         std::chrono::milliseconds timeout)
@@ -192,10 +207,10 @@ Samurai::IO::Net::UPnP::mapPortBlocking(Protocol protocol, uint16_t internalPort
 		Samurai::Timer::clock::now() + timeout;
 
 	Blocking state;
-	std::unique_ptr<Gateway> gateway = reach_gateway(state, deadline);
+	std::unique_ptr<Gateway> gateway = reach_gateway(loop, state, deadline);
 	if (!gateway) return state.result;
 
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(&state, gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(loop, &state, gateway.get());
 	if (!mapper) { state.result.error = Error::NoService; return state.result; }
 
 	Mapping mapping;
@@ -210,7 +225,7 @@ Samurai::IO::Net::UPnP::mapPortBlocking(Protocol protocol, uint16_t internalPort
 	if (externalPort) mapper->addMapping(mapping);
 	else mapper->addAnyMapping(mapping);
 
-	pump_until([&state] { return state.done; }, deadline);
+	pump_until(loop, [&state] { return state.done; }, deadline);
 
 	if (!state.done) state.result.error = Error::Network;
 	return state.result;
@@ -218,7 +233,7 @@ Samurai::IO::Net::UPnP::mapPortBlocking(Protocol protocol, uint16_t internalPort
 
 
 Samurai::IO::Net::UPnP::MapResult
-Samurai::IO::Net::UPnP::unmapPortBlocking(Protocol protocol, uint16_t externalPort,
+Samurai::IO::Net::UPnP::unmapPortBlocking(Samurai::EventLoop& loop, Protocol protocol, uint16_t externalPort,
                                           std::chrono::milliseconds timeout)
 {
 	MapResult refused;
@@ -229,10 +244,10 @@ Samurai::IO::Net::UPnP::unmapPortBlocking(Protocol protocol, uint16_t externalPo
 		Samurai::Timer::clock::now() + timeout;
 
 	Blocking state;
-	std::unique_ptr<Gateway> gateway = reach_gateway(state, deadline);
+	std::unique_ptr<Gateway> gateway = reach_gateway(loop, state, deadline);
 	if (!gateway) return state.result;
 
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(&state, gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(loop, &state, gateway.get());
 	if (!mapper) { state.result.error = Error::NoService; return state.result; }
 
 	MappingKey key;
@@ -240,7 +255,7 @@ Samurai::IO::Net::UPnP::unmapPortBlocking(Protocol protocol, uint16_t externalPo
 	key.externalPort = externalPort;
 
 	mapper->deleteMapping(key);
-	pump_until([&state] { return state.done; }, deadline);
+	pump_until(loop, [&state] { return state.done; }, deadline);
 
 	if (!state.done) state.result.error = Error::Network;
 	return state.result;
@@ -248,7 +263,8 @@ Samurai::IO::Net::UPnP::unmapPortBlocking(Protocol protocol, uint16_t externalPo
 
 
 Samurai::IO::Net::UPnP::MapResult
-Samurai::IO::Net::UPnP::getExternalAddressBlocking(std::chrono::milliseconds timeout)
+Samurai::IO::Net::UPnP::getExternalAddressBlocking(Samurai::EventLoop& loop,
+                                                   std::chrono::milliseconds timeout)
 {
 	MapResult refused;
 	if (inside_blocking_call) { refused.error = Error::Reentrant; return refused; }
@@ -258,14 +274,14 @@ Samurai::IO::Net::UPnP::getExternalAddressBlocking(std::chrono::milliseconds tim
 		Samurai::Timer::clock::now() + timeout;
 
 	Blocking state;
-	std::unique_ptr<Gateway> gateway = reach_gateway(state, deadline);
+	std::unique_ptr<Gateway> gateway = reach_gateway(loop, state, deadline);
 	if (!gateway) return state.result;
 
-	std::unique_ptr<PortMapper> mapper = PortMapper::create(&state, gateway.get());
+	std::unique_ptr<PortMapper> mapper = PortMapper::create(loop, &state, gateway.get());
 	if (!mapper) { state.result.error = Error::NoService; return state.result; }
 
 	mapper->getExternalAddress();
-	pump_until([&state] { return state.done; }, deadline);
+	pump_until(loop, [&state] { return state.done; }, deadline);
 
 	if (!state.done) state.result.error = Error::Network;
 	return state.result;

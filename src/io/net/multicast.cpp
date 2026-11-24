@@ -13,12 +13,12 @@
 #include <samurai/io/net/socketmonitor.h>
 
 
-Samurai::IO::Net::MulticastSocket::MulticastSocket(DatagramEventHandler* eh_, const InetAddress& addr_, uint16_t port_) : DatagramSocket(eh_, addr_, port_), netif(0)
+Samurai::IO::Net::MulticastSocket::MulticastSocket(Samurai::EventLoop& loop_, DatagramEventHandler* eh_, const InetAddress& addr_, uint16_t port_) : DatagramSocket(loop_, eh_, addr_, port_), netif(0)
 {
 
 }
 
-Samurai::IO::Net::MulticastSocket::MulticastSocket(DatagramEventHandler* eh_, uint16_t port_) : DatagramSocket(eh_, port_), netif(0)
+Samurai::IO::Net::MulticastSocket::MulticastSocket(Samurai::EventLoop& loop_, DatagramEventHandler* eh_, uint16_t port_) : DatagramSocket(loop_, eh_, port_), netif(0)
 {
 
 }

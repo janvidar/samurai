@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <samurai/eventloop.h>
 #include <samurai/io/net/hardwareaddress.h>
 #include <samurai/io/net/bandwidth.h>
 #include <samurai/util/bwestimation.h>
@@ -18,6 +19,20 @@
 #include <algorithm>
 #include <span>
 #include <string.h>
+#include <memory>
+
+static std::unique_ptr<Samurai::EventLoop> loop;
+
+EXO_SETUP({
+	loop = std::make_unique<Samurai::EventLoop>();
+	return loop->isValid() ? 1 : 0;
+});
+
+EXO_TEARDOWN({
+	loop.reset();
+	return 1;
+});
+
 
 /*
  * EXO_TEST takes two macro arguments, so a braced initialiser containing
@@ -98,11 +113,12 @@ EXO_TEST(rate_estimator_zero_after_add_of_nothing,
 	return est.getBps() == 0;
 });
 
-/* The manager is a singleton reached from every socket constructor, so its
- * counters have to start defined. */
-EXO_TEST(bandwidth_manager_instance_exists,
+/* A loop's manager is reached from every socket made on it, so its counters
+ * have to start defined. */
+EXO_TEST(bandwidth_manager_of_a_new_loop_starts_at_zero,
 {
-	return Samurai::IO::Net::BandwidthManager::getInstance() != 0;
+	Samurai::EventLoop fresh;
+	return fresh.bandwidth().getSendBps() == 0 && fresh.bandwidth().getRecvBps() == 0;
 });
 
 EXO_TEST(bandwidth_manager_starts_at_zero,
@@ -398,10 +414,10 @@ EXO_TEST(convert_to_uint16_rejects_out_of_range,
 /* ------------------------------------------------------------------------- */
 /* MessageHandler                                                            */
 /*                                                                           */
-/* A MessageListener registers itself with the singleton from its            */
-/* constructor, so these listeners filter on a message id of their own -      */
-/* anything else in the suite that listens would otherwise see these, and     */
-/* these would see its.                                                      */
+/* A MessageListener registers itself with its loop's handler from its      */
+/* constructor, and every case here shares one loop, so these listeners      */
+/* filter on a message id of their own - anything else listening on it would  */
+/* otherwise see these, and these would see its.                             */
 /* ------------------------------------------------------------------------- */
 
 namespace {
@@ -409,7 +425,8 @@ namespace {
 class CountingListener final : public Samurai::MessageListener
 {
 	public:
-		explicit CountingListener(size_t id) : wanted(id) { }
+		explicit CountingListener(size_t id, Samurai::EventLoop& on = *loop)
+			: Samurai::MessageListener(on), wanted(id) { }
 
 		bool EventMessage(const Samurai::Message* msg) override
 		{
@@ -437,7 +454,8 @@ class CountingListener final : public Samurai::MessageListener
 class RepostingListener final : public Samurai::MessageListener
 {
 	public:
-		RepostingListener(size_t id, size_t repost_as) : wanted(id), repost(repost_as) { }
+		RepostingListener(size_t id, size_t repost_as)
+			: Samurai::MessageListener(*loop), wanted(id), repost(repost_as) { }
 
 		bool EventMessage(const Samurai::Message* msg) override
 		{
@@ -446,7 +464,7 @@ class RepostingListener final : public Samurai::MessageListener
 			if (msg->getID() == wanted && !reposted)
 			{
 				reposted = true;
-				Samurai::MessageHandler::getInstance()->postMessage(repost, nullptr, 0, 0);
+				loop->messages().postMessage(repost, nullptr, 0, 0);
 				return true;
 			}
 
@@ -464,22 +482,23 @@ class RepostingListener final : public Samurai::MessageListener
 
 }
 
-EXO_TEST(messagehandler_instance_exists,
+EXO_TEST(messagehandler_is_the_loops_own,
 {
-	return Samurai::MessageHandler::getInstance() != nullptr;
+	Samurai::EventLoop other;
+	return &other.messages() != &loop->messages();
 });
 
 /* Nothing queued must be a safe no-op, not a pop from an empty deque. */
 EXO_TEST(messagehandler_process_of_an_empty_queue_is_safe,
 {
-	Samurai::MessageHandler::getInstance()->process();
+	loop->messages().process();
 	return true;
 });
 
 EXO_TEST(messagehandler_delivers_a_posted_message,
 {
 	CountingListener listener(0x51000001);
-	Samurai::MessageHandler* mh = Samurai::MessageHandler::getInstance();
+	Samurai::MessageHandler* mh = &loop->messages();
 
 	mh->postMessage(0x51000001, nullptr, 7, 9);
 	mh->process();
@@ -492,8 +511,8 @@ EXO_TEST(messagehandler_carries_the_data_pointer,
 	int payload = 42;
 	CountingListener listener(0x51000002);
 
-	Samurai::MessageHandler::getInstance()->postMessage(0x51000002, &payload, 0, 0);
-	Samurai::MessageHandler::getInstance()->process();
+	loop->messages().postMessage(0x51000002, &payload, 0, 0);
+	loop->messages().process();
 
 	return listener.seen == 1 && listener.last_data == &payload;
 });
@@ -505,8 +524,8 @@ EXO_TEST(messagehandler_delivers_to_every_listener,
 	CountingListener first(0x51000003);
 	CountingListener second(0x51000003);
 
-	Samurai::MessageHandler::getInstance()->postMessage(0x51000003, nullptr, 0, 0);
-	Samurai::MessageHandler::getInstance()->process();
+	loop->messages().postMessage(0x51000003, nullptr, 0, 0);
+	loop->messages().process();
 
 	return first.seen == 1 && second.seen == 1;
 });
@@ -514,7 +533,7 @@ EXO_TEST(messagehandler_delivers_to_every_listener,
 EXO_TEST(messagehandler_drains_the_queue,
 {
 	CountingListener listener(0x51000004);
-	Samurai::MessageHandler* mh = Samurai::MessageHandler::getInstance();
+	Samurai::MessageHandler* mh = &loop->messages();
 
 	for (int n = 0; n < 5; n++) mh->postMessage(0x51000004, nullptr, 0, 0);
 	mh->process();
@@ -529,7 +548,7 @@ EXO_TEST(messagehandler_drains_the_queue,
 /* A listener deregisters itself when it goes out of scope. */
 EXO_TEST(messagehandler_stops_delivering_to_a_destroyed_listener,
 {
-	Samurai::MessageHandler* mh = Samurai::MessageHandler::getInstance();
+	Samurai::MessageHandler* mh = &loop->messages();
 
 	{
 		CountingListener listener(0x51000005);
@@ -548,7 +567,7 @@ EXO_TEST(messagehandler_stops_delivering_to_a_destroyed_listener,
 EXO_TEST(messagehandler_remove_listener_stops_delivery,
 {
 	CountingListener listener(0x51000006);
-	Samurai::MessageHandler* mh = Samurai::MessageHandler::getInstance();
+	Samurai::MessageHandler* mh = &loop->messages();
 
 	mh->removeMessageListener(&listener);
 	mh->postMessage(0x51000006, nullptr, 0, 0);
@@ -570,7 +589,7 @@ EXO_TEST(messagehandler_remove_listener_stops_delivery,
 EXO_TEST(messagehandler_message_posted_during_process_waits_for_the_next_pass,
 {
 	RepostingListener listener(0x51000007, 0x51000008);
-	Samurai::MessageHandler* mh = Samurai::MessageHandler::getInstance();
+	Samurai::MessageHandler* mh = &loop->messages();
 
 	mh->postMessage(0x51000007, nullptr, 0, 0);
 	mh->process();
@@ -582,13 +601,13 @@ EXO_TEST(messagehandler_message_posted_during_process_waits_for_the_next_pass,
 	return listener.saw_repost;
 });
 
-/* The standalone postMessage() reaches the same queue. */
-EXO_TEST(messagehandler_standalone_post_reaches_listeners,
+/* A turn of the loop delivers what was posted to it, without process(). */
+EXO_TEST(messagehandler_loop_wait_delivers_posted_messages,
 {
 	CountingListener listener(0x51000009);
 
-	Samurai::postMessage(0x51000009, nullptr, 1, 2);
-	Samurai::MessageHandler::getInstance()->process();
+	loop->messages().postMessage(0x51000009, nullptr, 1, 2);
+	loop->wait(0);
 
 	return listener.seen == 1 && listener.last_arg1 == 1 && listener.last_arg2 == 2;
 });

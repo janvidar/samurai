@@ -51,27 +51,27 @@ const char* Samurai::IO::Net::DNS::toString(Samurai::IO::Net::DNS::Resolver::Err
  */
 
 /* static */
-std::unique_ptr<Samurai::IO::Net::DNS::Resolver> Samurai::IO::Net::DNS::Resolver::getHostByName(Samurai::IO::Net::ResolveEventHandler* eh, const char* name)
+std::unique_ptr<Samurai::IO::Net::DNS::Resolver> Samurai::IO::Net::DNS::Resolver::getHostByName(Samurai::EventLoop& loop, Samurai::IO::Net::ResolveEventHandler* eh, const char* name)
 {
 	std::unique_ptr<Samurai::IO::Net::DNS::Resolver> via_proxy =
-		Samurai::IO::Net::DNS::SocksResolver::forward(eh, name);
+		Samurai::IO::Net::DNS::SocksResolver::forward(loop, eh, name);
 	if (via_proxy) return via_proxy;
 
-	auto resolver = std::make_unique<Samurai::IO::Net::DNS::PooledResolver>(eh);
+	auto resolver = std::make_unique<Samurai::IO::Net::DNS::PooledResolver>(loop, eh);
 	resolver->lookup(name);
 	return resolver;
 }
 
 /* static */
-std::unique_ptr<Samurai::IO::Net::DNS::Resolver> Samurai::IO::Net::DNS::Resolver::getNameByAddress(Samurai::IO::Net::ResolveEventHandler* eh, InetAddress* address)
+std::unique_ptr<Samurai::IO::Net::DNS::Resolver> Samurai::IO::Net::DNS::Resolver::getNameByAddress(Samurai::EventLoop& loop, Samurai::IO::Net::ResolveEventHandler* eh, InetAddress* address)
 {
 	if (!address) return nullptr;
 
 	std::unique_ptr<Samurai::IO::Net::DNS::Resolver> via_proxy =
-		Samurai::IO::Net::DNS::SocksResolver::reverse(eh, *address);
+		Samurai::IO::Net::DNS::SocksResolver::reverse(loop, eh, *address);
 	if (via_proxy) return via_proxy;
 
-	auto resolver = std::make_unique<Samurai::IO::Net::DNS::PooledResolver>(eh);
+	auto resolver = std::make_unique<Samurai::IO::Net::DNS::PooledResolver>(loop, eh);
 	resolver->lookupAddress(*address);
 	return resolver;
 }

@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <samurai/eventloop.h>
 #include <samurai/io/net/socketmonitor.h>
 #include <samurai/io/net/interface.h>
 #include <samurai/io/net/upnp/gateway.h>
@@ -13,6 +14,19 @@
 #include <chrono>
 #include <memory>
 #include <vector>
+
+static std::unique_ptr<Samurai::EventLoop> loop;
+
+EXO_SETUP({
+	loop = std::make_unique<Samurai::EventLoop>();
+	return loop->isValid() ? 1 : 0;
+});
+
+EXO_TEARDOWN({
+	loop.reset();
+	return 1;
+});
+
 
 /*
  * SSDP discovery on the wire.
@@ -70,17 +84,13 @@ class SsdpCounter : public Samurai::IO::Net::UPnP::Ssdp::SearchEventHandler
 template<typename Fn>
 bool discovery_pump(Fn done, int timeout_ms)
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
-	Samurai::TimerManager* timers = Samurai::TimerManager::getInstance();
-
 	const auto deadline = std::chrono::steady_clock::now()
 		+ std::chrono::milliseconds(timeout_ms);
 
 	while (!done())
 	{
 		if (std::chrono::steady_clock::now() > deadline) return done();
-		monitor->wait(5);
-		timers->process();
+		loop->wait(5);
 	}
 	return true;
 }
@@ -104,7 +114,7 @@ Gateway::Options quick_search()
 EXO_TEST(upnp_discovery_reaches_a_terminal_state,
 {
 	DiscoveryRecorder events;
-	std::unique_ptr<Gateway> gateway = Gateway::discover(&events, quick_search());
+	std::unique_ptr<Gateway> gateway = Gateway::discover(*loop, &events, quick_search());
 	if (!gateway) return false;
 
 	const auto started = std::chrono::steady_clock::now();
@@ -132,12 +142,12 @@ EXO_TEST(upnp_discovery_reaches_a_terminal_state,
    leaks a descriptor per search. */
 EXO_TEST(upnp_discovery_returns_the_monitor_to_its_baseline,
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
+	SocketMonitor* monitor = &loop->monitor();
 	const size_t baseline = monitor->size();
 
 	{
 		DiscoveryRecorder events;
-		std::unique_ptr<Gateway> gateway = Gateway::discover(&events, quick_search());
+		std::unique_ptr<Gateway> gateway = Gateway::discover(*loop, &events, quick_search());
 		if (!gateway) return false;
 
 		/* A search opens one socket per interface per group, so the monitor has
@@ -157,9 +167,9 @@ EXO_TEST(upnp_discovery_destroyed_in_flight_reports_nothing,
 {
 	DiscoveryRecorder events;
 	{
-		std::unique_ptr<Gateway> gateway = Gateway::discover(&events, quick_search());
+		std::unique_ptr<Gateway> gateway = Gateway::discover(*loop, &events, quick_search());
 		if (!gateway) return false;
-		SocketMonitor::getInstance()->wait(1);
+		loop->monitor().wait(1);
 	}
 
 	discovery_pump([&] { return false; }, 900);
@@ -169,7 +179,7 @@ EXO_TEST(upnp_discovery_destroyed_in_flight_reports_nothing,
 EXO_TEST(upnp_discovery_cancel_settles_at_once,
 {
 	DiscoveryRecorder events;
-	std::unique_ptr<Gateway> gateway = Gateway::discover(&events, quick_search());
+	std::unique_ptr<Gateway> gateway = Gateway::discover(*loop, &events, quick_search());
 	if (!gateway) return false;
 
 	gateway->cancel();
@@ -186,7 +196,7 @@ EXO_TEST(upnp_discovery_without_a_family_to_search_fails,
 	options.searchIPv6 = false;
 
 	DiscoveryRecorder events;
-	std::unique_ptr<Gateway> gateway = Gateway::discover(&events, options);
+	std::unique_ptr<Gateway> gateway = Gateway::discover(*loop, &events, options);
 	if (!gateway) return false;
 
 	if (!discovery_pump([&] { return events.settled(); }, 3000)) return false;
@@ -200,7 +210,7 @@ EXO_TEST(upnp_discovery_over_ipv4_alone_still_finishes,
 	options.searchIPv6 = false;
 
 	DiscoveryRecorder events;
-	std::unique_ptr<Gateway> gateway = Gateway::discover(&events, options);
+	std::unique_ptr<Gateway> gateway = Gateway::discover(*loop, &events, options);
 	if (!gateway) return false;
 
 	return discovery_pump([&] { return events.settled(); }, 5000);
@@ -212,7 +222,7 @@ EXO_TEST(upnp_discovery_over_ipv6_alone_still_finishes,
 	options.searchIPv4 = false;
 
 	DiscoveryRecorder events;
-	std::unique_ptr<Gateway> gateway = Gateway::discover(&events, options);
+	std::unique_ptr<Gateway> gateway = Gateway::discover(*loop, &events, options);
 	/* A host with no IPv6 at all cannot open a socket, and discover() says so by
 	   returning something that fails rather than by returning null. */
 	if (!gateway) return true;
@@ -226,8 +236,8 @@ EXO_TEST(upnp_discovery_two_searches_are_independent,
 	DiscoveryRecorder first_events;
 	DiscoveryRecorder second_events;
 
-	std::unique_ptr<Gateway> first = Gateway::discover(&first_events, quick_search());
-	std::unique_ptr<Gateway> second = Gateway::discover(&second_events, quick_search());
+	std::unique_ptr<Gateway> first = Gateway::discover(*loop, &first_events, quick_search());
+	std::unique_ptr<Gateway> second = Gateway::discover(*loop, &second_events, quick_search());
 	if (!first || !second) return false;
 
 	return discovery_pump(
@@ -259,14 +269,14 @@ EXO_TEST(upnp_discovery_skips_loopback_and_point_to_point_interfaces,
 	Samurai::IO::Net::UPnP::Ssdp::Search::Options options;
 	options.timeout = std::chrono::milliseconds(300);
 
-	SocketMonitor* monitor = SocketMonitor::getInstance();
+	SocketMonitor* monitor = &loop->monitor();
 	const size_t baseline = monitor->size();
 
 	bool ok = true;
 	{
 		SsdpCounter counter;
 		std::unique_ptr<Samurai::IO::Net::UPnP::Ssdp::Search> search =
-			Samurai::IO::Net::UPnP::Ssdp::Search::start(&counter, options);
+			Samurai::IO::Net::UPnP::Ssdp::Search::start(*loop, &counter, options);
 
 		/* No eligible interface means no search at all, which start() reports. */
 		if (!eligible) ok = !search;

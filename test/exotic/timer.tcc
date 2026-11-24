@@ -3,10 +3,24 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <samurai/eventloop.h>
 #include <samurai/timer.h>
 #include <samurai/io/net/socketmonitor.h>
 #include <chrono>
 #include <memory>
+
+static std::unique_ptr<Samurai::EventLoop> loop;
+
+EXO_SETUP({
+	loop = std::make_unique<Samurai::EventLoop>();
+	return loop->isValid() ? 1 : 0;
+});
+
+EXO_TEARDOWN({
+	loop.reset();
+	return 1;
+});
+
 
 /*
  * Samurai::Timer had no coverage at all, and nothing drove TimerManager, so
@@ -68,7 +82,7 @@ class OtherDestroyer : public Samurai::TimerListener
 template<typename Predicate>
 bool timer_pump_until(Predicate done, size_t max_passes = 400, int ms = 5)
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
+	SocketMonitor* monitor = &loop->monitor();
 	for (size_t n = 0; n < max_passes; n++)
 	{
 		if (done()) return true;
@@ -79,7 +93,7 @@ bool timer_pump_until(Predicate done, size_t max_passes = 400, int ms = 5)
 
 void timer_pump(size_t passes, int ms = 5)
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
+	SocketMonitor* monitor = &loop->monitor();
 	for (size_t n = 0; n < passes; n++)
 		monitor->wait(ms);
 }
@@ -92,42 +106,43 @@ int elapsed_ms(Timer::clock::time_point since)
 
 }
 
-EXO_TEST(timer_manager_has_an_instance,
+EXO_TEST(timer_manager_of_a_new_loop_is_empty,
 {
-	return TimerManager::getInstance() != nullptr;
+	Samurai::EventLoop fresh;
+	return fresh.timers().size() == 0 && fresh.timers().timeToNext() < 0;
 });
 
 EXO_TEST(timer_registers_itself_and_deregisters,
 {
-	const size_t baseline = TimerManager::getInstance()->size();
+	const size_t baseline = loop->timers().size();
 	{
 		Counter counter;
-		Timer timer(&counter, std::chrono::milliseconds(10000), true);
-		if (TimerManager::getInstance()->size() != baseline + 1) return false;
+		Timer timer(*loop, &counter, std::chrono::milliseconds(10000), true);
+		if (loop->timers().size() != baseline + 1) return false;
 	}
-	return TimerManager::getInstance()->size() == baseline;
+	return loop->timers().size() == baseline;
 });
 
 EXO_TEST(timer_time_to_next_is_negative_when_nothing_is_armed,
 {
 	/* Anything armed by an earlier case is gone: every timer here is scoped. */
-	return TimerManager::getInstance()->timeToNext() < 0;
+	return loop->timers().timeToNext() < 0;
 });
 
 EXO_TEST(timer_time_to_next_is_bounded_by_the_nearest_deadline,
 {
 	Counter counter;
-	Timer far(&counter, std::chrono::milliseconds(60000), true);
-	Timer near(&counter, std::chrono::milliseconds(200), true);
+	Timer far(*loop, &counter, std::chrono::milliseconds(60000), true);
+	Timer near(*loop, &counter, std::chrono::milliseconds(200), true);
 
-	const int next = TimerManager::getInstance()->timeToNext();
+	const int next = loop->timers().timeToNext();
 	return next >= 0 && next <= 200;
 });
 
 EXO_TEST(timer_single_shot_fires_once,
 {
 	Counter counter;
-	Timer timer(&counter, std::chrono::milliseconds(1), true);
+	Timer timer(*loop, &counter, std::chrono::milliseconds(1), true);
 
 	if (!timer_pump_until([&] { return counter.fired > 0; })) return false;
 
@@ -139,7 +154,7 @@ EXO_TEST(timer_single_shot_fires_once,
 EXO_TEST(timer_repeating_fires_repeatedly,
 {
 	Counter counter;
-	Timer timer(&counter, std::chrono::milliseconds(1), false);
+	Timer timer(*loop, &counter, std::chrono::milliseconds(1), false);
 
 	return timer_pump_until([&] { return counter.fired >= 3; });
 });
@@ -148,7 +163,7 @@ EXO_TEST(timer_destroyed_before_it_is_due_never_fires,
 {
 	Counter counter;
 	{
-		Timer timer(&counter, std::chrono::milliseconds(1), true);
+		Timer timer(*loop, &counter, std::chrono::milliseconds(1), true);
 	}
 
 	timer_pump(20);
@@ -163,7 +178,7 @@ EXO_TEST(timer_destroyed_before_it_is_due_never_fires,
 EXO_TEST(timer_destroyed_inside_its_own_callback_is_safe,
 {
 	SelfDestroyer listener;
-	listener.timer = std::make_unique<Timer>(&listener, std::chrono::milliseconds(1), false);
+	listener.timer = std::make_unique<Timer>(*loop, &listener, std::chrono::milliseconds(1), false);
 
 	if (!timer_pump_until([&] { return listener.fired > 0; })) return false;
 
@@ -179,9 +194,9 @@ EXO_TEST(timer_that_destroys_another_timer_is_safe,
 	OtherDestroyer listener;
 	Counter victim_counter;
 
-	listener.victim = std::make_unique<Timer>(&victim_counter,
+	listener.victim = std::make_unique<Timer>(*loop, &victim_counter,
 	                                          std::chrono::milliseconds(50), true);
-	Timer killer(&listener, std::chrono::milliseconds(1), true);
+	Timer killer(*loop, &listener, std::chrono::milliseconds(1), true);
 
 	if (!timer_pump_until([&] { return listener.fired > 0; })) return false;
 
@@ -192,7 +207,7 @@ EXO_TEST(timer_that_destroys_another_timer_is_safe,
 EXO_TEST(timer_reset_postpones_the_deadline,
 {
 	Counter counter;
-	Timer timer(&counter, std::chrono::milliseconds(40), true);
+	Timer timer(*loop, &counter, std::chrono::milliseconds(40), true);
 
 	/* Keep pushing the deadline out; it must not fire while being reset. */
 	for (int n = 0; n < 8; n++)
@@ -208,8 +223,8 @@ EXO_TEST(timer_reset_postpones_the_deadline,
 EXO_TEST(timer_instances_are_independent,
 {
 	Counter first, second;
-	Timer quick(&first, std::chrono::milliseconds(1), true);
-	Timer slow(&second, std::chrono::milliseconds(60000), true);
+	Timer quick(*loop, &first, std::chrono::milliseconds(1), true);
+	Timer slow(*loop, &second, std::chrono::milliseconds(60000), true);
 
 	if (!timer_pump_until([&] { return first.fired == 1; })) return false;
 	return second.fired == 0;
@@ -218,9 +233,9 @@ EXO_TEST(timer_instances_are_independent,
 EXO_TEST(timer_second_granularity_constructor_arms_a_deadline,
 {
 	Counter counter;
-	Timer timer(&counter, (time_t) 30, true);
+	Timer timer(*loop, &counter, (time_t) 30, true);
 
-	const int next = TimerManager::getInstance()->timeToNext();
+	const int next = loop->timers().timeToNext();
 	return next > 1000 && counter.fired == 0;
 });
 
@@ -235,9 +250,9 @@ EXO_TEST(timer_second_granularity_constructor_arms_a_deadline,
 EXO_TEST(timer_monitor_wait_fires_a_due_timer,
 {
 	Counter counter;
-	Timer timer(&counter, std::chrono::milliseconds(1), true);
+	Timer timer(*loop, &counter, std::chrono::milliseconds(1), true);
 
-	SocketMonitor::getInstance()->wait(20);
+	loop->monitor().wait(20);
 	return counter.fired == 1;
 });
 
@@ -246,10 +261,10 @@ EXO_TEST(timer_monitor_wait_fires_a_due_timer,
 EXO_TEST(timer_monitor_wait_returns_before_its_timeout_when_a_timer_is_due,
 {
 	Counter counter;
-	Timer timer(&counter, std::chrono::milliseconds(10), true);
+	Timer timer(*loop, &counter, std::chrono::milliseconds(10), true);
 
 	const Timer::clock::time_point start = Timer::clock::now();
-	SocketMonitor::getInstance()->wait(5000);
+	loop->monitor().wait(5000);
 	const int spent = elapsed_ms(start);
 
 	return counter.fired == 1 && spent < 2000;
@@ -257,10 +272,10 @@ EXO_TEST(timer_monitor_wait_returns_before_its_timeout_when_a_timer_is_due,
 
 EXO_TEST(timer_monitor_wait_does_not_return_early_when_nothing_is_armed,
 {
-	if (TimerManager::getInstance()->timeToNext() >= 0) return false;
+	if (loop->timers().timeToNext() >= 0) return false;
 
 	const Timer::clock::time_point start = Timer::clock::now();
-	SocketMonitor::getInstance()->wait(50);
+	loop->monitor().wait(50);
 
 	/* A loose lower bound: the point is that it waited, not how precisely. */
 	return elapsed_ms(start) >= 20;
@@ -269,10 +284,10 @@ EXO_TEST(timer_monitor_wait_does_not_return_early_when_nothing_is_armed,
 EXO_TEST(timer_monitor_wait_with_a_far_deadline_still_honours_its_timeout,
 {
 	Counter counter;
-	Timer timer(&counter, std::chrono::milliseconds(60000), true);
+	Timer timer(*loop, &counter, std::chrono::milliseconds(60000), true);
 
 	const Timer::clock::time_point start = Timer::clock::now();
-	SocketMonitor::getInstance()->wait(30);
+	loop->monitor().wait(30);
 
 	return counter.fired == 0 && elapsed_ms(start) < 2000;
 });

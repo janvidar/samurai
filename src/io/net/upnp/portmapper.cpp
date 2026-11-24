@@ -67,25 +67,27 @@ Samurai::IO::Net::UPnP::MappingKey Samurai::IO::Net::UPnP::Mapping::key() const
 
 
 std::unique_ptr<Samurai::IO::Net::UPnP::PortMapper>
-Samurai::IO::Net::UPnP::PortMapper::create(PortMapperEventHandler* eh, Gateway* gateway)
+Samurai::IO::Net::UPnP::PortMapper::create(Samurai::EventLoop& loop, PortMapperEventHandler* eh,
+                                           Gateway* gateway)
 {
 	const Options options;
-	return create(eh, gateway, options);
+	return create(loop, eh, gateway, options);
 }
 
 
 std::unique_ptr<Samurai::IO::Net::UPnP::PortMapper>
-Samurai::IO::Net::UPnP::PortMapper::create(PortMapperEventHandler* eh, Gateway* gateway,
-                                           const Options& options)
+Samurai::IO::Net::UPnP::PortMapper::create(Samurai::EventLoop& loop, PortMapperEventHandler* eh,
+                                           Gateway* gateway, const Options& options)
 {
 	if (!gateway) return nullptr;
-	return std::unique_ptr<PortMapper>(new PortMapper(eh, gateway, options));
+	return std::unique_ptr<PortMapper>(new PortMapper(loop, eh, gateway, options));
 }
 
 
-Samurai::IO::Net::UPnP::PortMapper::PortMapper(PortMapperEventHandler* eh,
+Samurai::IO::Net::UPnP::PortMapper::PortMapper(Samurai::EventLoop& loop_,
+                                               PortMapperEventHandler* eh,
                                                Gateway* owner, const Options& opts)
-	: eventHandler(eh), gateway(owner), options(opts)
+	: loop(loop_), eventHandler(eh), gateway(owner), options(opts)
 {
 }
 
@@ -382,7 +384,7 @@ void Samurai::IO::Net::UPnP::PortMapper::internal_scheduleRenewal(const Mapping&
 	   sooner. */
 	if (renewal && renewal->deadline() <= Samurai::Timer::clock::now() + when) return;
 
-	renewal = std::make_unique<Samurai::Timer>(this, when, true);
+	renewal = std::make_unique<Samurai::Timer>(loop, this, when, true);
 }
 
 

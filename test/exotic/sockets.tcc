@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <samurai/eventloop.h>
 #include <samurai/messagehandler.h>
 #include <samurai/io/net/socketbase.h>
 #include <samurai/io/net/socket.h>
@@ -25,6 +26,19 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+static std::unique_ptr<Samurai::EventLoop> loop;
+
+EXO_SETUP({
+	loop = std::make_unique<Samurai::EventLoop>();
+	return loop->isValid() ? 1 : 0;
+});
+
+EXO_TEARDOWN({
+	loop.reset();
+	return 1;
+});
+
+
 /*
  * Socket, ServerSocket and DatagramSocket driven through the real event loop.
  *
@@ -35,9 +49,10 @@
  *
  * Two things make that possible. Binding to port 0 lets the kernel choose, so
  * cases neither collide with each other nor with whatever else on the machine
- * holds a fixed port. And nothing asserts the monitor's absolute size: it is a
- * process-wide singleton shared with every other suite in this binary, so a
- * fixture records what it was on the way in and asserts only its own delta.
+ * holds a fixed port. And nothing asserts the monitor's absolute size: it is
+ * the loop every case in this file shares, and the resolver's notifier joins
+ * it, so a fixture records what it was on the way in and asserts only its own
+ * delta.
  */
 
 namespace {
@@ -160,7 +175,6 @@ class SocketRecorder :
 template<typename Fn>
 static bool pump(Fn done, int timeout_ms = SOCKET_TEST_TIMEOUT_MS)
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
 	const auto deadline = std::chrono::steady_clock::now()
 		+ std::chrono::milliseconds(timeout_ms);
 
@@ -168,7 +182,7 @@ static bool pump(Fn done, int timeout_ms = SOCKET_TEST_TIMEOUT_MS)
 	{
 		if (std::chrono::steady_clock::now() > deadline)
 			return done();
-		monitor->wait(10);
+		loop->wait(10);
 	}
 	return true;
 }
@@ -209,18 +223,18 @@ struct TcpFixture
 	bool ready = false;
 
 	TcpFixture()
-		: monitor(SocketMonitor::getInstance())
+		: monitor(&loop->monitor())
 		, baseline(monitor->size())
 	{
 		InetSocketAddress any((uint16_t) 0);
-		server = Samurai::IO::Net::ServerSocket::create(&server_events, any);
+		server = Samurai::IO::Net::ServerSocket::create(*loop, &server_events, any);
 		if (!server || server->getFD() == -1) return;
 		if (!server->listen()) return;
 
 		port = server->getLocalPort();
 		if (!port) return;
 
-		client = Socket::create(&client_events, std::string("127.0.0.1"), port);
+		client = Socket::create(*loop, &client_events, std::string("127.0.0.1"), port);
 		if (!client) return;
 		client->connect();
 
@@ -384,14 +398,14 @@ static std::string peekAll(Socket* socket, size_t want)
  */
 static uint16_t find_dead_port()
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
+	SocketMonitor* monitor = &loop->monitor();
 	const size_t baseline = monitor->size();
 	uint16_t port = 0;
 
 	{
 		SocketRecorder events;
 		InetSocketAddress any((uint16_t) 0);
-		auto server = Samurai::IO::Net::ServerSocket::create(&events, any);
+		auto server = Samurai::IO::Net::ServerSocket::create(*loop, &events, any);
 		if (server && server->listen())
 			port = server->getLocalPort();
 	}
@@ -412,7 +426,7 @@ EXO_TEST(sockets_server_binds_an_ephemeral_port,
 	SocketRecorder events;
 	InetSocketAddress any((uint16_t) 0);
 
-	auto server = Samurai::IO::Net::ServerSocket::create(&events, any);
+	auto server = Samurai::IO::Net::ServerSocket::create(*loop, &events, any);
 	if (!server || server->getFD() == -1) return false;
 	if (!server->listen()) return false;
 
@@ -422,13 +436,13 @@ EXO_TEST(sockets_server_binds_an_ephemeral_port,
 
 EXO_TEST(sockets_server_registers_once,
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
+	SocketMonitor* monitor = &loop->monitor();
 	const size_t baseline = monitor->size();
 
 	{
 		SocketRecorder events;
 		InetSocketAddress any((uint16_t) 0);
-		auto server = Samurai::IO::Net::ServerSocket::create(&events, any);
+		auto server = Samurai::IO::Net::ServerSocket::create(*loop, &events, any);
 		if (!server->listen()) return false;
 		if (monitor->size() != baseline + 1) return false;
 	}
@@ -448,7 +462,7 @@ EXO_TEST(sockets_a_server_without_an_address_family_is_not_created,
 	InetAddress unset_addr;
 	InetSocketAddress unset(unset_addr, (uint16_t) 0);
 
-	auto server = Samurai::IO::Net::ServerSocket::create(
+	auto server = Samurai::IO::Net::ServerSocket::create(*loop, 
 		(Samurai::IO::Net::ServerSocketEventHandler*) nullptr, unset);
 
 	return server == nullptr;
@@ -499,17 +513,17 @@ EXO_TEST(sockets_a_connection_costs_three_registrations,
  */
 EXO_TEST(sockets_an_accepted_socket_joins_the_monitor_when_adopted,
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
+	SocketMonitor* monitor = &loop->monitor();
 	const size_t baseline = monitor->size();
 
 	SocketRecorder server_events;
 	SocketRecorder client_events;
 
 	InetSocketAddress any((uint16_t) 0);
-	auto server = Samurai::IO::Net::ServerSocket::create(&server_events, any);
+	auto server = Samurai::IO::Net::ServerSocket::create(*loop, &server_events, any);
 	if (!server->listen()) return false;
 
-	auto client = Socket::create(&client_events,
+	auto client = Socket::create(*loop, &client_events,
 		std::string("127.0.0.1"), server->getLocalPort());
 	client->connect();
 
@@ -533,7 +547,7 @@ EXO_TEST(sockets_an_accepted_socket_joins_the_monitor_when_adopted,
 
 EXO_TEST(sockets_releasing_gives_every_registration_back,
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
+	SocketMonitor* monitor = &loop->monitor();
 	const size_t baseline = monitor->size();
 
 	{
@@ -546,7 +560,7 @@ EXO_TEST(sockets_releasing_gives_every_registration_back,
 
 EXO_TEST(sockets_repeated_connections_do_not_accumulate,
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
+	SocketMonitor* monitor = &loop->monitor();
 	const size_t baseline = monitor->size();
 
 	for (int n = 0; n < 5; n++)
@@ -824,7 +838,7 @@ EXO_TEST(sockets_disconnecting_twice_is_harmless,
 
 EXO_TEST(sockets_a_refused_connection_is_reported,
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
+	SocketMonitor* monitor = &loop->monitor();
 	const size_t baseline = monitor->size();
 
 	const uint16_t dead_port = find_dead_port();
@@ -833,7 +847,7 @@ EXO_TEST(sockets_a_refused_connection_is_reported,
 	bool settled = false;
 	{
 		SocketRecorder events;
-		auto client = Socket::create(&events, std::string("127.0.0.1"), dead_port);
+		auto client = Socket::create(*loop, &events, std::string("127.0.0.1"), dead_port);
 		client->connect();
 
 		/* Refused, or - if something else grabbed the port meanwhile -
@@ -864,7 +878,7 @@ EXO_TEST(sockets_a_refused_connection_is_reported_once,
 	if (!dead_port) return false;
 
 	SocketRecorder events;
-	auto client = Socket::create(&events, std::string("127.0.0.1"), dead_port);
+	auto client = Socket::create(*loop, &events, std::string("127.0.0.1"), dead_port);
 	if (!client) return false;
 
 	client->connect();
@@ -878,7 +892,7 @@ EXO_TEST(sockets_a_refused_connection_is_reported_once,
 
 	if (events.connected) return true;
 
-	SocketMonitor::getInstance()->wait(25);
+	loop->monitor().wait(25);
 
 	const int reports = events.error_count + (events.disconnected ? 1 : 0);
 	return reports == 1 && !events.connected;
@@ -896,7 +910,7 @@ EXO_TEST(sockets_a_refused_connection_can_be_retried,
 	if (!dead_port) return false;
 
 	SocketRecorder events;
-	auto client = Socket::create(&events, std::string("127.0.0.1"), dead_port);
+	auto client = Socket::create(*loop, &events, std::string("127.0.0.1"), dead_port);
 	if (!client) return false;
 
 	client->connect();
@@ -916,15 +930,19 @@ EXO_TEST(sockets_a_refused_connection_can_be_retried,
 
 EXO_TEST(sockets_an_unresolvable_host_is_reported,
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
-	const size_t baseline = monitor->size();
+	SocketMonitor* monitor = &loop->monitor();
+	size_t baseline = 0;
 
 	bool settled = false;
 	{
 		SocketRecorder events;
-		auto client = Socket::create(&events,
+		auto client = Socket::create(*loop, &events,
 			std::string("no-such-host.invalid"), (uint16_t) 80);
 		client->connect();
+
+		/* Taken once the lookup has started: the resolver's notifier is a socket
+		   on this loop too, registered by the first lookup made on it. */
+		baseline = monitor->size() - (client->isMonitored() ? 1 : 0);
 
 		settled = pump([&] {
 			return events.error || events.disconnected;
@@ -941,12 +959,12 @@ EXO_TEST(sockets_an_unresolvable_host_is_reported,
 
 EXO_TEST(sockets_datagram_socket_listens,
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
+	SocketMonitor* monitor = &loop->monitor();
 	const size_t baseline = monitor->size();
 
 	{
 		SocketRecorder events;
-		auto server = Samurai::IO::Net::DatagramSocket::create(&events, (uint16_t) 0);
+		auto server = Samurai::IO::Net::DatagramSocket::create(*loop, &events, (uint16_t) 0);
 		if (!server || !server->listen()) return false;
 		if (server->getLocalPort() == 0) return false;
 		if (monitor->size() != baseline + 1) return false;
@@ -965,7 +983,7 @@ EXO_TEST(sockets_datagram_socket_listens,
 EXO_TEST(sockets_a_datagram_read_with_nothing_pending_is_not_an_error,
 {
 	SocketRecorder events;
-	auto socket = Samurai::IO::Net::DatagramSocket::create(&events, (uint16_t) 0);
+	auto socket = Samurai::IO::Net::DatagramSocket::create(*loop, &events, (uint16_t) 0);
 	if (!socket || !socket->listen()) return false;
 
 	Samurai::IO::Net::DatagramPacket packet;
@@ -977,13 +995,13 @@ EXO_TEST(sockets_a_datagram_arrives,
 	SocketRecorder server_events;
 	SocketRecorder client_events;
 
-	auto server = Samurai::IO::Net::DatagramSocket::create(&server_events, (uint16_t) 0);
+	auto server = Samurai::IO::Net::DatagramSocket::create(*loop, &server_events, (uint16_t) 0);
 	if (!server || !server->listen()) return false;
 
 	const uint16_t port = server->getLocalPort();
 	if (!port) return false;
 
-	auto client = Samurai::IO::Net::DatagramSocket::create(&client_events,
+	auto client = Samurai::IO::Net::DatagramSocket::create(*loop, &client_events,
 		InetAddress::Version::IPv4);
 	if (!client) return false;
 
@@ -1004,13 +1022,13 @@ EXO_TEST(sockets_datagram_payloads_are_kept_apart,
 	SocketRecorder server_events;
 	SocketRecorder client_events;
 
-	auto server = Samurai::IO::Net::DatagramSocket::create(&server_events, (uint16_t) 0);
+	auto server = Samurai::IO::Net::DatagramSocket::create(*loop, &server_events, (uint16_t) 0);
 	if (!server || !server->listen()) return false;
 
 	const uint16_t port = server->getLocalPort();
 	if (!port) return false;
 
-	auto client = Samurai::IO::Net::DatagramSocket::create(&client_events,
+	auto client = Samurai::IO::Net::DatagramSocket::create(*loop, &client_events,
 		InetAddress::Version::IPv4);
 	if (!client) return false;
 
@@ -1113,7 +1131,7 @@ EXO_TEST(sockets_a_peek_interrupted_by_a_signal_keeps_the_connection,
 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) != 0) return false;
 
 	InetSocketAddress dummy((uint16_t) 0);
-	auto socket = Socket::create(sv[0], dummy);
+	auto socket = Socket::create(*loop, sv[0], dummy);
 	if (!socket) { close(sv[0]); close(sv[1]); return false; }
 
 	if (!arm_interrupting_alarm()) { close(sv[1]); return false; }
@@ -1317,7 +1335,7 @@ EXO_TEST(sockets_no_peer_certificate_without_tls,
 
 EXO_TEST(sockets_tls_releases_its_registrations,
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
+	SocketMonitor* monitor = &loop->monitor();
 	const size_t baseline = monitor->size();
 
 	{
@@ -1339,7 +1357,7 @@ EXO_TEST(sockets_tls_releases_its_registrations,
 EXO_TEST(sockets_connect_timeout_is_settable,
 {
 	SocketRecorder events;
-	auto socket = Socket::create(&events, std::string("127.0.0.1"), (uint16_t) 9);
+	auto socket = Socket::create(*loop, &events, std::string("127.0.0.1"), (uint16_t) 9);
 	if (!socket) return false;
 
 	socket->setConnectTimeout(std::chrono::milliseconds(250));
@@ -1355,7 +1373,7 @@ EXO_TEST(sockets_connect_timeout_is_settable,
 EXO_TEST(sockets_connect_to_a_black_hole_gives_up,
 {
 	SocketRecorder events;
-	auto socket = Socket::create(&events, std::string("192.0.2.1"), (uint16_t) 80);
+	auto socket = Socket::create(*loop, &events, std::string("192.0.2.1"), (uint16_t) 80);
 	if (!socket) return false;
 
 	socket->setConnectTimeout(std::chrono::milliseconds(300));
@@ -1386,7 +1404,7 @@ EXO_TEST(sockets_released_in_its_timeout_handler,
 	};
 
 	Dropper dropper;
-	dropper.socket = Socket::create(&dropper, std::string("192.0.2.1"), (uint16_t) 80);
+	dropper.socket = Socket::create(*loop, &dropper, std::string("192.0.2.1"), (uint16_t) 80);
 	if (!dropper.socket) return false;
 
 	dropper.socket->setConnectTimeout(std::chrono::milliseconds(200));
@@ -1411,7 +1429,7 @@ EXO_TEST(sockets_released_in_its_timeout_handler,
 
 EXO_TEST(sockets_a_registration_survives_a_rejected_change_beside_it,
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
+	SocketMonitor* monitor = &loop->monitor();
 	const size_t baseline = monitor->size();
 
 	/*
@@ -1424,7 +1442,7 @@ EXO_TEST(sockets_a_registration_survives_a_rejected_change_beside_it,
 	for (int n = 0; n < 160; n++)
 	{
 		InetSocketAddress any((uint16_t) 0);
-		auto server = Samurai::IO::Net::ServerSocket::create(&events, any);
+		auto server = Samurai::IO::Net::ServerSocket::create(*loop, &events, any);
 		if (server && server->listen()) servers.push_back(server);
 	}
 	if (servers.size() < 160) return true;   /* not enough descriptors here */
@@ -1477,7 +1495,7 @@ EXO_TEST(sockets_a_registration_survives_a_rejected_change_beside_it,
  */
 EXO_TEST(sockets_a_second_connection_can_share_a_local_port,
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
+	SocketMonitor* monitor = &loop->monitor();
 	const size_t baseline = monitor->size();
 
 	bool ok = false;
@@ -1487,8 +1505,8 @@ EXO_TEST(sockets_a_second_connection_can_share_a_local_port,
 		SocketRecorder peer_events;
 		InetSocketAddress any((uint16_t) 0);
 
-		auto hub = Samurai::IO::Net::ServerSocket::create(&hub_events, any);
-		auto peer = Samurai::IO::Net::ServerSocket::create(&peer_events, any);
+		auto hub = Samurai::IO::Net::ServerSocket::create(*loop, &hub_events, any);
+		auto peer = Samurai::IO::Net::ServerSocket::create(*loop, &peer_events, any);
 		if (!hub || !peer || hub->getFD() == -1 || peer->getFD() == -1)
 			EXO_SKIP("could not listen on the loopback");
 		if (!hub->listen() || !peer->listen())
@@ -1496,7 +1514,7 @@ EXO_TEST(sockets_a_second_connection_can_share_a_local_port,
 
 		/* The hub connection, whose port is to be shared. */
 		SocketRecorder to_hub_events;
-		auto to_hub = Socket::create(&to_hub_events, std::string("127.0.0.1"), hub->getLocalPort());
+		auto to_hub = Socket::create(*loop, &to_hub_events, std::string("127.0.0.1"), hub->getLocalPort());
         EXO_ASSERT(to_hub != nullptr);
 		to_hub->setReuseLocalPort(0);
 		to_hub->connect();
@@ -1507,7 +1525,7 @@ EXO_TEST(sockets_a_second_connection_can_share_a_local_port,
 
 		/* And the peer connection, from that same port. */
 		SocketRecorder to_peer_events;
-		auto to_peer = Socket::create(&to_peer_events, std::string("127.0.0.1"), peer->getLocalPort());
+		auto to_peer = Socket::create(*loop, &to_peer_events, std::string("127.0.0.1"), peer->getLocalPort());
 		EXO_ASSERT(to_peer != nullptr);
 		to_peer->setReuseLocalPort(shared);
 		to_peer->connect();
@@ -1545,7 +1563,7 @@ EXO_TEST(sockets_a_second_connection_can_share_a_local_port,
  */
 EXO_TEST(sockets_a_local_port_that_cannot_be_bound_is_reported,
 {
-	SocketMonitor* monitor = SocketMonitor::getInstance();
+	SocketMonitor* monitor = &loop->monitor();
 	const size_t baseline = monitor->size();
 
 	bool reported = false;
@@ -1555,15 +1573,15 @@ EXO_TEST(sockets_a_local_port_that_cannot_be_bound_is_reported,
 		SocketRecorder blocker_events;
 		InetSocketAddress any((uint16_t) 0);
 
-		auto peer = Samurai::IO::Net::ServerSocket::create(&peer_events, any);
-		auto blocker = Samurai::IO::Net::ServerSocket::create(&blocker_events, any);
+		auto peer = Samurai::IO::Net::ServerSocket::create(*loop, &peer_events, any);
+		auto blocker = Samurai::IO::Net::ServerSocket::create(*loop, &blocker_events, any);
 		if (!peer || !blocker || peer->getFD() == -1 || blocker->getFD() == -1)
 			EXO_SKIP("could not listen on the loopback");
 		if (!peer->listen() || !blocker->listen())
 			EXO_SKIP("could not listen on the loopback");
 
 		SocketRecorder events;
-		auto client = Socket::create(&events, std::string("127.0.0.1"), peer->getLocalPort());
+		auto client = Socket::create(*loop, &events, std::string("127.0.0.1"), peer->getLocalPort());
 		EXO_ASSERT(client != nullptr);
 
 		/* A port somebody is listening on. */
@@ -1618,7 +1636,7 @@ EXO_TEST(socket_survives_the_last_reference_going_while_it_reports_a_lookup,
 {
 	LookupCanceller events;
 
-	events.hold = Socket::create(&events, std::string("127.0.0.1"), 1411);
+	events.hold = Socket::create(*loop, &events, std::string("127.0.0.1"), 1411);
 	EXO_ASSERT(events.hold);
 	EXO_ASSERT(events.hold.use_count() == 1);
 
@@ -1653,7 +1671,7 @@ EXO_TEST(serversocket_both_wildcards_can_hold_the_same_port,
 	SocketRecorder four_events;
 
 	InetSocketAddress six_any("::", 0, Samurai::IO::Net::InetAddress::Version::IPv6);
-	auto six = Samurai::IO::Net::ServerSocket::create(&six_events, six_any);
+	auto six = Samurai::IO::Net::ServerSocket::create(*loop, &six_events, six_any);
 	if (!six || six->getFD() == -1 || !six->listen()) return 1;
 
 	const uint16_t port = six->getLocalPort();
@@ -1661,7 +1679,7 @@ EXO_TEST(serversocket_both_wildcards_can_hold_the_same_port,
 
 	InetSocketAddress four_any("0.0.0.0", port,
 	                           Samurai::IO::Net::InetAddress::Version::IPv4);
-	auto four = Samurai::IO::Net::ServerSocket::create(&four_events, four_any);
+	auto four = Samurai::IO::Net::ServerSocket::create(*loop, &four_events, four_any);
 
 	EXO_ASSERT(four);
 	EXO_ASSERT(four->getFD() != -1);
@@ -1674,7 +1692,7 @@ EXO_TEST(serversocket_both_wildcards_can_hold_the_same_port,
 EXO_TEST(datagramsocket_both_wildcards_can_hold_the_same_port,
 {
 	InetSocketAddress six_any("::", 0, Samurai::IO::Net::InetAddress::Version::IPv6);
-	auto six = Samurai::IO::Net::DatagramSocket::create(nullptr, six_any);
+	auto six = Samurai::IO::Net::DatagramSocket::create(*loop, nullptr, six_any);
 	if (!six || six->getFD() == -1 || !six->listen()) return 1;
 
 	const uint16_t port = six->getLocalPort();
@@ -1682,7 +1700,7 @@ EXO_TEST(datagramsocket_both_wildcards_can_hold_the_same_port,
 
 	InetSocketAddress four_any("0.0.0.0", port,
 	                           Samurai::IO::Net::InetAddress::Version::IPv4);
-	auto four = Samurai::IO::Net::DatagramSocket::create(nullptr, four_any);
+	auto four = Samurai::IO::Net::DatagramSocket::create(*loop, nullptr, four_any);
 
 	EXO_ASSERT(four);
 	EXO_ASSERT(four->listen());

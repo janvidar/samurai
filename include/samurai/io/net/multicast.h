@@ -41,12 +41,12 @@ namespace Samurai {
 					/**
 					 * Set up a MulticastSocket to bind on the local address and port.
 					 */
-					MulticastSocket(DatagramEventHandler* eh, const InetAddress& addr, uint16_t port);
+					MulticastSocket(Samurai::EventLoop& loop, DatagramEventHandler* eh, const InetAddress& addr, uint16_t port);
 
 					/**
 					 * Set up a MulticastSocket to bind on any address and the given port.
 					 */
-					MulticastSocket(DatagramEventHandler* eh, uint16_t port);
+					MulticastSocket(Samurai::EventLoop& loop, DatagramEventHandler* eh, uint16_t port);
 
 					/**
 					 * Join the given multicast-address.

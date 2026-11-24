@@ -96,8 +96,9 @@ Samurai::IO::Net::UPnP::Action::~Action()
 }
 
 
-Samurai::IO::Net::UPnP::Gateway::Gateway(GatewayEventHandler* eh, const Options& opts)
-	: eventHandler(eh)
+Samurai::IO::Net::UPnP::Gateway::Gateway(Samurai::EventLoop& loop_, GatewayEventHandler* eh, const Options& opts)
+	: loop(loop_)
+	, eventHandler(eh)
 	, options(opts)
 	, discovered(std::make_unique<Discovered>())
 {
@@ -120,18 +121,18 @@ Samurai::IO::Net::UPnP::Gateway::~Gateway()
 
 
 std::unique_ptr<Samurai::IO::Net::UPnP::Gateway>
-Samurai::IO::Net::UPnP::Gateway::discover(GatewayEventHandler* eh)
+Samurai::IO::Net::UPnP::Gateway::discover(Samurai::EventLoop& loop, GatewayEventHandler* eh)
 {
 	const Options options;
-	return discover(eh, options);
+	return discover(loop, eh, options);
 }
 
 
 std::unique_ptr<Samurai::IO::Net::UPnP::Gateway>
-Samurai::IO::Net::UPnP::Gateway::discover(GatewayEventHandler* eh,
+Samurai::IO::Net::UPnP::Gateway::discover(Samurai::EventLoop& loop, GatewayEventHandler* eh,
                                           const Options& options)
 {
-	std::unique_ptr<Gateway> self(new Gateway(eh, options));
+	std::unique_ptr<Gateway> self(new Gateway(loop, eh, options));
 
 	Ssdp::Search::Options search;
 	search.timeout = options.searchTimeout;
@@ -144,7 +145,7 @@ Samurai::IO::Net::UPnP::Gateway::discover(GatewayEventHandler* eh,
 	search.requireLocationMatchesSource = options.requireLocationMatchesSource;
 
 	self->discovered->owner = self.get();
-	self->discovered->search = Ssdp::Search::start(self->discovered.get(), search);
+	self->discovered->search = Ssdp::Search::start(loop, self->discovered.get(), search);
 
 	if (!self->discovered->search)
 	{
@@ -160,26 +161,26 @@ Samurai::IO::Net::UPnP::Gateway::discover(GatewayEventHandler* eh,
 
 
 std::unique_ptr<Samurai::IO::Net::UPnP::Gateway>
-Samurai::IO::Net::UPnP::Gateway::describe(GatewayEventHandler* eh, const URL& location)
+Samurai::IO::Net::UPnP::Gateway::describe(Samurai::EventLoop& loop, GatewayEventHandler* eh, const URL& location)
 {
 	const Options options;
-	return describe(eh, location, options);
+	return describe(loop, eh, location, options);
 }
 
 
 std::unique_ptr<Samurai::IO::Net::UPnP::Gateway>
-Samurai::IO::Net::UPnP::Gateway::attach(GatewayEventHandler* eh, const GatewayInfo& info)
+Samurai::IO::Net::UPnP::Gateway::attach(Samurai::EventLoop& loop, GatewayEventHandler* eh, const GatewayInfo& info)
 {
 	const Options options;
-	return attach(eh, info, options);
+	return attach(loop, eh, info, options);
 }
 
 
 std::unique_ptr<Samurai::IO::Net::UPnP::Gateway>
-Samurai::IO::Net::UPnP::Gateway::describe(GatewayEventHandler* eh, const URL& location,
+Samurai::IO::Net::UPnP::Gateway::describe(Samurai::EventLoop& loop, GatewayEventHandler* eh, const URL& location,
                                           const Options& options)
 {
-	std::unique_ptr<Gateway> self(new Gateway(eh, options));
+	std::unique_ptr<Gateway> self(new Gateway(loop, eh, options));
 
 	if (!location.isValid() || location.getHostname().empty())
 	{
@@ -193,10 +194,10 @@ Samurai::IO::Net::UPnP::Gateway::describe(GatewayEventHandler* eh, const URL& lo
 
 
 std::unique_ptr<Samurai::IO::Net::UPnP::Gateway>
-Samurai::IO::Net::UPnP::Gateway::attach(GatewayEventHandler* eh, const GatewayInfo& info,
+Samurai::IO::Net::UPnP::Gateway::attach(Samurai::EventLoop& loop, GatewayEventHandler* eh, const GatewayInfo& info,
                                         const Options& options)
 {
-	std::unique_ptr<Gateway> self(new Gateway(eh, options));
+	std::unique_ptr<Gateway> self(new Gateway(loop, eh, options));
 
 	if (!info.isValid())
 	{
@@ -282,7 +283,7 @@ Samurai::IO::Net::UPnP::Gateway::getLocalAddress() const
 void Samurai::IO::Net::UPnP::Gateway::internal_reportLater(Error error)
 {
 	deferred_error = error;
-	deferred = std::make_unique<Samurai::Timer>(this, std::chrono::milliseconds(0), true);
+	deferred = std::make_unique<Samurai::Timer>(loop, this, std::chrono::milliseconds(0), true);
 }
 
 
@@ -305,7 +306,7 @@ void Samurai::IO::Net::UPnP::Gateway::internal_startDescription(const URL& locat
 	http_options.userAgent = std::string(Samurai::OS::getName()) + "/"
 		+ Samurai::OS::getVersion() + " UPnP/1.1 Samurai/1.0";
 
-	http = std::make_unique<Samurai::IO::Net::HTTP::Client>(this, http_options);
+	http = std::make_unique<Samurai::IO::Net::HTTP::Client>(loop, this, http_options);
 	http->get(location);
 }
 
@@ -477,7 +478,7 @@ void Samurai::IO::Net::UPnP::Gateway::internal_sendAction(Action* action)
 	http_options.userAgent = std::string(Samurai::OS::getName()) + "/"
 		+ Samurai::OS::getVersion() + " UPnP/1.1 Samurai/1.0";
 
-	http = std::make_unique<Samurai::IO::Net::HTTP::Client>(this, http_options);
+	http = std::make_unique<Samurai::IO::Net::HTTP::Client>(loop, this, http_options);
 	http->request(Samurai::IO::Net::HTTP::Method::Post, service->controlURL, extra, body);
 }
 
