@@ -415,6 +415,34 @@ EXO_TEST(tls_goodbye_and_deinitialize,
 		&& session.server.deinitialize() == TlsStatus::Ok;
 });
 
+/*
+ * A peer that hangs up once it has what it wanted, without a close_notify, has
+ * ended the stream: read as closed, not as an error with nothing to say about it.
+ */
+EXO_TEST(tls_a_peer_closing_without_a_goodbye_is_the_end_of_the_stream,
+{
+	if (!tls_test_keys_claimed().ready) return false;
+
+	TlsSession session;
+	if (!session.ok) return false;
+
+	const std::string message = "the last chunk";
+	if (!tls_write_all(session.client, message)) return false;
+	if (shutdown(session.pair.fd[1], SHUT_WR) != 0) return false;
+
+	std::string received;
+	if (!tls_read_exactly(session.server, message.size(), received) || received != message) return false;
+
+	char buf[64];
+	TlsStatus status = TlsStatus::Ok;
+	for (int spins = 0; spins < 200; spins++)
+	{
+		const ssize_t n = session.server.read(buf, sizeof(buf), status);
+		if (n != 0 || !tls_status_is_retry(status)) return n == 0 && status == TlsStatus::Closed;
+	}
+	return false;
+});
+
 /* Repeated sessions must not leak or corrupt the shared context. */
 EXO_TEST(tls_sessions_are_independent,
 {

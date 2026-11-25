@@ -180,6 +180,9 @@ bool Samurai::IO::File::open(Mode mode, std::error_code& ec)
 	else
 		flags |= O_RDONLY;
 
+	const bool wants_private = any(mode & Mode::Private) && (wants_write || wants_append);
+	if (wants_private) fmode = 0600;
+
 	if (wants_write || wants_append)
 	{
 		flags |= O_CREAT;
@@ -214,6 +217,16 @@ bool Samurai::IO::File::open(Mode mode, std::error_code& ec)
 		ec = Samurai::system_error(errno);
 		return false;
 	}
+
+#ifndef SAMURAI_WINDOWS
+	if (wants_private && ::fchmod(fd, 0600) != 0)
+	{
+		ec = Samurai::system_error(errno);
+		::close(fd);
+		fd = -1;
+		return false;
+	}
+#endif
 
 	/* A previous stat() no longer describes what is now open. */
 	info.reset();

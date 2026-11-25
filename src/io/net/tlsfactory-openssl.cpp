@@ -679,6 +679,10 @@ SSL_CTX* ssl_shared_context(bool client, unsigned long now)
  * The method is built on first use and not guarded by a lock, which is the
  * contract the shared context above already has.
  */
+#ifndef BIO_FLAGS_IN_EOF
+#define BIO_FLAGS_IN_EOF 0x800
+#endif
+
 BIO_METHOD* bio_method = nullptr;
 std::mutex bio_method_lock;
 
@@ -703,6 +707,11 @@ int bio_read(BIO* bio, char* data, int length)
 
 	BIO_clear_retry_flags(bio);
 	if (ret < 0 && bio_should_retry()) BIO_set_retry_read(bio);
+
+	/* What BIO_CTRL_EOF answers: without it OpenSSL cannot tell the peer closing
+	   from a failed read, and reports an end of stream as an error it has no
+	   description of. */
+	if (ret == 0) BIO_set_flags(bio, BIO_FLAGS_IN_EOF);
 
 	return (int) ret;
 }
@@ -741,6 +750,9 @@ long bio_ctrl(BIO* bio, int cmd, [[maybe_unused]] long argument, void* pointer)
 		/* Nothing is held back, so there is nothing a flush has to do. */
 		case BIO_CTRL_FLUSH:
 			return 1;
+
+		case BIO_CTRL_EOF:
+			return BIO_test_flags(bio, BIO_FLAGS_IN_EOF) ? 1 : 0;
 
 		default:
 			return 0;

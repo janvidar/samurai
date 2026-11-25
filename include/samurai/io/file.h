@@ -43,6 +43,7 @@ class File final {
 			Exclusive = 0x10, /**<<< "Write flag: opening will fail if file already exists when trying to create it" */
 			Paranoid  = 0x20, /**<<< "Don't follow symbolic links (if supported by operating system)" */
 			NoAccess  = 0x40, /**<<< "Don't update access time of file (if supported by operating system). This can cause significant speedups under heavy disk load." */
+			Private   = 0x80, /**<<< "Write flag: readable and writable by its owner alone, made so if it existed already" */
 		};
 		
 	public:
