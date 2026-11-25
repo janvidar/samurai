@@ -10,11 +10,9 @@
 #include <samurai/debug/dbg.h>
 #include <samurai/io/file.h>
 #include <memory>
+#include <mutex>
+#include <string>
 
-#define DUMP_FILE_NETWORK "~/.samurai/debug/network.log"
-#define DUMP_FILE_SEARCH  "~/.samurai/debug/search.log"
-#define DUMP_FILE_DEBUG   "~/.samurai/debug/debug.log"
-#define DUMP_FILE_HUB     "~/.samurai/debug/hub.log"
 
 #define PREFIX "../"
 
@@ -34,30 +32,44 @@ static std::unique_ptr<Samurai::IO::File> samurai_dump_hub;
 
 static bool g_debug_stderr = false;
 
-void samurai_debug_init() {
+/*
+ * The logs are the process's, written by every loop's thread: opened by the first
+ * that asks and closed by the last, with every write under the lock.
+ */
+static std::mutex samurai_dump_lock;
+static int samurai_dump_users = 0;
+
+void samurai_debug_init(const char* directory) {
+	std::lock_guard<std::mutex> guard(samurai_dump_lock);
+	if (samurai_dump_users++ > 0) return;
+
 	fprintf(stderr, "Starting up with debug code enabled\n");
-	
-	Samurai::IO::File::mkdir("~/.samurai",       0700);
-	Samurai::IO::File::mkdir("~/.samurai/debug",   0700);
-	
+
+	const bool own = directory && *directory;
+	const std::string dir = own ? directory : "~/.samurai/debug";
+	if (!own) Samurai::IO::File::mkdir("~/.samurai", 0700);
+	Samurai::IO::File::mkdir(dir.c_str(), 0700);
+
 	if (getenv("SAMURAI_DEBUG"))
 	{
 		g_debug_stderr = true;
 		fprintf(stderr, "    (dumping debug messages to stderr)\n");
 	}
-	
-	samurai_dump_net = std::make_unique<Samurai::IO::File>(DUMP_FILE_NETWORK);
-	samurai_dump_sch = std::make_unique<Samurai::IO::File>(DUMP_FILE_SEARCH);
-	samurai_dump_dbg = std::make_unique<Samurai::IO::File>(DUMP_FILE_DEBUG);
-	samurai_dump_hub = std::make_unique<Samurai::IO::File>(DUMP_FILE_HUB);
+
+	samurai_dump_net = std::make_unique<Samurai::IO::File>(dir + "/network.log");
+	samurai_dump_sch = std::make_unique<Samurai::IO::File>(dir + "/search.log");
+	samurai_dump_dbg = std::make_unique<Samurai::IO::File>(dir + "/debug.log");
+	samurai_dump_hub = std::make_unique<Samurai::IO::File>(dir + "/hub.log");
 	samurai_dump_net->open(Samurai::IO::File::Mode::Write | Samurai::IO::File::Mode::Truncate);
 	samurai_dump_sch->open(Samurai::IO::File::Mode::Write | Samurai::IO::File::Mode::Append);
 	samurai_dump_dbg->open(Samurai::IO::File::Mode::Write | Samurai::IO::File::Mode::Truncate);
 	samurai_dump_hub->open(Samurai::IO::File::Mode::Write | Samurai::IO::File::Mode::Append);
-	
 }
 
 void samurai_debug_fini() {
+	std::lock_guard<std::mutex> guard(samurai_dump_lock);
+	if (samurai_dump_users == 0 || --samurai_dump_users > 0) return;
+
 	samurai_dump_sch.reset();
 	samurai_dump_hub.reset();
 	samurai_dump_dbg.reset();
@@ -65,6 +77,7 @@ void samurai_debug_fini() {
 }
 
 void samurai_debug(const char* /*func*/, const char* file, int line, const char *format, ...) {
+	std::lock_guard<std::mutex> guard(samurai_dump_lock);
 	char logmsg[1024];
 	char location[1024];
 	va_list args;
@@ -91,6 +104,7 @@ void samurai_debug(const char* /*func*/, const char* file, int line, const char 
 }
 
 void samurai_error(const char* /*func*/, const char* file, int line, const char *format, ...) {
+	std::lock_guard<std::mutex> guard(samurai_dump_lock);
 	char logmsg[1024];
 	char location[1024];
 	va_list args;
@@ -117,6 +131,7 @@ void samurai_error(const char* /*func*/, const char* file, int line, const char 
 }
 
 void samurai_net(const char*, const char* , int, const char *format, ...) {
+	std::lock_guard<std::mutex> guard(samurai_dump_lock);
 	if (!samurai_dump_net) return;
 	
 	char logmsg[1024];
@@ -143,6 +158,7 @@ void samurai_net(const char*, const char* , int, const char *format, ...) {
 }
 
 void samurai_search(const char*, const char* , int, const char *format, ...) {
+	std::lock_guard<std::mutex> guard(samurai_dump_lock);
 	if (!samurai_dump_sch) return;
 	
 	char logmsg[1024];
@@ -170,6 +186,7 @@ void samurai_search(const char*, const char* , int, const char *format, ...) {
 }
 
 void samurai_hub(const char*, const char* , int, const char *format, ...) {
+	std::lock_guard<std::mutex> guard(samurai_dump_lock);
 	if (!samurai_dump_hub) return;
 	
 	char logmsg[1024];

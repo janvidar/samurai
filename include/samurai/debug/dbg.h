@@ -50,7 +50,7 @@
 #endif
 
 #if !defined(QDBG_INIT)
-#define QDBG_INIT do { samurai_debug_init(); } while(0)
+#define QDBG_INIT do { samurai_debug_init(nullptr); } while(0)
 #endif
 
 #if !defined(QDBG_FINI)
@@ -71,7 +71,8 @@
 #define SAMURAI_PRINTF_LIKE(fmt_index, first_arg)
 #endif
 
-void samurai_debug_init();
+/** Opened by the first caller and closed by the last; a null directory means ~/.samurai/debug. */
+void samurai_debug_init(const char* directory);
 void samurai_debug_fini();
 
 void samurai_debug(const char* func, const char* file, int line, const char *format, ...) SAMURAI_PRINTF_LIKE(4, 5);
