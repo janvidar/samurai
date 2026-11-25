@@ -158,6 +158,9 @@ class Socket :
 		const ProxySettings& getProxy() const { return proxy; }
 		bool isProxied() const { return outbound && proxy.isEnabled(); }
 
+		/** Whether this end dialled the connection, rather than accepting it. */
+		bool isOutbound() const { return outbound; }
+
 		/**
 		 * The name the connection was asked for.
 		 *
