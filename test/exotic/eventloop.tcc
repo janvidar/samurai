@@ -79,6 +79,7 @@ class Events
 		void EventAcceptError(const ServerSocket*, const char*) override { }
 		void EventAcceptSocket(const ServerSocket*, std::shared_ptr<Socket>) override { }
 
+		using Samurai::IO::Net::SocketEventHandler::EventHostFound;
 		void EventHostFound(const Samurai::IO::Net::InetAddress*) override { found = true; }
 		void EventHostError(Samurai::IO::Net::DNS::Resolver::Error) override { host_error = true; }
 };
