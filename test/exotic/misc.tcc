@@ -3,6 +3,8 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <chrono>
+#include <thread>
 #include <samurai/eventloop.h>
 #include <samurai/io/net/hardwareaddress.h>
 #include <samurai/io/net/bandwidth.h>
@@ -631,7 +633,7 @@ static void wait_for_the_next_second()
 {
 	const time_t start = time(nullptr);
 	while (time(nullptr) == start)
-		usleep(20 * 1000);
+		std::this_thread::sleep_for(std::chrono::milliseconds(20));
 }
 
 constexpr size_t bw_window = Samurai::Util::BANDWIDTH_ESTIMATION_TIMEOUT;

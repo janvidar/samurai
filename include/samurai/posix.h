@@ -34,6 +34,38 @@
 #ifndef X_OK
 #define X_OK 0
 #endif
+
+#ifndef STDIN_FILENO
+#define STDIN_FILENO 0
+#define STDOUT_FILENO 1
+#define STDERR_FILENO 2
+#endif
+
+/* Windows paths are not bounded by MAX_PATH once long paths are on; this is what a buffer holds. */
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
+#include <stdlib.h>
+#include <string.h>
+
+inline int setenv(const char* name, const char* value, int overwrite)
+{
+	if (!overwrite && getenv(name)) return 0;
+	return _putenv_s(name, value) == 0 ? 0 : -1;
+}
+
+inline int unsetenv(const char* name)
+{
+	return _putenv_s(name, "") == 0 ? 0 : -1;
+}
+
+/* 'templ' ends in XXXXXX, as on POSIX; made unique, created, and returned, or null. */
+inline char* mkdtemp(char* templ)
+{
+	if (_mktemp_s(templ, strlen(templ) + 1) != 0) return nullptr;
+	return _mkdir(templ) == 0 ? templ : nullptr;
+}
 #endif
 
 #endif // HAVE_SAMURAI_POSIX_H

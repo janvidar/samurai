@@ -18,7 +18,7 @@
 
 #include <openssl/x509v3.h>
 
-#include <sys/socket.h>
+#include <samurai/io/net/socketglue.h>
 #include <sys/stat.h>
 #include <samurai/posix.h>
 #include <fcntl.h>

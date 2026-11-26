@@ -23,7 +23,9 @@
 
 #include <signal.h>
 #include <string.h>
+#ifndef _WIN32
 #include <sys/time.h>
+#endif
 #include <samurai/posix.h>
 
 static std::unique_ptr<Samurai::EventLoop> loop;

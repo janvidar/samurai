@@ -684,6 +684,8 @@ EXO_TEST(file_rmdir_removes_an_empty_directory,
 /* so the reissued call has something to return and the case cannot hang.     */
 /* ------------------------------------------------------------------------- */
 
+/* Signals, fifos, POSIX permission bits and symlinks: none of them on Windows. */
+#ifndef _WIN32
 namespace {
 
 int g_fifo_write_end = -1;
@@ -741,6 +743,7 @@ EXO_TEST(file_read_interrupted_by_a_signal_is_reissued,
 
 	return got == 1 && buf[0] == 'x' && !ec;
 });
+#endif
 
 
 /* ------------------------------------------------------------------------- */
@@ -773,6 +776,7 @@ EXO_TEST(file_predicates_are_false_for_what_is_not_there,
 });
 
 /* A file the umask left non-executable, and the same file with the bit set. */
+#ifndef _WIN32
 EXO_TEST(file_executable_follows_the_mode,
 {
 	Scratch scratch("exec");
@@ -785,6 +789,7 @@ EXO_TEST(file_executable_follows_the_mode,
 	if (chmod(path.c_str(), 0755) != 0) return false;
 	return f.isExecutable();
 });
+#endif
 
 EXO_TEST(file_a_directory_is_executable_because_it_is_searchable,
 {
@@ -797,6 +802,7 @@ EXO_TEST(file_a_directory_is_executable_because_it_is_searchable,
  * Deleting writes to the directory, not to the file, so a read-only file in a
  * writable directory can still go.
  */
+#ifndef _WIN32
 EXO_TEST(file_deleteable_reads_the_directory_not_the_file,
 {
 	Scratch scratch("del");
@@ -811,7 +817,9 @@ EXO_TEST(file_deleteable_reads_the_directory_not_the_file,
 	chmod(path.c_str(), 0644);
 	return deleteable;
 });
+#endif
 
+#ifndef _WIN32
 EXO_TEST(file_not_deleteable_from_a_read_only_directory,
 {
 	Scratch scratch("delro");
@@ -830,6 +838,7 @@ EXO_TEST(file_not_deleteable_from_a_read_only_directory,
 	if (geteuid() == 0) return true;
 	return !deleteable;
 });
+#endif
 
 /* What it says has to match what actually happens. */
 EXO_TEST(file_deleteable_agrees_with_remove,
@@ -844,6 +853,7 @@ EXO_TEST(file_deleteable_agrees_with_remove,
 	return f.remove() && !f.exists();
 });
 
+#ifndef _WIN32
 EXO_TEST(file_symlink_is_recognised,
 {
 	Scratch scratch("symlink");
@@ -858,7 +868,9 @@ EXO_TEST(file_symlink_is_recognised,
 	/* isSymlink() asks about the link; everything else follows it. */
 	return l.isSymlink() && !t.isSymlink() && l.exists() && !l.isDirectory();
 });
+#endif
 
+#ifndef _WIN32
 EXO_TEST(file_symlink_to_a_directory_is_both,
 {
 	Scratch scratch("symdir");
@@ -868,12 +880,14 @@ EXO_TEST(file_symlink_to_a_directory_is_both,
 	Samurai::IO::File l(link);
 	return l.isSymlink() && l.isDirectory();
 });
+#endif
 
 /*
  * Paranoid maps to O_NOFOLLOW, so a symlink must not open through it. This is
  * what the mode is for: a path that was a regular file a moment ago and is a
  * link to something else by the time it is opened.
  */
+#ifndef _WIN32
 EXO_TEST(file_paranoid_refuses_to_follow_a_symlink,
 {
 	Scratch scratch("paranoid");
@@ -893,6 +907,7 @@ EXO_TEST(file_paranoid_refuses_to_follow_a_symlink,
 
 	return !opened && ec;
 });
+#endif
 
 EXO_TEST(file_paranoid_opens_a_regular_file,
 {
@@ -1210,6 +1225,7 @@ EXO_TEST(file_resolve_agrees_with_the_constructor,
  * name inside a directory can still reach outside it once opened, if a link
  * inside that directory points out.
  */
+#ifndef _WIN32
 EXO_TEST(file_resolve_is_lexical_and_does_not_follow_symlinks,
 {
 	Scratch scratch("symlex");
@@ -1240,6 +1256,7 @@ EXO_TEST(file_resolve_is_lexical_and_does_not_follow_symlinks,
 	}
 	return true;
 });
+#endif
 
 /*
  * Normalising is not confining: a '..' in a name appended to a directory
