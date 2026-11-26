@@ -254,21 +254,25 @@ void Samurai::IO::Net::Socket::handleMonitorEvent(Samurai::IO::Net::SocketMonito
 
 		/*
 		 * A connection still being made that "closes" was refused or reset: kqueue
-		 * says so as end-of-stream on the read side, before any write readiness,
-		 * and the reason is only in SO_ERROR.
+		 * says so as end-of-stream on the read side, before any write readiness.
+		 * internal_connected() reads SO_ERROR (once - reading clears it) and fails
+		 * the attempt the way a write-side refusal does, leaving it retryable.
 		 */
 		if (state == SocketState::ProxyHandshake)
 		{
 			internal_proxy_failed();
 		}
-		else if (any(trig & Samurai::IO::Net::SocketMonitor::Triggers::Error) || state == SocketState::Connecting)
+		else if (state == SocketState::Connecting)
+		{
+			internal_connected();
+		}
+		else if (any(trig & Samurai::IO::Net::SocketMonitor::Triggers::Error))
 		{
 			int value = 0;
 			socklen_t valsize = sizeof(value);
 			if (Samurai::IO::Net::get_sockopt(sd, SOL_SOCKET, SO_ERROR, &value, &valsize) != 0)
 				value = 0;
-			if (value != 0 || any(trig & Samurai::IO::Net::SocketMonitor::Triggers::Error)) internal_error(value);
-			else internal_closed();
+			internal_error(value);
 		}
 		else
 		{
