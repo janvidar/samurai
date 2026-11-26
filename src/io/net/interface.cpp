@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <stdio.h>
 #include <string.h>
 #include <samurai/samurai.h>
 #include <samurai/io/net/interface.h>
@@ -101,7 +102,7 @@ bool Samurai::IO::Net::NetworkInterfaceUnix::getInfo(unsigned long info, int af)
 	if (sock == -1) return false;
 
 	memset(&m_ifr, 0, sizeof(m_ifr));
-	strncpy(m_ifr.ifr_name, m_name, sizeof(m_ifr.ifr_name) - 1);
+	snprintf(m_ifr.ifr_name, sizeof(m_ifr.ifr_name), "%s", m_name);
 	m_ifr.ifr_addr.sa_family = af;
 
 	if (ioctl(sock, info, &m_ifr) < 0)
