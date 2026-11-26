@@ -19,7 +19,7 @@
 #endif
 
 #include <string.h>
-#include <unistd.h>
+#include <samurai/posix.h>
 #include <fcntl.h>
 
 #include <samurai/eventloop.h>

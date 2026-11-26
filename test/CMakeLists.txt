@@ -74,6 +74,11 @@ endif()
 
 # MODE AUTO compiles each .tcc as its own translation unit and lets the tests
 # register themselves, so nothing is generated and Perl is not needed.
+# Over socketpair(AF_UNIX) and descriptor numbers, neither of which Windows has.
+if(NOT WIN32)
+    set(SAMURAI_POSIX_ONLY_TESTS exotic/socketmonitor.tcc)
+endif()
+
 exotic_add_tests(autotest
     LANGUAGE CXX
     SOURCES
@@ -94,7 +99,7 @@ exotic_add_tests(autotest
         exotic/notifier.tcc
         exotic/random.tcc
         exotic/resolver.tcc
-        exotic/socketmonitor.tcc
+        ${SAMURAI_POSIX_ONLY_TESTS}
         exotic/sockets.tcc
         exotic/socks5.tcc
         exotic/string.tcc

@@ -70,7 +70,7 @@
 
 #ifdef SAMURAI_POSIX
 #include <sys/time.h>
-#include <unistd.h>
+#include <samurai/posix.h>
 #endif
 
 #ifdef SAMURAI_OS_WINDOWS

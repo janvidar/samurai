@@ -11,8 +11,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include <signal.h>
+#ifndef _WIN32
 #include <sys/time.h>
-#include <unistd.h>
+#endif
+#include <samurai/posix.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <utility>

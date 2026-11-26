@@ -12,7 +12,7 @@
 #include "io/net/socketmonitor-backend.h"
 
 #include <sys/socket.h>
-#include <unistd.h>
+#include <samurai/posix.h>
 #include <fcntl.h>
 #include <sys/select.h>
 #include <memory>

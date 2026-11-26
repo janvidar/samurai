@@ -30,12 +30,7 @@
 #include <limits.h>
 #include <string.h>
 #include <sys/stat.h>
-#ifdef SAMURAI_POSIX
-#include <unistd.h>
-#else
-#include <io.h>
-#include <process.h>
-#endif
+#include <samurai/posix.h>
 
 /*
  * The build requires OpenSSL 3.0 or LibreSSL 3.5, both of which negotiate
@@ -330,7 +325,13 @@ static BIO* ssl_create_pem_file(const char* path, mode_t perms)
 	}
 
 	BIO* bio = nullptr;
-	if (::fchmod(fd, perms) == 0)
+#ifdef SAMURAI_WINDOWS
+	/* No POSIX modes to set: the file is the user's by the profile it lives in. */
+	const bool restricted = true;
+#else
+	const bool restricted = ::fchmod(fd, perms) == 0;
+#endif
+	if (restricted)
 	{
 		/* BIO_CLOSE hands the descriptor over, so the BIO closes it. */
 		bio = BIO_new_fd(fd, BIO_CLOSE);

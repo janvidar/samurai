@@ -19,12 +19,7 @@
 
 #include <stdio.h>
 #include <string.h>
-#ifdef SAMURAI_POSIX
-#include <unistd.h>
-#else
-#include <io.h>
-#include <process.h>
-#endif
+#include <samurai/posix.h>
 #include <samurai/os.h>
 
 namespace Samurai

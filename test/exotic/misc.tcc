@@ -13,7 +13,7 @@
 #include <samurai/timestamp.h>
 #include <samurai/stdc.h>
 #include <time.h>
-#include <unistd.h>
+#include <samurai/posix.h>
 #include <samurai/messagehandler.h>
 #include <string>
 #include <algorithm>

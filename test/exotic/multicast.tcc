@@ -246,12 +246,12 @@ EXO_TEST(multicast_ttl_reads_are_stable,
 
 EXO_TEST(multicast_ttl_is_per_socket,
 {
-	std::shared_ptr<McastSocket> near = make_multicast_socket();
-	std::shared_ptr<McastSocket> far = make_multicast_socket();
-	if (!near || !far) return false;
+	std::shared_ptr<McastSocket> nearby = make_multicast_socket();
+	std::shared_ptr<McastSocket> distant = make_multicast_socket();
+	if (!nearby || !distant) return false;
 
-	if (!near->setMulticastTimeToLive(9)) return false;
-	return near->getMulticastTimeToLive() == 9 && far->getMulticastTimeToLive() == 1;
+	if (!nearby->setMulticastTimeToLive(9)) return false;
+	return nearby->getMulticastTimeToLive() == 9 && distant->getMulticastTimeToLive() == 1;
 });
 
 /*

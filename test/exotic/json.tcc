@@ -4,6 +4,7 @@
  */
 
 #include <samurai/io/json.h>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -429,7 +430,7 @@ EXO_TEST(json_write_misuse_is_caught, {
 
 EXO_TEST(json_write_rejects_non_finite, {
 	JsonWriter w;
-	w.beginArray().value(1.0 / 0.0).endArray();
+	w.beginArray().value(std::numeric_limits<double>::infinity()).endArray();
 	return !w.isComplete();
 });
 
