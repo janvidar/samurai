@@ -84,11 +84,13 @@
 #define SAMURAI_WINDOWS
 #endif
 
-/* MSVC has no ssize_t; MinGW's headers do. */
+/* POSIX types MSVC does not have; MinGW's headers do. */
 #if defined(_MSC_VER) && !defined(SAMURAI_HAVE_SSIZE_T)
 #define SAMURAI_HAVE_SSIZE_T
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
+typedef int pid_t;
+typedef unsigned short mode_t;
 #endif
 
 /*

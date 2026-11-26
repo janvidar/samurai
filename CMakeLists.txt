@@ -328,6 +328,15 @@ foreach(target IN ITEMS samurai_objects ${SAMURAI_LIBRARIES})
     # its bytes on Windows.
     if(WIN32)
         target_link_libraries(${target} PUBLIC ws2_32 iphlpapi bcrypt)
+        # windows.h without min/max macros or the rarely used half of the API.
+        target_compile_definitions(${target} PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
+    endif()
+
+    # The conforming preprocessor, for __VA_OPT__ in the public logging macros;
+    # PUBLIC because consumers expand them too.
+    if(MSVC)
+        target_compile_options(${target} PUBLIC /Zc:preprocessor /Zc:__cplusplus /utf-8)
+        target_compile_definitions(${target} PUBLIC _CRT_SECURE_NO_WARNINGS _CRT_NONSTDC_NO_WARNINGS)
     endif()
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")

@@ -19,7 +19,9 @@
 #endif
 
 #include <stdio.h>
+#ifdef SAMURAI_POSIX
 #include <sys/time.h>
+#endif
 #include <time.h>
 #include <stdlib.h>
 #include <string.h>

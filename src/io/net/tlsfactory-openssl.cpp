@@ -30,7 +30,12 @@
 #include <limits.h>
 #include <string.h>
 #include <sys/stat.h>
+#ifdef SAMURAI_POSIX
 #include <unistd.h>
+#else
+#include <io.h>
+#include <process.h>
+#endif
 
 /*
  * The build requires OpenSSL 3.0 or LibreSSL 3.5, both of which negotiate

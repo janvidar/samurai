@@ -18,7 +18,12 @@
 #include <filesystem>
 #include <samurai/io/buffer.h>
 
+#ifdef SAMURAI_POSIX
 #include <unistd.h>
+#else
+#include <io.h>
+#include <process.h>
+#endif
 #include <errno.h>
 #include <sys/stat.h>
 #include <fcntl.h>
