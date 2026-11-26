@@ -257,7 +257,11 @@ void Samurai::IO::Net::Socket::handleMonitorEvent(Samurai::IO::Net::SocketMonito
 		 * says so as end-of-stream on the read side, before any write readiness,
 		 * and the reason is only in SO_ERROR.
 		 */
-		if (any(trig & Samurai::IO::Net::SocketMonitor::Triggers::Error) || state == SocketState::Connecting)
+		if (state == SocketState::ProxyHandshake)
+		{
+			internal_proxy_failed();
+		}
+		else if (any(trig & Samurai::IO::Net::SocketMonitor::Triggers::Error) || state == SocketState::Connecting)
 		{
 			int value = 0;
 			socklen_t valsize = sizeof(value);
@@ -513,9 +517,13 @@ void Samurai::IO::Net::Socket::internal_proxy_pump()
 	const Socks5Handshake::Status status =
 		Samurai::IO::Net::socks5_pump(*handshake, sd, want_write, ec);
 
+	/* A proxy that hangs up with our request unread resets the connection on some
+	   systems; that is the proxy failing the handshake, not the peer going away. */
 	if (ec)
 	{
-		internal_error(ec.value());
+		const int value = ec.value();
+		if (value == ECONNRESET || value == EPIPE || value == ECONNABORTED) internal_proxy_failed();
+		else internal_error(value);
 		return;
 	}
 
