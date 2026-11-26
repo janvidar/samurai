@@ -5,9 +5,8 @@
 
 #include <samurai/samurai.h>
 
-#include <sys/time.h>
-
 #ifdef SAMURAI_POSIX
+#include <sys/time.h>
 #include <sys/resource.h>
 #include <sys/utsname.h>
 #endif

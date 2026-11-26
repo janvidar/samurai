@@ -84,6 +84,13 @@
 #define SAMURAI_WINDOWS
 #endif
 
+/* MSVC has no ssize_t; MinGW's headers do. */
+#if defined(_MSC_VER) && !defined(SAMURAI_HAVE_SSIZE_T)
+#define SAMURAI_HAVE_SSIZE_T
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#endif
+
 /*
  * Exactly one platform family must be selected, and the two Windows spellings
  * always travel together. Both are in use across the tree - SAMURAI_WINDOWS
