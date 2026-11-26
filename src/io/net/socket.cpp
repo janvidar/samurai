@@ -252,13 +252,19 @@ void Samurai::IO::Net::Socket::handleMonitorEvent(Samurai::IO::Net::SocketMonito
 		if (state == SocketState::Invalid || state == SocketState::Disconnected)
 			return;
 
-		if (any(trig & Samurai::IO::Net::SocketMonitor::Triggers::Error))
+		/*
+		 * A connection still being made that "closes" was refused or reset: kqueue
+		 * says so as end-of-stream on the read side, before any write readiness,
+		 * and the reason is only in SO_ERROR.
+		 */
+		if (any(trig & Samurai::IO::Net::SocketMonitor::Triggers::Error) || state == SocketState::Connecting)
 		{
 			int value = 0;
 			socklen_t valsize = sizeof(value);
 			if (Samurai::IO::Net::get_sockopt(sd, SOL_SOCKET, SO_ERROR, &value, &valsize) != 0)
 				value = 0;
-			internal_error(value);
+			if (value != 0 || any(trig & Samurai::IO::Net::SocketMonitor::Triggers::Error)) internal_error(value);
+			else internal_closed();
 		}
 		else
 		{
