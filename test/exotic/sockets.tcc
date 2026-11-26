@@ -3,6 +3,7 @@
  * See the file "COPYING" for licensing details.
  */
 
+#include <thread>
 #include <samurai/eventloop.h>
 #include <samurai/messagehandler.h>
 #include <samurai/io/net/socketbase.h>
@@ -204,7 +205,7 @@ static bool spin(Fn done, int timeout_ms = SOCKET_TEST_TIMEOUT_MS)
 	{
 		if (std::chrono::steady_clock::now() > deadline)
 			return done();
-		usleep(1000);
+		std::this_thread::sleep_for(std::chrono::microseconds(1000));
 	}
 	return true;
 }
@@ -1077,6 +1078,8 @@ EXO_TEST(sockets_datagram_payloads_are_kept_apart,
  * descriptor, without which this write raises the signal instead of failing.
  * Reaching the assertion at all is the test.
  */
+/* socketpair(AF_UNIX) and signals: POSIX only. */
+#ifndef _WIN32
 EXO_TEST(sockets_writing_to_a_closed_peer_returns_an_error_not_a_signal,
 {
 	int sv[2];
@@ -1150,6 +1153,7 @@ EXO_TEST(sockets_a_peek_interrupted_by_a_signal_keeps_the_connection,
 	close(sv[1]);
 	return got == 1 && buf[0] == 'x';
 });
+#endif
 
 /* ------------------------------------------------------------------------- */
 /* TLS through Socket and the event loop                                     */
@@ -1320,7 +1324,7 @@ EXO_TEST(sockets_tls_writing_to_a_peer_that_has_gone_is_an_error_not_a_signal,
 	for (int n = 0; n < 64 && last >= 0; n++)
 	{
 		last = fix.client()->write("payload", 7);
-		usleep(1000);
+		std::this_thread::sleep_for(std::chrono::microseconds(1000));
 	}
 
 	return last < 0;

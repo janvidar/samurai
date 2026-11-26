@@ -26,6 +26,13 @@ typedef SOCKET socket_t;
 typedef int socklen_t;
 typedef int interface_t;
 
+/* shutdown()'s POSIX names. */
+#ifndef SHUT_RD
+#define SHUT_RD   SD_RECEIVE
+#define SHUT_WR   SD_SEND
+#define SHUT_RDWR SD_BOTH
+#endif
+
 /* MSVC's errno.h has these with POSIX values; a socket reports the WSA ones. */
 
 

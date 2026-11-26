@@ -74,24 +74,60 @@ static bool tls_expected_fingerprint(const std::string& cert_path, Tls::Sha256Di
 
 struct SocketPair
 {
-	int fd[2] = { -1, -1 };
+	socket_t fd[2] = { INVALID_SOCKET, INVALID_SOCKET };
 
+	/* Non-blocking, so an incomplete handshake reports WantRead instead of
+	   deadlocking both ends against each other. */
 	SocketPair()
 	{
-		if (socketpair(AF_UNIX, SOCK_STREAM, 0, fd) != 0) { fd[0] = fd[1] = -1; return; }
-		/* Non-blocking, so an incomplete handshake reports WantRead instead of
-		   deadlocking both ends against each other. */
+#ifdef _WIN32
+		/* No socketpair(): a loopback connection is the nearest thing. */
+		socket_t listener = ::socket(AF_INET, SOCK_STREAM, 0);
+		sockaddr_in at {};
+		at.sin_family = AF_INET;
+		at.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+		int size = sizeof(at);
+		if (listener == INVALID_SOCKET
+		    || ::bind(listener, reinterpret_cast<sockaddr*>(&at), sizeof(at)) != 0
+		    || ::listen(listener, 1) != 0
+		    || ::getsockname(listener, reinterpret_cast<sockaddr*>(&at), &size) != 0)
+		{
+			if (listener != INVALID_SOCKET) Samurai::IO::Net::socket_close(listener);
+			return;
+		}
+		fd[1] = ::socket(AF_INET, SOCK_STREAM, 0);
+		if (fd[1] != INVALID_SOCKET && ::connect(fd[1], reinterpret_cast<sockaddr*>(&at), sizeof(at)) == 0)
+			fd[0] = ::accept(listener, nullptr, nullptr);
+		Samurai::IO::Net::socket_close(listener);
+		if (fd[0] == INVALID_SOCKET)
+		{
+			if (fd[1] != INVALID_SOCKET) Samurai::IO::Net::socket_close(fd[1]);
+			fd[1] = INVALID_SOCKET;
+			return;
+		}
 		for (int n = 0; n < 2; n++)
+		{
+			u_long on = 1;
+			ioctlsocket(fd[n], FIONBIO, &on);
+		}
+#else
+		int raw[2];
+		if (socketpair(AF_UNIX, SOCK_STREAM, 0, raw) != 0) return;
+		for (int n = 0; n < 2; n++)
+		{
+			fd[n] = raw[n];
 			fcntl(fd[n], F_SETFL, fcntl(fd[n], F_GETFL, 0) | O_NONBLOCK);
+		}
+#endif
 	}
 
 	~SocketPair()
 	{
 		for (int n = 0; n < 2; n++)
-			if (fd[n] != -1) close(fd[n]);
+			if (fd[n] != INVALID_SOCKET) Samurai::IO::Net::socket_close(fd[n]);
 	}
 
-	bool valid() const { return fd[0] != -1 && fd[1] != -1; }
+	bool valid() const { return fd[0] != INVALID_SOCKET && fd[1] != INVALID_SOCKET; }
 
 	SocketPair(const SocketPair&) = delete;
 	SocketPair& operator=(const SocketPair&) = delete;
@@ -1264,6 +1300,8 @@ EXO_TEST(tls_selfsigned_leaves_no_key_behind_when_the_certificate_cannot_be_writ
 });
 
 /* A directory that cannot be written to fails the call rather than the process. */
+/* Relies on POSIX permission bits, which Windows does not enforce. */
+#ifndef _WIN32
 EXO_TEST(tls_selfsigned_fails_in_an_unwritable_directory,
 {
 	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
@@ -1289,6 +1327,7 @@ EXO_TEST(tls_selfsigned_fails_in_an_unwritable_directory,
 	EXO_ASSERT(!key_left && !cert_left);
 	return true;
 });
+#endif
 
 /*
  * A name that cannot be encoded as the certificate would have to carry it is
@@ -1592,6 +1631,8 @@ EXO_TEST(tls_a_key_that_does_not_match_the_certificate_is_refused,
  * were cached, a certificate that becomes readable again would need a restart
  * before any connection could use it.
  */
+/* Relies on POSIX permission bits, which Windows does not enforce. */
+#ifndef _WIN32
 EXO_TEST(tls_a_context_that_could_not_be_built_is_tried_again,
 {
 	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
@@ -1629,6 +1670,7 @@ EXO_TEST(tls_a_context_that_could_not_be_built_is_tried_again,
 	EXO_ASSERT(tls_handshake(server, client));
 	return 1;
 });
+#endif
 
 /* ------------------------------------------------------------------------- */
 /* Keys held by a context rather than by the process                         */
