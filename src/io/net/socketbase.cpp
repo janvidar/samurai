@@ -253,7 +253,18 @@ bool Samurai::IO::Net::SocketBase::setReuseAddress(bool toggle) {
 bool Samurai::IO::Net::SocketBase::setReuseAddress(bool toggle, std::error_code& ec) {
 	ec.clear();
 	int on = toggle ? 1 : 0;
-	if (Samurai::IO::Net::set_sockopt(sd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) == SOCKET_ERROR)
+#ifdef SAMURAI_WINSOCK
+	/*
+	 * Winsock's SO_REUSEADDR lets another socket bind a port that is already
+	 * listening - taking it over, and making a taken port look free. What POSIX
+	 * asks of it (rebinding past TIME_WAIT) Windows does by default, so the nearest
+	 * meaning is the opposite option: this socket's port is its own.
+	 */
+	const int option = SO_EXCLUSIVEADDRUSE;
+#else
+	const int option = SO_REUSEADDR;
+#endif
+	if (Samurai::IO::Net::set_sockopt(sd, SOL_SOCKET, option, &on, sizeof(on)) == SOCKET_ERROR)
 	{
 		ec = Samurai::system_error(Samurai::IO::Net::net_error());
 		QERR("ERROR: setReuseAddress to %s failed", toggle ? "ON" : "OFF");
