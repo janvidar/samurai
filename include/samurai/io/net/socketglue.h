@@ -122,6 +122,42 @@ inline bool socket_pair(socket_t fds[2])
 #endif
 }
 
+/** Make a socket non-blocking. */
+inline bool set_nonblocking(socket_t sd)
+{
+#ifdef SAMURAI_WINSOCK
+	u_long on = 1;
+	return ::ioctlsocket(sd, FIONBIO, &on) == 0;
+#else
+	const int flags = ::fcntl(sd, F_GETFL, 0);
+	if (flags == -1) return false;
+	return ::fcntl(sd, F_SETFL, flags | O_NONBLOCK) != -1;
+#endif
+}
+
+/** recv() and send() with the platform's buffer and length types; -1 on error. */
+inline ssize_t socket_recv(socket_t sd, void* buf, size_t len)
+{
+#ifdef SAMURAI_WINSOCK
+	return ::recv(sd, static_cast<char*>(buf), static_cast<int>(len), 0);
+#else
+	return ::recv(sd, buf, len, 0);
+#endif
+}
+
+inline ssize_t socket_send(socket_t sd, const void* buf, size_t len)
+{
+#ifdef SAMURAI_WINSOCK
+	return ::send(sd, static_cast<const char*>(buf), static_cast<int>(len), 0);
+#else
+#ifdef MSG_NOSIGNAL
+	return ::send(sd, buf, len, MSG_NOSIGNAL);
+#else
+	return ::send(sd, buf, len, 0);
+#endif
+#endif
+}
+
 /** The last socket error, as the platform reports it. */
 inline int net_error()
 {

@@ -13,24 +13,6 @@
 #include <fcntl.h>
 #endif
 
-namespace {
-
-/* setNonBlocking() works on the inherited descriptor; the write end needs the
-   same treatment and is not one. */
-bool set_nonblocking(socket_t sd)
-{
-#ifdef SAMURAI_POSIX
-	const int flags = fcntl(sd, F_GETFL, 0);
-	if (flags == -1) return false;
-	return fcntl(sd, F_SETFL, flags | O_NONBLOCK) != -1;
-#else
-	u_long on = 1;
-	return ioctlsocket(sd, FIONBIO, &on) == 0;
-#endif
-}
-
-}
-
 Samurai::IO::Net::Notifier::Notifier(Samurai::EventLoop& loop_, std::function<void()> on_notified)
 	: SocketBase(loop_, SocketType::Stream)
 	, writer(INVALID_SOCKET)
@@ -56,7 +38,7 @@ Samurai::IO::Net::Notifier::Notifier(Samurai::EventLoop& loop_, std::function<vo
 
 	/* The drain reads until it runs out, and notify() must never park a caller
 	   on a full buffer, so neither end may block. */
-	if (!setNonBlocking(true) || !set_nonblocking(writer))
+	if (!setNonBlocking(true) || !Samurai::IO::Net::set_nonblocking(writer))
 	{
 		QERR("Unable to make the notification socketpair non-blocking: %s",
 		     strerror(Samurai::IO::Net::net_error()));
