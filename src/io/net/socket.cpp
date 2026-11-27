@@ -503,7 +503,14 @@ void Samurai::IO::Net::Socket::internal_proxy_failed()
 	const char* message = "Proxy handshake failed";
 	Samurai::IO::Net::SocketError code = Samurai::IO::Net::SocketError::ProxyProtocol;
 
-	if (handshake) code = handshake->getError(message);
+	/* A handshake cut short by the connection has not failed by itself yet, and
+	   would report its default; closed() fails it as the proxy hanging up. It is a
+	   no-op on one that already failed, which keeps that failure's own reason. */
+	if (handshake)
+	{
+		handshake->closed();
+		code = handshake->getError(message);
+	}
 
 	handshake.reset();
 	state = SocketState::Invalid;
