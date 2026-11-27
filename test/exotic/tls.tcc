@@ -55,11 +55,11 @@ namespace {
    library so the two are not the same code checked against itself. */
 static bool tls_expected_fingerprint(const std::string& cert_path, Tls::Sha256Digest& out)
 {
-	FILE* f = fopen(cert_path.c_str(), "rb");
+	BIO* f = tls_read_pem(cert_path);
 	if (!f) return false;
 
-	X509* cert = PEM_read_X509(f, nullptr, nullptr, nullptr);
-	fclose(f);
+	X509* cert = PEM_read_bio_X509(f, nullptr, nullptr, nullptr);
+	BIO_free(f);
 	if (!cert) return false;
 
 	unsigned char* der = nullptr;
@@ -756,21 +756,21 @@ static bool file_contents(const std::string& path, std::string& out)
    it claims to be, not merely something the generator was happy with. */
 static X509* read_certificate(const std::string& path)
 {
-	FILE* f = fopen(path.c_str(), "rb");
+	BIO* f = tls_read_pem(path);
 	if (!f) return nullptr;
 
-	X509* cert = PEM_read_X509(f, nullptr, nullptr, nullptr);
-	fclose(f);
+	X509* cert = PEM_read_bio_X509(f, nullptr, nullptr, nullptr);
+	BIO_free(f);
 	return cert;
 }
 
 static EVP_PKEY* read_private_key(const std::string& path)
 {
-	FILE* f = fopen(path.c_str(), "rb");
+	BIO* f = tls_read_pem(path);
 	if (!f) return nullptr;
 
-	EVP_PKEY* key = PEM_read_PrivateKey(f, nullptr, nullptr, nullptr);
-	fclose(f);
+	EVP_PKEY* key = PEM_read_bio_PrivateKey(f, nullptr, nullptr, nullptr);
+	BIO_free(f);
 	return key;
 }
 

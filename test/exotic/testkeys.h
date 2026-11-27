@@ -19,6 +19,8 @@
  * key - and generating a 2048 bit one per case would dominate the run.
  */
 
+#include <fstream>
+#include <iterator>
 #include <samurai/io/net/tlsfactory.h>
 
 #include <openssl/evp.h>
@@ -128,23 +130,48 @@ static bool tls_write_keypair(const std::string& key_path, const std::string& ce
 
 	if (ok) ok = X509_sign(cert, pkey, EVP_sha256()) > 0;
 
+	/* Through memory: OpenSSL's FILE* writers need applink on Windows. */
+	const auto save = [](const std::string& path, BIO* pem)
+	{
+		char* bytes = nullptr;
+		const long size = pem ? BIO_get_mem_data(pem, &bytes) : 0;
+		std::ofstream out(path, std::ios::binary | std::ios::trunc);
+		const bool written = size > 0 && out.write(bytes, size) && out.flush();
+		BIO_free(pem);
+		return written;
+	};
+
 	if (ok)
 	{
-		FILE* kf = fopen(key_path.c_str(), "wb");
-		ok = kf && PEM_write_PrivateKey(kf, pkey, nullptr, nullptr, 0, nullptr, nullptr);
-		if (kf) fclose(kf);
+		BIO* pem = BIO_new(BIO_s_mem());
+		ok = pem && PEM_write_bio_PrivateKey(pem, pkey, nullptr, nullptr, 0, nullptr, nullptr)
+			&& save(key_path, pem);
 	}
 
 	if (ok)
 	{
-		FILE* cf = fopen(cert_path.c_str(), "wb");
-		ok = cf && PEM_write_X509(cf, cert);
-		if (cf) fclose(cf);
+		BIO* pem = BIO_new(BIO_s_mem());
+		ok = pem && PEM_write_bio_X509(pem, cert) && save(cert_path, pem);
 	}
 
 	X509_free(cert);
 	EVP_PKEY_free(pkey);
 	return ok;
+}
+
+/* A file read into a memory BIO, for the same reason the pair is written through one. */
+inline BIO* tls_read_pem(const std::string& path)
+{
+	std::ifstream in(path, std::ios::binary);
+	if (!in) return nullptr;
+	const std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+	BIO* bio = BIO_new(BIO_s_mem());
+	if (bio && !bytes.empty() && BIO_write(bio, bytes.data(), static_cast<int>(bytes.size())) <= 0)
+	{
+		BIO_free(bio);
+		return nullptr;
+	}
+	return bio;
 }
 
 /*
