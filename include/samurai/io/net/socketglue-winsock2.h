@@ -17,6 +17,12 @@
  * member.
  */
 
+/* Winsock's default of 64 sockets per select() is too few; it has to be set
+   before winsock2.h is first included to take effect. */
+#ifndef FD_SETSIZE
+#define FD_SETSIZE 1024
+#endif
+
 #include <winsock2.h>
 #include <ws2tcpip.h>
 

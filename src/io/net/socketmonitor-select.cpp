@@ -73,7 +73,13 @@ void Samurai::IO::Net::SelectSocketMonitor::internal_modify(Samurai::IO::Net::So
  */
 static bool fd_fits_in_set(socket_t fd)
 {
+#ifdef SAMURAI_WINSOCK
+	/* Winsock's fd_set is a counted array of handles, whatever their value; its
+	   FD_SET drops what does not fit, which FD_ISSET then reports as not ready. */
+	return fd != INVALID_SOCKET;
+#else
 	return fd != INVALID_SOCKET && (long) fd >= 0 && (long) fd < (long) FD_SETSIZE;
+#endif
 }
 
 
@@ -123,6 +129,12 @@ void Samurai::IO::Net::SelectSocketMonitor::internal_wait(int time_ms) {
 		   means. */
 		if (any(trigger & Samurai::IO::Net::SocketMonitor::Triggers::Urgent)) FD_SET(fd, &efds);
 
+#ifdef SAMURAI_WINSOCK
+		/* Winsock reports a failed non-blocking connect in the exception set,
+		   not the write set, so a socket waiting to write waits on both. */
+		if (any(trigger & Samurai::IO::Net::SocketMonitor::Triggers::Write)) FD_SET(fd, &efds);
+#endif
+
 		if (!any(trigger & (Samurai::IO::Net::SocketMonitor::Triggers::Read | Samurai::IO::Net::SocketMonitor::Triggers::Write | Samurai::IO::Net::SocketMonitor::Triggers::Urgent))) continue;
 
 		if (maxfd == INVALID_SOCKET || maxfd < fd)
@@ -135,6 +147,16 @@ void Samurai::IO::Net::SelectSocketMonitor::internal_wait(int time_ms) {
 		     "cannot be monitored; use the poll or epoll backend",
 		     (unsigned long) skipped, (int) FD_SETSIZE);
 	}
+
+#ifdef SAMURAI_WINSOCK
+	/* Winsock fails select() on empty sets at once (WSAEINVAL) rather than
+	   waiting, which turned an idle loop into a busy one. */
+	if (maxfd == INVALID_SOCKET)
+	{
+		if (time_ms > 0) ::Sleep(static_cast<DWORD>(time_ms));
+		return;
+	}
+#endif
 
 	struct ::timeval timeout;
 	timeout.tv_sec = (time_ms / 1000);
@@ -182,7 +204,18 @@ void Samurai::IO::Net::SelectSocketMonitor::internal_wait(int time_ms) {
 		Samurai::IO::Net::SocketMonitor::Triggers trig = Samurai::IO::Net::SocketMonitor::Triggers::None;
 		if (FD_ISSET(fd, &wfds)) trig |= Samurai::IO::Net::SocketMonitor::Triggers::Write;
 		if (FD_ISSET(fd, &rfds)) trig |= Samurai::IO::Net::SocketMonitor::Triggers::Read;
-		if (FD_ISSET(fd, &efds)) trig |= Samurai::IO::Net::SocketMonitor::Triggers::Urgent;
+		if (FD_ISSET(fd, &efds))
+		{
+#ifdef SAMURAI_WINSOCK
+			/* For a socket that was waiting to write, see above: a failed connect. */
+			if (any(sock->getMonitorTrigger() & Samurai::IO::Net::SocketMonitor::Triggers::Write))
+				trig |= Samurai::IO::Net::SocketMonitor::Triggers::Error;
+			if (any(sock->getMonitorTrigger() & Samurai::IO::Net::SocketMonitor::Triggers::Urgent))
+				trig |= Samurai::IO::Net::SocketMonitor::Triggers::Urgent;
+#else
+			trig |= Samurai::IO::Net::SocketMonitor::Triggers::Urgent;
+#endif
+		}
 
 		if (!any(trig)) continue;
 
