@@ -211,6 +211,14 @@ bool Samurai::IO::File::open(Mode mode, std::error_code& ec)
 	flags |= O_LARGEFILE;
 #endif
 
+#ifdef SAMURAI_WINDOWS
+	/* Bytes as they are, not text with its line endings translated. The CRT
+	   refuses mode bits beyond its own read and write, and has no notion of
+	   others to keep out: a private file is private by the profile it is in. */
+	flags |= O_BINARY;
+	fmode = _S_IREAD | _S_IWRITE;
+#endif
+
 	fd = ::open(filename.c_str(), flags, fmode);
 	if (fd == -1)
 	{
@@ -700,10 +708,11 @@ std::string Samurai::IO::File::resolvePath(const std::string& input) {
 	// Expand a leading '~' to the home directory.
 	if (!work.empty() && work[0] == '~' && (work.size() == 1 || work[1] == '/'))
 	{
-#ifdef SAMURAI_WINDOWS
-		const char* home = getenv("USERPROFILE");
-#else
+		/* HOME wins where it is set, Windows included (MSYS sets it, and so do
+		   tests that want a home of their own); USERPROFILE is Windows' own. */
 		const char* home = getenv("HOME");
+#ifdef SAMURAI_WINDOWS
+		if (!home || !*home) home = getenv("USERPROFILE");
 #endif
 		if (home)
 			work = std::string(home) + work.substr(1);
@@ -729,11 +738,15 @@ std::string Samurai::IO::File::resolvePath(const std::string& input) {
 		if (!ec) p = abs;
 	}
 
-	std::string out = p.lexically_normal().string();
+	/* Forward slashes on Windows too: callers build paths with '/' and compare and
+	   split them as strings, and Windows takes either. The same as string() elsewhere. */
+	std::string out = p.lexically_normal().generic_string();
 
 	/* lexically_normal() leaves a trailing separator on directory-like paths;
-	   the previous implementation stripped it and callers compare these. */
-	while (out.size() > 1 && (out[out.size()-1] == '/' || out[out.size()-1] == '\\'))
+	   the previous implementation stripped it and callers compare these. Not
+	   from a drive root, though: "D:" is the current directory on D, not its root. */
+	while (out.size() > 1 && out[out.size()-1] == '/'
+	       && !(out.size() == 3 && out[1] == ':'))
 		out.erase(out.size()-1);
 
 	if (out.empty()) out = "/";
