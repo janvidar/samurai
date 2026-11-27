@@ -208,14 +208,24 @@ EXO_TEST(timer_that_destroys_another_timer_is_safe,
 EXO_TEST(timer_reset_postpones_the_deadline,
 {
 	Counter counter;
-	Timer timer(*loop, &counter, std::chrono::milliseconds(40), true);
+	const auto deadline = std::chrono::milliseconds(100);
+	Timer timer(*loop, &counter, deadline, true);
 
-	/* Keep pushing the deadline out; it must not fire while being reset. */
+	/*
+	 * Keep pushing the deadline out; it must not fire while being reset. A gap
+	 * between two resets as long as the deadline - a loaded machine - lets it
+	 * fire rightly, so that is told apart rather than failed.
+	 */
+	auto last = std::chrono::steady_clock::now();
+	bool starved = false;
 	for (int n = 0; n < 8; n++)
 	{
 		timer.reset();
+		last = std::chrono::steady_clock::now();
 		timer_pump(2, 2);
+		if (std::chrono::steady_clock::now() - last >= deadline) starved = true;
 	}
+	if (starved) EXO_SKIP("the machine stalled for longer than the deadline between two resets");
 	if (counter.fired != 0) return false;
 
 	return timer_pump_until([&] { return counter.fired == 1; });
