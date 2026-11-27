@@ -72,7 +72,7 @@ EXO_TEST(file_6, {
 });
 
 /* The home '~' means: HOME, and on Windows USERPROFILE where HOME is not set. */
-static const char* home_directory()
+static const char* tilde_home()
 {
 	const char* home = getenv("HOME");
 #ifdef SAMURAI_WINDOWS
@@ -83,7 +83,7 @@ static const char* home_directory()
 
 EXO_TEST(file_7, {
 	Samurai::IO::File f("~");
-	const char* home = home_directory();
+	const char* home = tilde_home();
 	if (!home) return false;
 	return f.getName() == Samurai::IO::File::resolvePath(home);
 });
