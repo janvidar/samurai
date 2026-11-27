@@ -80,45 +80,16 @@ struct SocketPair
 	   deadlocking both ends against each other. */
 	SocketPair()
 	{
-#ifdef _WIN32
-		/* No socketpair(): a loopback connection is the nearest thing. */
-		socket_t listener = ::socket(AF_INET, SOCK_STREAM, 0);
-		sockaddr_in at {};
-		at.sin_family = AF_INET;
-		at.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-		int size = sizeof(at);
-		if (listener == INVALID_SOCKET
-		    || ::bind(listener, reinterpret_cast<sockaddr*>(&at), sizeof(at)) != 0
-		    || ::listen(listener, 1) != 0
-		    || ::getsockname(listener, reinterpret_cast<sockaddr*>(&at), &size) != 0)
-		{
-			if (listener != INVALID_SOCKET) Samurai::IO::Net::socket_close(listener);
-			return;
-		}
-		fd[1] = ::socket(AF_INET, SOCK_STREAM, 0);
-		if (fd[1] != INVALID_SOCKET && ::connect(fd[1], reinterpret_cast<sockaddr*>(&at), sizeof(at)) == 0)
-			fd[0] = ::accept(listener, nullptr, nullptr);
-		Samurai::IO::Net::socket_close(listener);
-		if (fd[0] == INVALID_SOCKET)
-		{
-			if (fd[1] != INVALID_SOCKET) Samurai::IO::Net::socket_close(fd[1]);
-			fd[1] = INVALID_SOCKET;
-			return;
-		}
+		if (!Samurai::IO::Net::socket_pair(fd)) return;
 		for (int n = 0; n < 2; n++)
 		{
+#ifdef SAMURAI_WINSOCK
 			u_long on = 1;
 			ioctlsocket(fd[n], FIONBIO, &on);
-		}
 #else
-		int raw[2];
-		if (socketpair(AF_UNIX, SOCK_STREAM, 0, raw) != 0) return;
-		for (int n = 0; n < 2; n++)
-		{
-			fd[n] = raw[n];
 			fcntl(fd[n], F_SETFL, fcntl(fd[n], F_GETFL, 0) | O_NONBLOCK);
-		}
 #endif
+		}
 	}
 
 	~SocketPair()

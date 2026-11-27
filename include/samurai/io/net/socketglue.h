@@ -64,6 +64,48 @@ inline int socket_close(socket_t sd)
 #endif
 }
 
+/**
+ * A connected pair of stream sockets, both blocking: socketpair() where there is
+ * one, and on Windows a loopback connection, the nearest thing it has.
+ * @return false, with both left INVALID_SOCKET, if none could be made.
+ */
+inline bool socket_pair(socket_t fds[2])
+{
+	fds[0] = fds[1] = INVALID_SOCKET;
+#ifdef SAMURAI_WINSOCK
+	const socket_t listener = ::socket(AF_INET, SOCK_STREAM, 0);
+	if (listener == INVALID_SOCKET) return false;
+
+	sockaddr_in at {};
+	at.sin_family = AF_INET;
+	at.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	int size = sizeof(at);
+	if (::bind(listener, reinterpret_cast<sockaddr*>(&at), sizeof(at)) == 0
+	    && ::listen(listener, 1) == 0
+	    && ::getsockname(listener, reinterpret_cast<sockaddr*>(&at), &size) == 0)
+	{
+		fds[1] = ::socket(AF_INET, SOCK_STREAM, 0);
+		if (fds[1] != INVALID_SOCKET && ::connect(fds[1], reinterpret_cast<sockaddr*>(&at), sizeof(at)) == 0)
+			fds[0] = ::accept(listener, nullptr, nullptr);
+	}
+	socket_close(listener);
+
+	if (fds[0] == INVALID_SOCKET)
+	{
+		if (fds[1] != INVALID_SOCKET) socket_close(fds[1]);
+		fds[1] = INVALID_SOCKET;
+		return false;
+	}
+	return true;
+#else
+	int raw[2];
+	if (::socketpair(AF_UNIX, SOCK_STREAM, 0, raw) != 0) return false;
+	fds[0] = raw[0];
+	fds[1] = raw[1];
+	return true;
+#endif
+}
+
 /** The last socket error, as the platform reports it. */
 inline int net_error()
 {
