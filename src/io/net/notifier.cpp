@@ -24,8 +24,8 @@ bool set_nonblocking(socket_t sd)
 	if (flags == -1) return false;
 	return fcntl(sd, F_SETFL, flags | O_NONBLOCK) != -1;
 #else
-	(void) sd;
-	return false;
+	u_long on = 1;
+	return ioctlsocket(sd, FIONBIO, &on) == 0;
 #endif
 }
 
@@ -36,11 +36,11 @@ Samurai::IO::Net::Notifier::Notifier(Samurai::EventLoop& loop_, std::function<vo
 	, writer(INVALID_SOCKET)
 	, callback(std::move(on_notified))
 {
-#ifdef SAMURAI_POSIX
+	/* A loopback connection on Windows, which has no socketpair(). */
 	socket_t pair[2];
-	if (::socketpair(AF_UNIX, SOCK_STREAM, 0, pair) != 0)
+	if (!Samurai::IO::Net::socket_pair(pair))
 	{
-		QERR("Unable to create a notification socketpair: %s",
+		QERR("Unable to create a notification socket pair: %s",
 		     strerror(Samurai::IO::Net::net_error()));
 		return;
 	}
@@ -65,7 +65,6 @@ Samurai::IO::Net::Notifier::Notifier(Samurai::EventLoop& loop_, std::function<vo
 		writer = INVALID_SOCKET;
 		sd     = INVALID_SOCKET;
 	}
-#endif
 }
 
 Samurai::IO::Net::Notifier::~Notifier()
