@@ -309,42 +309,55 @@ static bool ssl_set_random_serial(X509* cert)
 }
 
 /*
+ * The bytes OpenSSL wrote into 'pem', stored in a new file at 'path'.
+ *
  * Created with O_EXCL, so a file that is already there is never overwritten,
  * and given the mode asked for explicitly rather than left to the process
  * umask: a umask that widened the mode would leave a private key readable by
  * others, and one that narrowed it to nothing would leave a key we cannot read
  * back ourselves.
+ *
+ * Written here rather than through a file BIO: OpenSSL handed a C runtime
+ * descriptor needs applink on Windows, where it may not share our runtime.
  */
-static BIO* ssl_create_pem_file(const char* path, mode_t perms)
+static bool ssl_store_pem(const char* path, mode_t perms, BIO* pem)
 {
+	char* data = nullptr;
+	const long length = BIO_get_mem_data(pem, &data);
+	if (length <= 0 || !data) return false;
+
+#ifdef SAMURAI_WINDOWS
+	/* No POSIX modes: the file is the user's by the profile it lives in. */
+	(void) perms;
+	const int fd = ::open(path, O_WRONLY | O_CREAT | O_EXCL | O_BINARY, _S_IREAD | _S_IWRITE);
+#else
 	const int fd = ::open(path, O_WRONLY | O_CREAT | O_EXCL, perms);
+#endif
 	if (fd == -1)
 	{
 		QERR("Unable to create '%s': %s", path, strerror(errno));
-		return nullptr;
+		return false;
 	}
 
-	BIO* bio = nullptr;
-#ifdef SAMURAI_WINDOWS
-	/* No POSIX modes to set: the file is the user's by the profile it lives in. */
-	const bool restricted = true;
-#else
-	const bool restricted = ::fchmod(fd, perms) == 0;
-#endif
-	if (restricted)
-	{
-		/* BIO_CLOSE hands the descriptor over, so the BIO closes it. */
-		bio = BIO_new_fd(fd, BIO_CLOSE);
-		if (bio) return bio;
-	}
-	else
+	bool ok = true;
+#ifndef SAMURAI_WINDOWS
+	if (::fchmod(fd, perms) != 0)
 	{
 		QERR("Unable to set the mode of '%s': %s", path, strerror(errno));
+		ok = false;
+	}
+#endif
+
+	for (long done = 0; ok && done < length;)
+	{
+		const auto wrote = ::write(fd, data + done, static_cast<unsigned>(length - done));
+		if (wrote <= 0) ok = false;
+		else done += wrote;
 	}
 
-	::close(fd);
-	::unlink(path);
-	return nullptr;
+	if (::close(fd) != 0) ok = false;
+	if (!ok) ::unlink(path);
+	return ok;
 }
 
 bool Samurai::IO::Net::TlsFactory::generateSelfSignedCertificate(
@@ -443,31 +456,18 @@ bool Samurai::IO::Net::TlsFactory::generateSelfSignedCertificate(
 	if (X509_sign(cert.get(), pkey.get(), EVP_sha256()) <= 0)
 		return ssl_failure("Unable to sign the certificate");
 
-	BioPtr key_file(ssl_create_pem_file(key_path.c_str(), 0600));
-	if (!key_file) return false;
-
-	if (PEM_write_bio_PrivateKey(key_file.get(), pkey.get(), nullptr, nullptr, 0,
-			nullptr, nullptr) != 1
-		|| BIO_flush(key_file.get()) != 1)
-	{
-		key_file.reset();
-		::unlink(key_path.c_str());
+	BioPtr key_pem(BIO_new(BIO_s_mem()));
+	if (!key_pem
+		|| PEM_write_bio_PrivateKey(key_pem.get(), pkey.get(), nullptr, nullptr, 0,
+			nullptr, nullptr) != 1)
 		return ssl_failure("Unable to write the private key");
-	}
-	key_file.reset();
+	if (!ssl_store_pem(key_path.c_str(), 0600, key_pem.get()))
+		return ssl_failure("Unable to write the private key");
 
-	BioPtr cert_file(ssl_create_pem_file(cert_path.c_str(), 0644));
-	if (!cert_file)
+	BioPtr cert_pem(BIO_new(BIO_s_mem()));
+	if (!cert_pem || PEM_write_bio_X509(cert_pem.get(), cert.get()) != 1
+		|| !ssl_store_pem(cert_path.c_str(), 0644, cert_pem.get()))
 	{
-		::unlink(key_path.c_str());
-		return false;
-	}
-
-	if (PEM_write_bio_X509(cert_file.get(), cert.get()) != 1
-		|| BIO_flush(cert_file.get()) != 1)
-	{
-		cert_file.reset();
-		::unlink(cert_path.c_str());
 		::unlink(key_path.c_str());
 		return ssl_failure("Unable to write the certificate");
 	}
