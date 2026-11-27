@@ -329,6 +329,10 @@ foreach(target IN ITEMS samurai_objects ${SAMURAI_LIBRARIES})
 
     # bcrypt supplies BCryptGenRandom, which is where Util::secureRandom() gets
     # its bytes on Windows.
+    # Security for the roots the keychain trusts, read by the TLS factory.
+    if(APPLE)
+        target_link_libraries(${target} PUBLIC "-framework Security" "-framework CoreFoundation")
+    endif()
     if(WIN32)
         target_link_libraries(${target} PUBLIC ws2_32 iphlpapi bcrypt crypt32)
         # windows.h without min/max macros or the rarely used half of the API.

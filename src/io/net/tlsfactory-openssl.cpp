@@ -39,6 +39,9 @@
 #undef OCSP_REQUEST
 #undef OCSP_RESPONSE
 #endif
+#ifdef __APPLE__
+#include <Security/Security.h>
+#endif
 #include <iterator>
 #include <limits.h>
 #include <string.h>
@@ -279,6 +282,61 @@ static bool ssl_add_windows_roots(SSL_CTX* ctx)
 	CertCloseStore(system, 0);
 	ERR_clear_error();
 	return added > 0;
+}
+#endif
+
+#ifdef __APPLE__
+/*
+ * The roots macOS trusts, from its keychain: OpenSSL's default paths name files
+ * under the prefix it was built for, which a Mac it is shipped to does not have.
+ */
+static bool ssl_add_macos_roots(SSL_CTX* ctx)
+{
+	CFArrayRef anchors = nullptr;
+	if (SecTrustCopyAnchorCertificates(&anchors) != errSecSuccess || !anchors) return false;
+
+	X509_STORE* store = SSL_CTX_get_cert_store(ctx);
+	int added = 0;
+	for (CFIndex n = 0; n < CFArrayGetCount(anchors); n++)
+	{
+		SecCertificateRef one = (SecCertificateRef) CFArrayGetValueAtIndex(anchors, n);
+		CFDataRef data = SecCertificateCopyData(one);
+		if (!data) continue;
+		const unsigned char* der = CFDataGetBytePtr(data);
+		if (X509* cert = d2i_X509(nullptr, &der, (long) CFDataGetLength(data)))
+		{
+			if (X509_STORE_add_cert(store, cert) == 1) added++;
+			X509_free(cert);
+		}
+		CFRelease(data);
+	}
+	CFRelease(anchors);
+	ERR_clear_error();
+	return added > 0;
+}
+#endif
+
+#if !defined(SAMURAI_WINDOWS) && !defined(__APPLE__)
+/*
+ * The distribution's own bundle, wherever it keeps it. OpenSSL looks only where
+ * the distribution it was built on keeps one, which is not where every other
+ * does - and a package carries its OpenSSL to all of them.
+ */
+static void ssl_add_distribution_roots(SSL_CTX* ctx)
+{
+	static const char* const bundles[] = {
+		"/etc/ssl/certs/ca-certificates.crt",                /* Debian, Ubuntu, Arch, Alpine */
+		"/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem", /* Fedora, RHEL */
+		"/etc/pki/tls/certs/ca-bundle.crt",                  /* older Fedora, RHEL */
+		"/etc/ssl/ca-bundle.pem",                            /* openSUSE */
+		"/etc/ssl/cert.pem",                                 /* Alpine, Void, the BSDs */
+	};
+
+	for (const char* bundle : bundles)
+	{
+		struct stat st;
+		if (stat(bundle, &st) == 0 && S_ISREG(st.st_mode) && ssl_add_trust_anchors(ctx, bundle)) return;
+	}
 }
 #endif
 
@@ -708,9 +766,14 @@ SSL_CTX* ssl_build_context(bool client, Samurai::IO::File* cert, Samurai::IO::Fi
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, nullptr);
 
 	/* Without a trust store SSL_VERIFY_PEER can never succeed. */
-#ifdef SAMURAI_WINDOWS
+#if defined(SAMURAI_WINDOWS)
 	if (!ssl_add_windows_roots(ctx))
+#elif defined(__APPLE__)
+	/* Either: a development build finds Homebrew's files, a shipped one the keychain's. */
+	const bool defaults = SSL_CTX_set_default_verify_paths(ctx) == 1;
+	if (!ssl_add_macos_roots(ctx) && !defaults)
 #else
+	ssl_add_distribution_roots(ctx);
 	if (SSL_CTX_set_default_verify_paths(ctx) != 1)
 #endif
 	{
