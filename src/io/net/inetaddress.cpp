@@ -173,12 +173,8 @@ bool Samurai::IO::Net::InetAddress::isValid() const
 		if ((host_order & 0xf0000000) == 0xf0000000) return false;  /* 240.0.0.0/4 */
 		return true;
 	} else if (version == Version::IPv6) {
-#ifdef SAMURAI_POSIX
 		const auto words = data->ipv6_32();
 		return (words[0] || words[1] || words[2] || words[3]);
-#else
-		return true; // FIXME
-#endif
 	} else {
 		return false;
 	}
@@ -191,11 +187,7 @@ bool Samurai::IO::Net::InetAddress::isMulticast() const
 		const uint32_t host_order = getIPv4HostOrder();
 		return (host_order >= 0xe0000000 && host_order < 0xf0000000);
 	} else if (version == Version::IPv6) {
-#ifdef SAMURAI_POSIX
 		return (data->ipv6_08()[0] == 0xff);
-#else
-		return false; // FIXME
-#endif
 	} else {
 		return false;
 	}
@@ -211,11 +203,7 @@ bool Samurai::IO::Net::InetAddress::isPrivate() const
 		if ((host_order & 0xffff0000) == 0xc0a80000) return true; /* 192.168.0.0/16 */
 		return false;
 	} else if (version == Version::IPv6) {
-#ifdef SAMURAI_POSIX
 		return ((data->ipv6_08()[0] & 0xfe) == 0xfc); /* fc00::/7 */
-#else
-		return false; // FIXME
-#endif
 	} else {
 		return false;
 	}
@@ -227,12 +215,8 @@ bool Samurai::IO::Net::InetAddress::isLinkLocal() const
 	if (version == Version::IPv4) {
 		return ((getIPv4HostOrder() & 0xffff0000) == 0xa9fe0000); /* 169.254.0.0/16 */
 	} else if (version == Version::IPv6) {
-#ifdef SAMURAI_POSIX
 		const auto bytes = data->ipv6_08();
 		return (bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0x80); /* fe80::/10 */
-#else
-		return false; // FIXME
-#endif
 	} else {
 		return false;
 	}
@@ -244,14 +228,10 @@ bool Samurai::IO::Net::InetAddress::isLoopback() const
 	if (version == Version::IPv4) {
 		return ((getIPv4HostOrder() & 0xff000000) == 0x7f000000);
 	} else if (version == Version::IPv6) {
-#ifdef SAMURAI_POSIX
 		const auto words = data->ipv6_32();
 		const auto shorts = data->ipv6_16();
 		const auto bytes = data->ipv6_08();
 		return (words[0] == 0 && words[1] == 0 && words[2] == 0 && shorts[6] == 0 && bytes[14] == 0 && bytes[15] == 1);
-#else
-		return false; // FIXME
-#endif
 	} else {
 		return false;
 	}

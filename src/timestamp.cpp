@@ -4,6 +4,7 @@
  */
 
 #include <time.h>
+#include <string>
 #include <samurai/timestamp.h>
 
 Samurai::TimeStamp::TimeStamp() {
@@ -40,7 +41,23 @@ std::string Samurai::TimeStamp::getTime(const char* format) const {
 	if (!format)
 		format = "%a %b %e %H:%M:%S %Y";
 
-	const size_t written = strftime(buf, sizeof(buf), format, localtime(&data));
+	/* %s, seconds since the epoch, is a GNU extension the Windows C runtime
+	   aborts on, so it is expanded here on every platform. */
+	std::string expanded;
+	for (const char* c = format; *c; c++)
+	{
+		if (c[0] == '%' && c[1] == 's') { expanded += std::to_string((long long) data); c++; }
+		else if (c[0] == '%' && c[1]) { expanded += c[0]; expanded += c[1]; c++; }
+		else expanded += *c;
+	}
+
+	struct tm local = {};
+#ifdef _WIN32
+	localtime_s(&local, &data);
+#else
+	localtime_r(&data, &local);
+#endif
+	const size_t written = strftime(buf, sizeof(buf), expanded.c_str(), &local);
 	return std::string(buf, written);
 }
 

@@ -466,7 +466,8 @@ void Samurai::IO::Net::Socket::internal_connected() {
 		Samurai::IO::Net::SocketError sockErr =
 			classify_socket_error(value, classified);
 
-		const char* error = (value != 0) ? strerror(value) : classified;
+		/* The classified text first: strerror() knows no Winsock codes. */
+		const char* error = classified ? classified : (value != 0 ? strerror(value) : nullptr);
 		state = SocketState::Disconnected;
 		close();
 		if (eventHandler) eventHandler->EventError(this, sockErr, error);

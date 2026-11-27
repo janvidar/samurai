@@ -14,7 +14,6 @@
 
 #ifdef SAMURAI_WINDOWS
 #include <iphlpapi.h>
-#define USE_ADAPTER_INFO
 #endif
 
 namespace Samurai {
@@ -51,11 +50,7 @@ class NetworkInterfaceUnix : public NetworkInterface
 class NetworkInterfaceWindows : public NetworkInterface
 {
 	public:
-#ifdef USE_ADAPTER_INFO
-		NetworkInterfaceWindows(PIP_ADAPTER_INFO info);
-#else
 		NetworkInterfaceWindows(PIP_ADAPTER_ADDRESSES info);
-#endif
 
 		/* The base implementations report nothing, so an interface that has a
 		 * name and an MTU has to hand them over itself. */
@@ -241,47 +236,19 @@ int Samurai::IO::Net::NetworkInterfaceWindows::getMtu() const
 	return m_mtu;
 }
 
-#ifdef USE_ADAPTER_INFO
-Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_INFO info)
-	: Samurai::IO::Net::NetworkInterface()
-	, m_name(info->Description ? info->Description : "")
-	, m_ifnumber((interface_t) info->Index)
-	, m_mtu(0)
-{
-	if (info->AddressLength == 6)
-	{
-		uint8_t hwaddr_bytes[6];
-		memcpy(hwaddr_bytes, info->Address, 6);
-		if (hwaddr_bytes[0] || hwaddr_bytes[1] || hwaddr_bytes[2] || hwaddr_bytes[3] || hwaddr_bytes[4] || hwaddr_bytes[5])
-			m_hwaddr = std::make_unique<Samurai::IO::Net::HardwareAddress>(hwaddr_bytes);
-	}
-
-	m_flags |= NetworkInterfaceFlags::Enabled;
-	if (info->Type == MIB_IF_TYPE_LOOPBACK)   m_flags |= NetworkInterfaceFlags::Loopback;
-	if (info->Type == MIB_IF_TYPE_PPP)        m_flags |= NetworkInterfaceFlags::PointToPoint;
-	if (info->Type == MIB_IF_TYPE_ETHERNET)   m_flags |= (NetworkInterfaceFlags::Broadcast | NetworkInterfaceFlags::Multicast);
-
-	/* Only the first address of the adapter is represented, so the list is not
-	   walked; assigning inside a loop would leak all but the last anyway. */
-	PIP_ADDR_STRING ipstr = &info->IpAddressList;
-	if (ipstr)
-	{
-		m_address = std::make_unique<Samurai::IO::Net::InetAddress>(
-			ipstr->IpAddress.String, Samurai::IO::Net::InetAddress::Version::IPv4);
-		m_netmask = std::make_unique<Samurai::IO::Net::InetAddress>(
-			ipstr->IpMask.String, Samurai::IO::Net::InetAddress::Version::IPv4);
-	}
-}
-
-
-#else // USE_ADAPTER_INFO
 
 Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_ADDRESSES info)
 	: Samurai::IO::Net::NetworkInterface()
-	, m_name(info->AdapterName ? info->AdapterName : "")
 	, m_ifnumber((interface_t) info->IfIndex)
 	, m_mtu((int) info->Mtu)
 {
+	/* The name getIndexByName() and getNameByIndex() speak, not the adapter's GUID. */
+	char name[256] = { 0 };
+	if (ConvertInterfaceLuidToNameA(&info->Luid, name, sizeof(name)) == NO_ERROR)
+		m_name = name;
+	else if (info->AdapterName)
+		m_name = info->AdapterName;
+
 	if (info->PhysicalAddressLength == 6)
 	{
 		uint8_t hwaddr_bytes[6];
@@ -309,27 +276,42 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_A
 		m_flags |= NetworkInterfaceFlags::Broadcast;
 	}
 
-	/* The address lives on the adapter's first unicast entry; IP_ADAPTER_ADDRESSES
-	   itself has no sockaddr. */
-	PIP_ADAPTER_UNICAST_ADDRESS unicast = info->FirstUnicastAddress;
-	struct sockaddr* sa = unicast ? unicast->Address.lpSockaddr : 0;
+	/* One address represents the adapter: its first IPv4 one, else its first IPv6
+	   one. IP_ADAPTER_ADDRESSES itself has no sockaddr. */
+	PIP_ADAPTER_UNICAST_ADDRESS chosen = nullptr;
+	for (PIP_ADAPTER_UNICAST_ADDRESS one = info->FirstUnicastAddress; one; one = one->Next)
+	{
+		const struct sockaddr* sa = one->Address.lpSockaddr;
+		if (!sa) continue;
+		if (sa->sa_family == AF_INET) { chosen = one; break; }
+		if (sa->sa_family == AF_INET6 && !chosen) chosen = one;
+	}
 
+	const struct sockaddr* sa = chosen ? chosen->Address.lpSockaddr : nullptr;
 	if (sa && sa->sa_family == AF_INET)
 	{
-		struct sockaddr_in* addr4 = (struct sockaddr_in*) sa;
+		const struct sockaddr_in* addr4 = (const struct sockaddr_in*) sa;
 		m_address = std::make_unique<Samurai::IO::Net::InetAddress>();
-		m_address->setRawAddress(&addr4->sin_addr, sizeof(addr4->sin_addr),
+		m_address->setRawAddress((void*) &addr4->sin_addr, sizeof(addr4->sin_addr),
 			Samurai::IO::Net::InetAddress::Version::IPv4);
+
+		const unsigned prefix = chosen->OnLinkPrefixLength;
+		if (prefix <= 32)
+		{
+			struct in_addr mask;
+			mask.s_addr = htonl(prefix ? 0xffffffffu << (32 - prefix) : 0);
+			m_netmask = std::make_unique<Samurai::IO::Net::InetAddress>();
+			m_netmask->setRawAddress(&mask, sizeof(mask), Samurai::IO::Net::InetAddress::Version::IPv4);
+		}
 	}
 	else if (sa && sa->sa_family == AF_INET6)
 	{
-		struct sockaddr_in6* addr6 = (struct sockaddr_in6*) sa;
+		const struct sockaddr_in6* addr6 = (const struct sockaddr_in6*) sa;
 		m_address = std::make_unique<Samurai::IO::Net::InetAddress>();
-		m_address->setRawAddress(&addr6->sin6_addr, sizeof(addr6->sin6_addr),
+		m_address->setRawAddress((void*) &addr6->sin6_addr, sizeof(addr6->sin6_addr),
 			Samurai::IO::Net::InetAddress::Version::IPv6);
 	}
 }
-#endif // USE_ADAPTER_INFO
 #endif // SAMURAI_WINDOWS
 
 
@@ -429,32 +411,6 @@ bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<std::unique_p
 
 #ifdef SAMURAI_WINDOWS
 	DWORD ret = 0;
-#ifdef USE_ADAPTER_INFO
-	PIP_ADAPTER_INFO adapterInfo;
-	PIP_ADAPTER_INFO adapter = 0;
-	DWORD bufsize = sizeof(IP_ADAPTER_INFO);
-	adapterInfo = (IP_ADAPTER_INFO*) malloc(bufsize);
-
-	ret = GetAdaptersInfo(adapterInfo, &bufsize);
-	if (ret == ERROR_BUFFER_OVERFLOW)
-	{
-		free(adapterInfo);
-		adapterInfo = (IP_ADAPTER_INFO*) malloc(bufsize);
-		ret = GetAdaptersInfo(adapterInfo, &bufsize);
-	}
-
-	if (ret == NO_ERROR)
-	{
-		adapter = adapterInfo;
-		while (adapter)
-		{
-			interfaces.push_back(std::make_unique<Samurai::IO::Net::NetworkInterfaceWindows>(adapter));
-			adapter = adapter->Next;
-		}
-	}
-	free(adapterInfo);
-	return true;
-#else // USE_ADAPTER_INFO
 
 	DWORD flags = GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_INCLUDE_PREFIX | GAA_FLAG_SKIP_DNS_SERVER | GAA_FLAG_INCLUDE_ALL_INTERFACES;
 	PIP_ADAPTER_ADDRESSES adr = 0;
@@ -495,7 +451,6 @@ bool Samurai::IO::Net::NetworkInterface::getInterfaces(std::vector<std::unique_p
 	free(adr);
 	return false;
 
-#endif // USE_ADAPTER_INFO
 #endif // SAMURAI_WINDOWS
 }
 
