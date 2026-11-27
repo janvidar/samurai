@@ -987,9 +987,9 @@ namespace {
 
 static std::string current_directory()
 {
-	char buf[4096] = { 0 };
-	if (!getcwd(buf, sizeof(buf))) return std::string();
-	return std::string(buf);
+	std::error_code ec;
+	const std::filesystem::path here = std::filesystem::current_path(ec);
+	return ec ? std::string() : here.generic_string();
 }
 
 /* An absolute home directory, or an empty string when the environment cannot
@@ -1021,8 +1021,18 @@ static std::string many_parents(size_t count)
 
 /* Reports what it saw before failing, since the interesting part of a path case
    is the difference between the two names. */
-static bool resolves_to(const std::string& input, const std::string& expected)
+/* Windows reads a leading "//" as a network (UNC) root, not a doubled one. */
+static std::string rooted_once(const std::string& input)
 {
+#ifdef SAMURAI_WINDOWS
+	if (input.size() >= 2 && input[0] == '/' && input[1] == '/') return input.substr(1);
+#endif
+	return input;
+}
+
+static bool resolves_to(const std::string& given, const std::string& expected)
+{
+	const std::string input = rooted_once(given);
 	const std::string got = Samurai::IO::File::resolvePath(input);
 	if (got == expected) return true;
 
@@ -1135,7 +1145,8 @@ EXO_TEST(file_resolve_three_dots_is_an_ordinary_name,
 {
 	EXO_ASSERT(resolves_to("/home/.../", PATH_PREFIX + "/home/..."));
 	EXO_ASSERT(resolves_to("/a/.../b", PATH_PREFIX + "/a/.../b"));
-	EXO_ASSERT(resolves_to("/a/....", PATH_PREFIX + "/a/...."));
+	/* Windows drops trailing dots from a name, so "...." is no name there. */
+	if (PATH_PREFIX.empty()) EXO_ASSERT(resolves_to("/a/....", PATH_PREFIX + "/a/...."));
 	EXO_ASSERT(resolves_to("/a/..b", PATH_PREFIX + "/a/..b"));
 	return true;
 });

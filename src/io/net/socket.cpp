@@ -455,10 +455,11 @@ void Samurai::IO::Net::Socket::internal_stream_end() {
 }
 
 void Samurai::IO::Net::Socket::internal_connected() {
-#ifdef SAMURAI_POSIX
-	int value;
+	/* On every platform: Winsock reports a refused connect this way too, and
+	   without asking it read as connected. */
+	int value = 0;
 	socklen_t valsize = sizeof(value);
-	int ret = getsockopt(sd, SOL_SOCKET, SO_ERROR, &value, &valsize);
+	int ret = Samurai::IO::Net::get_sockopt(sd, SOL_SOCKET, SO_ERROR, &value, &valsize);
 	if (ret != 0 || value != 0) {
 		/* Classified the same way as any other failure; see classify_socket_error. */
 		const char* classified = 0;
@@ -471,7 +472,6 @@ void Samurai::IO::Net::Socket::internal_connected() {
 		if (eventHandler) eventHandler->EventError(this, sockErr, error);
 		return;
 	}
-#endif // SAMURAI_POSIX
 
 	/*
 	 * The descriptor is connected - but to the proxy, so end to end there is
