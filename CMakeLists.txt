@@ -79,6 +79,9 @@ endif()
 # build, since that is what it meant before these two options existed.
 if(DEFINED BUILD_SHARED_LIBS AND NOT BUILD_SHARED_LIBS)
     set(SAMURAI_SHARED_DEFAULT OFF)
+elseif(WIN32)
+    # Nothing is marked for export, so a DLL would come without an import library.
+    set(SAMURAI_SHARED_DEFAULT OFF)
 else()
     set(SAMURAI_SHARED_DEFAULT ON)
 endif()
