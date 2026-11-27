@@ -754,7 +754,9 @@ void Samurai::IO::Net::Socket::internal_connect_addr()
 	int ret = ::connect(sd, addr->getSockAddr(), addr->getSockAddrSize());
 	timer = std::make_unique<Samurai::Timer>(*getLoop(), this, connect_timeout, true);
 	if (ret == -1) {
-		if (Samurai::IO::Net::net_error() == EINPROGRESS) {
+		/* Winsock says a non-blocking connect is under way with WSAEWOULDBLOCK. */
+		const int pending = Samurai::IO::Net::net_error();
+		if (pending == EINPROGRESS || pending == EWOULDBLOCK) {
 			state = SocketState::Connecting;
 			if (eventHandler) {
 				eventHandler->EventConnecting(this);

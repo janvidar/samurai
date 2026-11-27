@@ -282,11 +282,10 @@ bool Samurai::IO::File::rename(const std::string& new_name, std::error_code& ec)
 	ec.clear();
 	std::string new_filename = resolvePath(new_name);
 
-	if (::rename(filename.c_str(), new_filename.c_str()) != 0)
-	{
-		ec = Samurai::system_error(errno);
-		return false;
-	}
+	/* Through std::filesystem: Windows' rename() refuses an existing target, which
+	   is every write-beside-and-rename in the tree; this replaces it there too. */
+	std::filesystem::rename(filename, new_filename, ec);
+	if (ec) return false;
 
 	filename = new_filename;
 	baseName = "";

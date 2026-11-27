@@ -451,6 +451,7 @@ void Samurai::IO::Net::SocketBase::disableMonitor()
 
 bool Samurai::IO::Net::SocketBase::createDescriptor(int af)
 {
+	Samurai::IO::Net::winsock_ready();
 	if (type == SocketType::Stream)
 	{
 		sd = ::socket(af, SOCK_STREAM, IPPROTO_TCP);

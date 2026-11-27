@@ -54,6 +54,22 @@ namespace Net {
  * which.
  */
 
+/**
+ * Winsock started, once per process, before the first call that needs it; a
+ * no-op elsewhere. The event loop's monitor used to be the only thing that did,
+ * so parsing an address without one failed on Windows.
+ */
+inline void winsock_ready()
+{
+#ifdef SAMURAI_WINSOCK
+	static const bool started = [] {
+		WSADATA wsa;
+		return WSAStartup(MAKEWORD(2, 2), &wsa) == 0;
+	}();
+	(void) started;
+#endif
+}
+
 /** Close a socket descriptor. */
 inline int socket_close(socket_t sd)
 {

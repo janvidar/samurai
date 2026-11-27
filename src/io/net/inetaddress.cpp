@@ -12,85 +12,17 @@
 #include <string>
 #include <memory>
 
-/**
- * inet_ntop
- */
+/* inet_ntop and inet_pton, which Windows has had since Vista. */
 static const char* net_address_to_string(int af, const void* src, char* dst, socklen_t cnt)
 {
-#ifdef SAMURAI_WINSOCK
-	int address_length;
-	DWORD size = cnt;
-	struct sockaddr_storage addr;
-	struct sockaddr_in* sin = (struct sockaddr_in*) &addr;
-	struct sockaddr_in6* sin6 = (struct sockaddr_in6*) &addr;
-
-	memset (&addr, 0, sizeof(addr));
-	switch (af) {
-		case AF_INET:
-			size = sizeof (struct sockaddr_in);
-			sin->sin_family = af;
-			memcpy (&sin->sin_addr, src, sizeof (struct in_addr));
-			break;
-
-		case AF_INET6:
-			size = sizeof (struct sockaddr_in6);
-			sin6->sin6_family = af;
-			memcpy (&sin6->sin6_addr, src, sizeof (struct in6_addr));
-			break;
-		default:
-			return nullptr;
-	}
-
-	if (WSAAddressToString ((LPSOCKADDR) &addr, address_length, nullptr, dst, &size) == 0)
-		return dst;
-
-	return nullptr;
-#else
+	Samurai::IO::Net::winsock_ready();
 	return inet_ntop(af, src, dst, cnt);
-#endif
 }
 
 static int net_string_to_address(int af, const char* src, void* dst)
 {
-#ifdef SAMURAI_WINSOCK
-	int ret, size;
-	struct sockaddr_in  addr4;
-	struct sockaddr_in6 addr6;
-	struct sockaddr* addr = 0;
-	if (af == AF_INET6)
-	{
-		// if (net_is_ipv6_supported() != 1) return -1;
-		size = sizeof(struct sockaddr_in6);
-		addr = (struct sockaddr*) &addr6;
-	}
-	else
-	{
-		size = sizeof(struct sockaddr_in);
-		addr = (struct sockaddr*) &addr4;
-	}
-
-// 	if (!net_initialized)
-// 		net_initialize();
-
-	ret = WSAStringToAddressA((char*) src, af, nullptr, addr, &size);
-	if (ret == -1)
-	{
-		return -1;
-	}
-
-	if (af == AF_INET6)
-	{
-		memcpy(dst, &addr6.sin6_addr, sizeof(addr6.sin6_addr));
-	}
-	else
-	{
-		memcpy(dst, &addr4.sin_addr, sizeof(addr4.sin_addr));
-	}
-
-	return 1;
-#else
+	Samurai::IO::Net::winsock_ready();
 	return inet_pton(af, src, dst);
-#endif
 }
 
 

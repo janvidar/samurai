@@ -58,6 +58,7 @@ void resolveForward(ResolverPool::Request& request)
 	hints.ai_socktype = SOCK_STREAM;
 
 	struct addrinfo* result = nullptr;
+	Samurai::IO::Net::winsock_ready();
 	const int rc = ::getaddrinfo(request.query.c_str(), nullptr, &hints, &result);
 
 	if (rc != 0)
