@@ -17,13 +17,15 @@
 #include <samurai/posix.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <filesystem>
 #include <utility>
 #include <span>
 
+/* What an absolute path starts with: the current drive on Windows ("D:"), nothing elsewhere. */
 #ifdef SAMURAI_WINDOWS
-#define PATH_PREFIX "C:"
+static const std::string PATH_PREFIX = std::filesystem::current_path().root_name().generic_string();
 #else
-#define PATH_PREFIX ""
+static const std::string PATH_PREFIX;
 #endif
 
 /* The fixtures under data/ are reached through a directory baked in at compile
@@ -37,51 +39,51 @@
 #define EXOTIC_DATA_PATH(relative) EXOTIC_DATA_DIR "/" relative
 
 EXO_TEST(file_1, {
-	Samurai::IO::File f(PATH_PREFIX "/path/to/file/jalla");
+	Samurai::IO::File f(PATH_PREFIX + "/path/to/file/jalla");
 	
 	printf("%s: expect %s, got=%s\n", __FUNCTION__, "jalla", f.getBaseName().c_str());
 	return f.getBaseName() == "jalla";
 });
 
 EXO_TEST(file_2, {
-	Samurai::IO::File f(PATH_PREFIX "///path///to///file///jalla");
-	printf("%s: expect %s, got=%s\n", __FUNCTION__, PATH_PREFIX "/path/to/file/jalla", f.getName().c_str());
-	return f.getName() == PATH_PREFIX "/path/to/file/jalla";
+	Samurai::IO::File f(PATH_PREFIX + "///path///to///file///jalla");
+	printf("%s: expect %s, got=%s\n", __FUNCTION__, (PATH_PREFIX + "/path/to/file/jalla").c_str(), f.getName().c_str());
+	return f.getName() == PATH_PREFIX + "/path/to/file/jalla";
 });
 
 EXO_TEST(file_3, {
-	Samurai::IO::File f(PATH_PREFIX "/path/to/file/jalla/../../");
-	return f.getName() == PATH_PREFIX "/path/to";
+	Samurai::IO::File f(PATH_PREFIX + "/path/to/file/jalla/../../");
+	return f.getName() == PATH_PREFIX + "/path/to";
 });
 
 EXO_TEST(file_4, {
-	Samurai::IO::File f(PATH_PREFIX "/home/user/../../");
-	return f.getName() == PATH_PREFIX "/";
+	Samurai::IO::File f(PATH_PREFIX + "/home/user/../../");
+	return f.getName() == PATH_PREFIX + "/";
 });
 
 EXO_TEST(file_5, {
-	Samurai::IO::File f(PATH_PREFIX "//home////.jalla////../janv/../janv/../janvidar/.samurai//..");  // expecting: /home/janvidar
-	return f.getName() == PATH_PREFIX "/home/janvidar";
+	Samurai::IO::File f(PATH_PREFIX + "//home////.jalla////../janv/../janv/../janvidar/.samurai//..");  // expecting: /home/janvidar
+	return f.getName() == PATH_PREFIX + "/home/janvidar";
 });
 
 EXO_TEST(file_6, {
-	Samurai::IO::File f(PATH_PREFIX "//home/~////.jalla/////");	// expecting: /home/~/.jalla
-	return f.getName() == PATH_PREFIX "/home/~/.jalla";
+	Samurai::IO::File f(PATH_PREFIX + "//home/~////.jalla/////");	// expecting: /home/~/.jalla
+	return f.getName() == PATH_PREFIX + "/home/~/.jalla";
 });
 
 EXO_TEST(file_7, {
 	Samurai::IO::File f("~");
-	char* home = getenv("HOME");
+	const char* home = getenv("HOME");
+#ifdef SAMURAI_WINDOWS
+	if (!home || !*home) home = getenv("USERPROFILE");
+#endif
 	if (!home) return false;
-	return f.getName() == home;
+	return f.getName() == Samurai::IO::File::resolvePath(home);
 });
 
 EXO_TEST(file_8, {
-	char pwd[1024] = { 0 };
-	memset(pwd, 0, 1024);
-	if (!getcwd(pwd, 1024)) return false;
 	Samurai::IO::File f("home/../");
-	return f.getName() == pwd;
+	return f.getName() == std::filesystem::current_path().generic_string();
 });
 
 EXO_TEST(file_exist_1, {
@@ -598,6 +600,8 @@ EXO_TEST(file_size_keeps_up_across_several_writes,
 
 /* The accessors describe the file the descriptor holds, so renaming the path
    out from under an open File does not change what size() reports. */
+/* Renames or removes a file that is open, which Windows does not allow. */
+#ifndef _WIN32
 EXO_TEST(file_size_follows_the_descriptor_not_the_path,
 {
 	Scratch scratch("stat-fd");
@@ -621,9 +625,12 @@ EXO_TEST(file_size_follows_the_descriptor_not_the_path,
 	f.close();
 	return held == 10;
 });
+#endif
 
 /* exists() is a question about the name, so an open file whose path is gone
    answers false even though the descriptor is still good. */
+/* Renames or removes a file that is open, which Windows does not allow. */
+#ifndef _WIN32
 EXO_TEST(file_exists_asks_about_the_path,
 {
 	Scratch scratch("exists-path");
@@ -640,6 +647,7 @@ EXO_TEST(file_exists_asks_about_the_path,
 	f.close();
 	return gone;
 });
+#endif
 
 /* rmdir() removes directories. A regular file at the same name is not one, and
    must survive the call. */
@@ -1045,7 +1053,7 @@ EXO_TEST(file_resolve_tilde_expands_to_the_home_directory,
  */
 EXO_TEST(file_resolve_tilde_expands_only_at_the_start,
 {
-	EXO_ASSERT(resolves_to("//home/~////.jalla/////", PATH_PREFIX "/home/~/.jalla"));
+	EXO_ASSERT(resolves_to("//home/~////.jalla/////", PATH_PREFIX + "/home/~/.jalla"));
 
 	const std::string cwd = current_directory();
 	if (cwd.empty()) return false;
@@ -1058,27 +1066,27 @@ EXO_TEST(file_resolve_tilde_expands_only_at_the_start,
 
 EXO_TEST(file_resolve_collapses_repeated_separators,
 {
-	EXO_ASSERT(resolves_to("//path///to////file", PATH_PREFIX "/path/to/file"));
-	EXO_ASSERT(resolves_to("/a//b", PATH_PREFIX "/a/b"));
+	EXO_ASSERT(resolves_to("//path///to////file", PATH_PREFIX + "/path/to/file"));
+	EXO_ASSERT(resolves_to("/a//b", PATH_PREFIX + "/a/b"));
 	return true;
 });
 
 EXO_TEST(file_resolve_drops_a_single_dot,
 {
-	EXO_ASSERT(resolves_to("/a/./b/./c", PATH_PREFIX "/a/b/c"));
-	EXO_ASSERT(resolves_to("/a/b/./../", PATH_PREFIX "/a"));
+	EXO_ASSERT(resolves_to("/a/./b/./c", PATH_PREFIX + "/a/b/c"));
+	EXO_ASSERT(resolves_to("/a/b/./../", PATH_PREFIX + "/a"));
 	return true;
 });
 
 EXO_TEST(file_resolve_dot_dot_removes_the_preceding_component,
 {
-	EXO_ASSERT(resolves_to("/a/b/..", PATH_PREFIX "/a"));
-	EXO_ASSERT(resolves_to("/a/b/../", PATH_PREFIX "/a"));
-	EXO_ASSERT(resolves_to("/tmp/x/../y", PATH_PREFIX "/tmp/y"));
+	EXO_ASSERT(resolves_to("/a/b/..", PATH_PREFIX + "/a"));
+	EXO_ASSERT(resolves_to("/a/b/../", PATH_PREFIX + "/a"));
+	EXO_ASSERT(resolves_to("/tmp/x/../y", PATH_PREFIX + "/tmp/y"));
 
 	/* The long-hand case that was written down but never checked. */
 	EXO_ASSERT(resolves_to("//home////.jalla////../janv/../janv/../janvidar/.quickdc//..",
-		PATH_PREFIX "/home/janvidar"));
+		PATH_PREFIX + "/home/janvidar"));
 	return true;
 });
 
@@ -1090,11 +1098,11 @@ EXO_TEST(file_resolve_dot_dot_removes_the_preceding_component,
  */
 EXO_TEST(file_resolve_dot_dot_cannot_climb_past_the_root,
 {
-	EXO_ASSERT(resolves_to("/home/janvidar/../..", PATH_PREFIX "/"));
-	EXO_ASSERT(resolves_to("/..", PATH_PREFIX "/"));
-	EXO_ASSERT(resolves_to("/../../../etc/passwd", PATH_PREFIX "/etc/passwd"));
-	EXO_ASSERT(resolves_to("/tmp/../../../../etc/passwd", PATH_PREFIX "/etc/passwd"));
-	EXO_ASSERT(resolves_to("/a/b/../../../../c", PATH_PREFIX "/c"));
+	EXO_ASSERT(resolves_to("/home/janvidar/../..", PATH_PREFIX + "/"));
+	EXO_ASSERT(resolves_to("/..", PATH_PREFIX + "/"));
+	EXO_ASSERT(resolves_to("/../../../etc/passwd", PATH_PREFIX + "/etc/passwd"));
+	EXO_ASSERT(resolves_to("/tmp/../../../../etc/passwd", PATH_PREFIX + "/etc/passwd"));
+	EXO_ASSERT(resolves_to("/a/b/../../../../c", PATH_PREFIX + "/c"));
 	return true;
 });
 
@@ -1109,19 +1117,19 @@ EXO_TEST(file_resolve_relative_dot_dot_stops_at_the_root,
 {
 	const std::string climb = many_parents(64);
 
-	EXO_ASSERT(resolves_to(climb + "/home/", PATH_PREFIX "/home"));
-	EXO_ASSERT(resolves_to(climb + "/home/../", PATH_PREFIX "/"));
-	EXO_ASSERT(resolves_to(climb + "/home/.../", PATH_PREFIX "/home/..."));
+	EXO_ASSERT(resolves_to(climb + "/home/", PATH_PREFIX + "/home"));
+	EXO_ASSERT(resolves_to(climb + "/home/../", PATH_PREFIX + "/"));
+	EXO_ASSERT(resolves_to(climb + "/home/.../", PATH_PREFIX + "/home/..."));
 	return true;
 });
 
 /* Three dots is a name. Only exactly one and exactly two are special. */
 EXO_TEST(file_resolve_three_dots_is_an_ordinary_name,
 {
-	EXO_ASSERT(resolves_to("/home/.../", PATH_PREFIX "/home/..."));
-	EXO_ASSERT(resolves_to("/a/.../b", PATH_PREFIX "/a/.../b"));
-	EXO_ASSERT(resolves_to("/a/....", PATH_PREFIX "/a/...."));
-	EXO_ASSERT(resolves_to("/a/..b", PATH_PREFIX "/a/..b"));
+	EXO_ASSERT(resolves_to("/home/.../", PATH_PREFIX + "/home/..."));
+	EXO_ASSERT(resolves_to("/a/.../b", PATH_PREFIX + "/a/.../b"));
+	EXO_ASSERT(resolves_to("/a/....", PATH_PREFIX + "/a/...."));
+	EXO_ASSERT(resolves_to("/a/..b", PATH_PREFIX + "/a/..b"));
 	return true;
 });
 
@@ -1130,7 +1138,7 @@ EXO_TEST(file_resolve_trailing_separator_makes_no_difference,
 	const std::string bare = Samurai::IO::File::resolvePath("/a/b");
 	EXO_ASSERT(resolves_to("/a/b/", bare));
 	EXO_ASSERT(resolves_to("/a/b///", bare));
-	EXO_ASSERT(resolves_to("/a/b", PATH_PREFIX "/a/b"));
+	EXO_ASSERT(resolves_to("/a/b", PATH_PREFIX + "/a/b"));
 	return true;
 });
 
@@ -1138,9 +1146,9 @@ EXO_TEST(file_resolve_trailing_separator_makes_no_difference,
    stripping it would leave nothing. */
 EXO_TEST(file_resolve_the_root_stays_the_root,
 {
-	EXO_ASSERT(resolves_to("/", PATH_PREFIX "/"));
-	EXO_ASSERT(resolves_to("//", PATH_PREFIX "/"));
-	EXO_ASSERT(resolves_to("///", PATH_PREFIX "/"));
+	EXO_ASSERT(resolves_to("/", PATH_PREFIX + "/"));
+	EXO_ASSERT(resolves_to("//", PATH_PREFIX + "/"));
+	EXO_ASSERT(resolves_to("///", PATH_PREFIX + "/"));
 	return true;
 });
 
@@ -1267,10 +1275,10 @@ EXO_TEST(file_resolve_is_lexical_and_does_not_follow_symlinks,
  */
 EXO_TEST(file_resolve_normalises_but_does_not_confine_to_a_base,
 {
-	const std::string base = PATH_PREFIX "/share";
+	const std::string base = PATH_PREFIX + "/share";
 
-	EXO_ASSERT(resolves_to(base + "/sub/../file", PATH_PREFIX "/share/file"));
-	EXO_ASSERT(resolves_to(base + "/../../etc/passwd", PATH_PREFIX "/etc/passwd"));
+	EXO_ASSERT(resolves_to(base + "/sub/../file", PATH_PREFIX + "/share/file"));
+	EXO_ASSERT(resolves_to(base + "/../../etc/passwd", PATH_PREFIX + "/etc/passwd"));
 
 	const std::string escaped = Samurai::IO::File::resolvePath(base + "/../../etc/passwd");
 	EXO_ASSERT(escaped.compare(0, base.size(), base) != 0);
@@ -1304,8 +1312,8 @@ EXO_TEST(file_resolve_without_a_home_directory_drops_the_tilde,
 
 	if (cwd.empty()) return false;
 
-	if (bare != cwd || below != PATH_PREFIX "/x"
-		|| climbing != PATH_PREFIX "/etc/passwd")
+	if (bare != cwd || below != PATH_PREFIX + "/x"
+		|| climbing != PATH_PREFIX + "/etc/passwd")
 	{
 		printf("%s: got '%s', '%s', '%s'\n", __FUNCTION__,
 			bare.c_str(), below.c_str(), climbing.c_str());

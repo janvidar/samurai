@@ -19,6 +19,11 @@ namespace Samurai {
  */
 inline std::error_code system_error(int errnum)
 {
+#ifdef _WIN32
+	/* Windows' system category is Win32's codes; errno values are small and are
+	   the generic category's, while Winsock's start at 10000 and are Win32's. */
+	if (errnum > 0 && errnum < 10000) return std::error_code(errnum, std::generic_category());
+#endif
 	return std::error_code(errnum, std::system_category());
 }
 

@@ -518,7 +518,9 @@ bool Samurai::IO::File::isExecutable() const
 {
 #ifdef SAMURAI_WINDOWS
 	/* Windows has no execute bit; the extension is what decides. Compared
-	   case-insensitively, since "PROGRAM.EXE" is just as executable. */
+	   case-insensitively, since "PROGRAM.EXE" is just as executable. A directory
+	   is, as on POSIX, because it can be searched. */
+	if (isDirectory()) return true;
 	std::string ext = getExtension();
 	for (std::string::size_type n = 0; n < ext.size(); n++)
 		ext[n] = (char) tolower((unsigned char) ext[n]);
