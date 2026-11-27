@@ -148,10 +148,13 @@ bool Samurai::IO::Net::SocketBase::bind(Samurai::IO::Net::SocketAddress* sa, std
 
 uint16_t Samurai::IO::Net::SocketBase::getLocalPort() const {
 	if (state != SocketState::Connected && state != SocketState::Connecting && state != SocketState::Listening) return 0;
-	sockaddr_in localaddr;
+	/* Room for either family: Winsock refuses a buffer too short for an IPv6
+	   address, where Linux truncates it. The port sits at the same offset in both. */
+	sockaddr_storage localaddr;
 	socklen_t len = sizeof(localaddr);
-	if (getsockname(sd, (sockaddr*) &localaddr, &len) == 0)
-		return ntohs(localaddr.sin_port);
+	if (getsockname(sd, (sockaddr*) &localaddr, &len) != 0) return 0;
+	if (localaddr.ss_family == AF_INET6) return ntohs(((sockaddr_in6*) &localaddr)->sin6_port);
+	if (localaddr.ss_family == AF_INET) return ntohs(((sockaddr_in*) &localaddr)->sin_port);
 	return 0;
 }
 
@@ -463,6 +466,14 @@ void Samurai::IO::Net::SocketBase::disableMonitor()
 bool Samurai::IO::Net::SocketBase::createDescriptor(int af)
 {
 	Samurai::IO::Net::winsock_ready();
+
+	/* Winsock makes a socket for an unspecified family, where POSIX refuses. */
+	if (af != AF_INET && af != AF_INET6)
+	{
+		QERR("Unable to create socket: no address family");
+		return false;
+	}
+
 	if (type == SocketType::Stream)
 	{
 		sd = ::socket(af, SOCK_STREAM, IPPROTO_TCP);

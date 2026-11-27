@@ -183,6 +183,8 @@ bool Samurai::Util::secureRandom(std::span<uint8_t> out)
 {
 	/* USE_SYSTEM_PREFERRED_RNG means no algorithm handle has to be opened and
 	   closed around every call. */
+	/* BCryptGenRandom() calls an empty buffer an invalid parameter. */
+	if (out.empty()) return true;
 	const NTSTATUS status = BCryptGenRandom(nullptr, (PUCHAR) out.data(),
 		(ULONG) out.size(), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
 	return status >= 0;

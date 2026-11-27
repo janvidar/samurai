@@ -856,8 +856,16 @@ EXO_TEST(tls_selfsigned_writes_a_key_and_a_certificate,
  * looks encrypted and authenticates nobody. The mode is set explicitly rather
  * than left to the umask, so this is exact rather than an upper bound.
  */
+/* Windows keeps no group and other permission bits, only read-only or not. */
+#ifdef SAMURAI_WINDOWS
+static const bool POSIX_MODES = false;
+#else
+static const bool POSIX_MODES = true;
+#endif
+
 EXO_TEST(tls_selfsigned_private_key_is_readable_only_by_its_owner,
 {
+	if (!POSIX_MODES) EXO_SKIP("the file system has no POSIX permissions");
 	if (!tls_test_keys_claimed().ready) EXO_SKIP("the working directory is not writable");
 
 	GeneratedKeys keys("modes", "quickdc-peer");

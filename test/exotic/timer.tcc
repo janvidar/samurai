@@ -132,8 +132,9 @@ EXO_TEST(timer_time_to_next_is_negative_when_nothing_is_armed,
 EXO_TEST(timer_time_to_next_is_bounded_by_the_nearest_deadline,
 {
 	Counter counter;
-	Timer far(*loop, &counter, std::chrono::milliseconds(60000), true);
-	Timer near(*loop, &counter, std::chrono::milliseconds(200), true);
+	/* Not "near" and "far": windows.h defines both away. */
+	Timer distant(*loop, &counter, std::chrono::milliseconds(60000), true);
+	Timer close_by(*loop, &counter, std::chrono::milliseconds(200), true);
 
 	const int next = loop->timers().timeToNext();
 	return next >= 0 && next <= 200;

@@ -240,7 +240,7 @@ int Samurai::IO::Net::NetworkInterfaceWindows::getMtu() const
 Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_ADDRESSES info)
 	: Samurai::IO::Net::NetworkInterface()
 	, m_ifnumber((interface_t) info->IfIndex)
-	, m_mtu((int) info->Mtu)
+	, m_mtu(info->Mtu > 65536 ? 0 : (int) info->Mtu) /* the loopback adapter says 0xffffffff */
 {
 	/* The name getIndexByName() and getNameByIndex() speak, not the adapter's GUID. */
 	char name[256] = { 0 };
