@@ -704,7 +704,17 @@ void Samurai::IO::Net::Socket::internal_connect_addr()
 		/* Only the port-sharing case needs these, and they are not free: a
 		   socket that did not ask to share its port should not be sharing it. */
 		if (reuse_local_port) {
-			if (!setReuseAddress(true, ec) || !setReusePort(true, ec)) {
+#ifdef SAMURAI_WINSOCK
+			/* Sharing with another outgoing socket, which is what Winsock's own
+			   SO_REUSEADDR does - unlike setReuseAddress(), which there makes a
+			   port exclusive for a listener. No SO_REUSEPORT on Windows. */
+			int on = 1;
+			const bool shared = Samurai::IO::Net::set_sockopt(sd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) != SOCKET_ERROR;
+			if (!shared) ec = Samurai::system_error(Samurai::IO::Net::net_error());
+#else
+			const bool shared = setReuseAddress(true, ec) && setReusePort(true, ec);
+#endif
+			if (!shared) {
 				state = SocketState::Invalid;
 				close();
 				if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, "the local port could not be made shareable");
