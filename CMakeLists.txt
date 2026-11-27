@@ -327,7 +327,7 @@ foreach(target IN ITEMS samurai_objects ${SAMURAI_LIBRARIES})
     # bcrypt supplies BCryptGenRandom, which is where Util::secureRandom() gets
     # its bytes on Windows.
     if(WIN32)
-        target_link_libraries(${target} PUBLIC ws2_32 iphlpapi bcrypt)
+        target_link_libraries(${target} PUBLIC ws2_32 iphlpapi bcrypt crypt32)
         # windows.h without min/max macros or the rarely used half of the API.
         target_compile_definitions(${target} PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
     endif()

@@ -27,6 +27,19 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <fstream>
+#ifdef _WIN32
+#include <windows.h>
+#include <wincrypt.h>
+/* wincrypt.h's names for its own structures, which shadow OpenSSL's types. */
+#undef X509_NAME
+#undef X509_EXTENSIONS
+#undef X509_CERT_PAIR
+#undef PKCS7_ISSUER_AND_SERIAL
+#undef OCSP_REQUEST
+#undef OCSP_RESPONSE
+#endif
+#include <iterator>
 #include <limits.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -158,11 +171,122 @@ static std::optional<Samurai::IO::Net::TlsFactory::Sha256Digest> sha256_of(X509*
 	return digest;
 }
 
+/*
+ * A file's bytes in a memory BIO, read here rather than by OpenSSL: a file BIO
+ * goes through OpenSSL's stdio, which on Windows needs applink in every program.
+ */
+static BIO* ssl_read_pem(const std::string& path)
+{
+	std::ifstream in(path, std::ios::binary);
+	if (!in) return nullptr;
+	const std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+
+	BIO* bio = BIO_new(BIO_s_mem());
+	if (bio && !bytes.empty() && BIO_write(bio, bytes.data(), static_cast<int>(bytes.size())) <= 0)
+	{
+		BIO_free(bio);
+		return nullptr;
+	}
+	return bio;
+}
+
+/* What SSL_CTX_use_certificate_chain_file() does, from bytes read here. */
+static bool ssl_use_certificate_chain(SSL_CTX* ctx, const std::string& path)
+{
+	BIO* bio = ssl_read_pem(path);
+	if (!bio) return false;
+
+	bool ok = false;
+	if (X509* leaf = PEM_read_bio_X509_AUX(bio, nullptr, nullptr, nullptr))
+	{
+		ok = SSL_CTX_use_certificate(ctx, leaf) == 1;
+		X509_free(leaf);
+	}
+
+	if (ok && SSL_CTX_clear_chain_certs(ctx) == 1)
+	{
+		while (X509* ca = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr))
+		{
+			if (SSL_CTX_add0_chain_cert(ctx, ca) != 1)
+			{
+				X509_free(ca);
+				ok = false;
+				break;
+			}
+		}
+		/* Running out of certificates ends the loop with an error that is not one. */
+		if (ok) ERR_clear_error();
+	}
+
+	BIO_free(bio);
+	return ok;
+}
+
+static bool ssl_use_private_key(SSL_CTX* ctx, const std::string& path)
+{
+	BIO* bio = ssl_read_pem(path);
+	if (!bio) return false;
+
+	EVP_PKEY* key = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
+	BIO_free(bio);
+	if (!key) return false;
+
+	const bool ok = SSL_CTX_use_PrivateKey(ctx, key) == 1;
+	EVP_PKEY_free(key);
+	return ok;
+}
+
+/* Every certificate in a PEM file added to the trust store; false if there was none. */
+static bool ssl_add_trust_anchors(SSL_CTX* ctx, const std::string& path)
+{
+	BIO* bio = ssl_read_pem(path);
+	if (!bio) return false;
+
+	X509_STORE* store = SSL_CTX_get_cert_store(ctx);
+	int added = 0;
+	while (X509* cert = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr))
+	{
+		if (X509_STORE_add_cert(store, cert) == 1) added++;
+		X509_free(cert);
+	}
+	BIO_free(bio);
+	ERR_clear_error();
+	return added > 0;
+}
+
+#ifdef SAMURAI_WINDOWS
+/*
+ * OpenSSL's default paths name its own CA files, which a Windows system does not
+ * have; the authorities Windows trusts are in its ROOT store.
+ */
+static bool ssl_add_windows_roots(SSL_CTX* ctx)
+{
+	HCERTSTORE system = CertOpenSystemStoreW(0, L"ROOT");
+	if (!system) return false;
+
+	X509_STORE* store = SSL_CTX_get_cert_store(ctx);
+	int added = 0;
+	for (PCCERT_CONTEXT one = CertEnumCertificatesInStore(system, nullptr); one;
+	     one = CertEnumCertificatesInStore(system, one))
+	{
+		const unsigned char* der = one->pbCertEncoded;
+		if (X509* cert = d2i_X509(nullptr, &der, static_cast<long>(one->cbCertEncoded)))
+		{
+			if (X509_STORE_add_cert(store, cert) == 1) added++;
+			X509_free(cert);
+		}
+	}
+	CertCloseStore(system, 0);
+	ERR_clear_error();
+	return added > 0;
+}
+#endif
+
 static std::optional<Samurai::IO::Net::TlsFactory::Sha256Digest> ssl_certificate_sha256(Samurai::IO::File* pem)
 {
 	if (!pem || !pem->exists()) return std::nullopt;
 
-	BIO* bio = BIO_new_file(pem->getName().c_str(), "r");
+	BIO* bio = ssl_read_pem(pem->getName());
 	if (!bio)
 	{
 		char msg[SSL_ERRBUF_SIZE];
@@ -584,7 +708,11 @@ SSL_CTX* ssl_build_context(bool client, Samurai::IO::File* cert, Samurai::IO::Fi
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, nullptr);
 
 	/* Without a trust store SSL_VERIFY_PEER can never succeed. */
+#ifdef SAMURAI_WINDOWS
+	if (!ssl_add_windows_roots(ctx))
+#else
 	if (SSL_CTX_set_default_verify_paths(ctx) != 1)
+#endif
 	{
 		char msg[SSL_ERRBUF_SIZE];
 		ssl_error_string(msg, sizeof(msg));
@@ -602,7 +730,7 @@ SSL_CTX* ssl_build_context(bool client, Samurai::IO::File* cert, Samurai::IO::Fi
 	 */
 	for (const std::string& anchor : Samurai::IO::Net::TlsFactory::getTrustAnchors())
 	{
-		if (SSL_CTX_load_verify_locations(ctx, anchor.c_str(), nullptr) == 1)
+		if (ssl_add_trust_anchors(ctx, anchor))
 			continue;
 
 		char msg[SSL_ERRBUF_SIZE];
@@ -619,7 +747,7 @@ SSL_CTX* ssl_build_context(bool client, Samurai::IO::File* cert, Samurai::IO::Fi
 	 */
 	if (cert && cert->exists())
 	{
-		if (SSL_CTX_use_certificate_chain_file(ctx, cert->getName().c_str()) != 1)
+		if (!ssl_use_certificate_chain(ctx, cert->getName()))
 		{
 			char msg[SSL_ERRBUF_SIZE];
 			ssl_error_string(msg, sizeof(msg));
@@ -631,8 +759,7 @@ SSL_CTX* ssl_build_context(bool client, Samurai::IO::File* cert, Samurai::IO::Fi
 
 	if (pkey && pkey->exists())
 	{
-		if (SSL_CTX_use_PrivateKey_file(ctx, pkey->getName().c_str(),
-				SSL_FILETYPE_PEM) != 1)
+		if (!ssl_use_private_key(ctx, pkey->getName()))
 		{
 			char msg[SSL_ERRBUF_SIZE];
 			ssl_error_string(msg, sizeof(msg));
