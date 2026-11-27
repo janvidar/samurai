@@ -71,12 +71,19 @@ EXO_TEST(file_6, {
 	return f.getName() == PATH_PREFIX + "/home/~/.jalla";
 });
 
-EXO_TEST(file_7, {
-	Samurai::IO::File f("~");
+/* The home '~' means: HOME, and on Windows USERPROFILE where HOME is not set. */
+static const char* home_directory()
+{
 	const char* home = getenv("HOME");
 #ifdef SAMURAI_WINDOWS
 	if (!home || !*home) home = getenv("USERPROFILE");
 #endif
+	return home;
+}
+
+EXO_TEST(file_7, {
+	Samurai::IO::File f("~");
+	const char* home = home_directory();
 	if (!home) return false;
 	return f.getName() == Samurai::IO::File::resolvePath(home);
 });
