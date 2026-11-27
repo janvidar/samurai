@@ -130,3 +130,56 @@ jobs:
       # This is the only job that runs the kqueue socket monitor.
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+  windows:
+    name: Windows MSVC Debug
+    runs-on: windows-2022
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: samurai
+
+      - uses: actions/checkout@v4
+        with:
+          repository: janvidar/exotic
+          path: exotic
+
+      # vcpkg's built packages kept between runs: building OpenSSL takes minutes.
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg-cache
+          key: vcpkg-${{ runner.os }}-openssl-zlib-bzip2-v1
+
+      - name: Install dependencies
+        shell: bash
+        env:
+          VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg-cache,readwrite
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/vcpkg-cache"
+          choco install -y ninja
+          vcpkg install openssl:x64-windows zlib:x64-windows bzip2:x64-windows
+
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure
+        shell: bash
+        run: |
+          cmake -S samurai -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+
+      - name: Build
+        shell: bash
+        run: cmake --build build -- -k 0
+
+      # The tests write under /tmp, which Windows reads as \tmp on the current drive.
+      - name: Make /tmp
+        shell: bash
+        run: cmd //c "if not exist \\tmp mkdir \\tmp"
+
+      # Bounded by timeout(1) too: the step's own limit does not reach ctest's children.
+      - name: Test
+        shell: bash
+        timeout-minutes: 15
+        run: timeout 600 ctest --test-dir build --output-on-failure --timeout 300
