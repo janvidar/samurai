@@ -1025,7 +1025,9 @@ static std::string many_parents(size_t count)
 static std::string rooted_once(const std::string& input)
 {
 #ifdef SAMURAI_WINDOWS
-	if (input.size() >= 2 && input[0] == '/' && input[1] == '/') return input.substr(1);
+	const size_t slashes = input.find_first_not_of('/');
+	if (slashes != std::string::npos ? slashes > 1 : input.size() > 1)
+		return "/" + (slashes == std::string::npos ? std::string() : input.substr(slashes));
 #endif
 	return input;
 }
@@ -1216,7 +1218,7 @@ EXO_TEST(file_resolve_is_idempotent,
 	for (const char* input : inputs)
 	{
 		const std::string once = Samurai::IO::File::resolvePath(input);
-		EXO_ASSERT(resolves_to(once, once));
+		EXO_ASSERT(Samurai::IO::File::resolvePath(once) == once);
 	}
 	return true;
 });
@@ -1310,23 +1312,39 @@ EXO_TEST(file_resolve_normalises_but_does_not_confine_to_a_base,
  * '~' becomes the working directory instead, since dropping it leaves an empty
  * path. Neither reaches anywhere it should not.
  */
+/* No home directory at all while it lives: HOME, and USERPROFILE on Windows. */
+struct NoHome
+{
+	std::vector<std::pair<std::string, std::string>> saved;
+
+	NoHome()
+	{
+		const char* names[] = { "HOME", "USERPROFILE" };
+		for (const char* name : names)
+		{
+			if (const char* value = getenv(name)) saved.emplace_back(name, value);
+			unsetenv(name);
+		}
+	}
+
+	~NoHome()
+	{
+		for (const auto& [name, value] : saved) setenv(name.c_str(), value.c_str(), 1);
+	}
+};
+
 EXO_TEST(file_resolve_without_a_home_directory_drops_the_tilde,
 {
-	const char* previous = getenv("HOME");
-	const bool had_home = previous != nullptr;
-	const std::string saved = had_home ? std::string(previous) : std::string();
-
-	unsetenv("HOME");
-
-	const std::string cwd = current_directory();
-	const std::string bare = Samurai::IO::File::resolvePath("~");
-	const std::string below = Samurai::IO::File::resolvePath("~/x");
-	const std::string climbing = Samurai::IO::File::resolvePath("~/../../etc/passwd");
-
-	/* Put it back before asserting: a case that fails here must not leave the
-	   rest of the suite running without a home directory. */
-	if (had_home)
-		setenv("HOME", saved.c_str(), 1);
+	std::string cwd, bare, below, climbing;
+	{
+		/* Restored before asserting: a case that fails here must not leave the
+		   rest of the suite running without a home directory. */
+		NoHome none;
+		cwd = current_directory();
+		bare = Samurai::IO::File::resolvePath("~");
+		below = Samurai::IO::File::resolvePath("~/x");
+		climbing = Samurai::IO::File::resolvePath("~/../../etc/passwd");
+	}
 
 	if (cwd.empty()) return false;
 
