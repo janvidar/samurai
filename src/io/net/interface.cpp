@@ -257,7 +257,9 @@ Samurai::IO::Net::NetworkInterfaceWindows::NetworkInterfaceWindows(PIP_ADAPTER_A
 			m_hwaddr = std::make_unique<Samurai::IO::Net::HardwareAddress>(hwaddr_bytes);
 	}
 
-	if (info->OperStatus == IfOperStatusUp)
+	/* Up and with an address: Windows lists adapters that are up and carry none
+	   (virtual switches, WAN miniports), which nothing can be sent through. */
+	if (info->OperStatus == IfOperStatusUp && info->FirstUnicastAddress)
 		m_flags |= NetworkInterfaceFlags::Enabled;
 
 	/* The negation has to apply to the masked bit, not to Flags: '!' binds

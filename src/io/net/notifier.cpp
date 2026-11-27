@@ -23,7 +23,7 @@ Samurai::IO::Net::Notifier::Notifier(Samurai::EventLoop& loop_, std::function<vo
 	if (!Samurai::IO::Net::socket_pair(pair))
 	{
 		QERR("Unable to create a notification socket pair: %s",
-		     strerror(Samurai::IO::Net::net_error()));
+		     Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 		return;
 	}
 
@@ -41,7 +41,7 @@ Samurai::IO::Net::Notifier::Notifier(Samurai::EventLoop& loop_, std::function<vo
 	if (!setNonBlocking(true) || !Samurai::IO::Net::set_nonblocking(writer))
 	{
 		QERR("Unable to make the notification socketpair non-blocking: %s",
-		     strerror(Samurai::IO::Net::net_error()));
+		     Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 		Samurai::IO::Net::socket_close(writer);
 		Samurai::IO::Net::socket_close(sd);
 		writer = INVALID_SOCKET;

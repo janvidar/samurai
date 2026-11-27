@@ -117,7 +117,7 @@ bool Samurai::IO::Net::SocketBase::bind(Samurai::IO::Net::SocketAddress* sa, std
 			if (ret == SOCKET_ERROR)
 			{
 				ec = Samurai::system_error(Samurai::IO::Net::net_error());
-				QDBG("Bind on Version::IPv4 failed. Error %d: %s", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
+				QDBG("Bind on Version::IPv4 failed. Error %d: %s", Samurai::IO::Net::net_error(), Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 				return false;
 			}
 			return true;
@@ -133,7 +133,7 @@ bool Samurai::IO::Net::SocketBase::bind(Samurai::IO::Net::SocketAddress* sa, std
 			if (ret == SOCKET_ERROR)
 			{
 				ec = Samurai::system_error(Samurai::IO::Net::net_error());
-				QDBG("Bind on Version::IPv6 failed. Error %d: %s", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
+				QDBG("Bind on Version::IPv6 failed. Error %d: %s", Samurai::IO::Net::net_error(), Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 				return false;
 			}
 			return true;
@@ -485,7 +485,7 @@ bool Samurai::IO::Net::SocketBase::createDescriptor(int af)
 	
 	if (sd == INVALID_SOCKET)
 	{
-		QERR("Unable to create socket: %s (%d)", strerror(Samurai::IO::Net::net_error()), Samurai::IO::Net::net_error());
+		QERR("Unable to create socket: %s (%d)", Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()), Samurai::IO::Net::net_error());
 		return false;
 	}
 

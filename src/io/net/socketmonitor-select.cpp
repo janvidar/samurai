@@ -189,7 +189,7 @@ void Samurai::IO::Net::SelectSocketMonitor::internal_wait(int time_ms) {
 			return;
 		}
 
-		QERR("Select error: %i, %s", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
+		QERR("Select error: %i, %s", Samurai::IO::Net::net_error(), Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 		return;
 	}
 

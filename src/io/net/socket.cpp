@@ -193,7 +193,7 @@ void Samurai::IO::Net::Socket::handleMonitorEvent(Samurai::IO::Net::SocketMonito
 				{
 					if (Samurai::IO::Net::net_error() != EAGAIN && Samurai::IO::Net::net_error() != EINTR)
 					{
-						QERR("Socket recv error: %d (%s) (x=%d)\n", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()), x);
+						QERR("Socket recv error: %d (%s) (x=%d)\n", Samurai::IO::Net::net_error(), Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()), x);
 						internal_error(Samurai::IO::Net::net_error());
 					}
 				}
@@ -467,7 +467,7 @@ void Samurai::IO::Net::Socket::internal_connected() {
 			classify_socket_error(value, classified);
 
 		/* The classified text first: strerror() knows no Winsock codes. */
-		const char* error = classified ? classified : (value != 0 ? strerror(value) : nullptr);
+		const char* error = classified ? classified : (value != 0 ? Samurai::IO::Net::net_error_text(value) : nullptr);
 		state = SocketState::Disconnected;
 		close();
 		if (eventHandler) eventHandler->EventError(this, sockErr, error);
@@ -678,14 +678,14 @@ void Samurai::IO::Net::Socket::internal_connect_addr()
 	if (!createDescriptor(addr->getSockAddrFamily())) {
 		state = SocketState::Invalid;
 		close();
-		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, strerror(Samurai::IO::Net::net_error()));
+		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 		return;
 	}
 
 	if (!setNonBlocking(true)) {
 		state = SocketState::Invalid;
 		close();
-		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, strerror(Samurai::IO::Net::net_error()));
+		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 		return;
 	}
 
@@ -776,7 +776,7 @@ void Samurai::IO::Net::Socket::internal_connect_addr()
 		} else {
 			state = SocketState::Invalid;
 			close();
-			if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, strerror(Samurai::IO::Net::net_error()));
+			if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketUnknown, Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 			return;
 		}
 	}
@@ -866,7 +866,7 @@ ssize_t Samurai::IO::Net::Socket::write(const char* data, size_t length) {
 			} else {
 				state = SocketState::Invalid;
 				close();
-				if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketWrite, strerror(Samurai::IO::Net::net_error()));
+				if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketWrite, Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 				return -1;
 			}
 		}
@@ -931,7 +931,7 @@ ssize_t Samurai::IO::Net::Socket::read(char* data, size_t length) {
 
 			state = SocketState::Invalid;
 			close();
-			if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketRead, strerror(Samurai::IO::Net::net_error()));
+			if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketRead, Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 			return 0; // nothing was read.
 		}
 	}
@@ -987,7 +987,7 @@ ssize_t Samurai::IO::Net::Socket::peek(char* data, size_t length) {
 
 		state = SocketState::Invalid;
 		close();
-		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketRead, strerror(Samurai::IO::Net::net_error()));
+		if (eventHandler) eventHandler->EventError(this, Samurai::IO::Net::SocketError::SocketRead, Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 		return 0;
 	}
 	return ret;

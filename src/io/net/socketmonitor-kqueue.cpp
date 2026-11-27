@@ -257,7 +257,7 @@ void Samurai::IO::Net::KQueueSocketMonitor::internal_commitOneAtATime()
 
 		QDBG("kqueue - change %zu rejected (sd=%d, filter=%d): %s", n,
 		     (int) change[n].ident, (int) change[n].filter,
-		     strerror(Samurai::IO::Net::net_error()));
+		     Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 	}
 }
 
@@ -325,7 +325,7 @@ void Samurai::IO::Net::KQueueSocketMonitor::internal_wait(int time_ms)
 			if (Samurai::IO::Net::net_error() != EINTR)
 			{
 				QERR("kevent error: %i, %s", Samurai::IO::Net::net_error(),
-				     strerror(Samurai::IO::Net::net_error()));
+				     Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 			}
 			return;
 		}
@@ -360,7 +360,7 @@ void Samurai::IO::Net::KQueueSocketMonitor::internal_wait(int time_ms)
 		{
 			if (Samurai::IO::Net::net_error() != EINTR)
 			{
-				QERR("kevent error: %i, %s", Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
+				QERR("kevent error: %i, %s", Samurai::IO::Net::net_error(), Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 			}
 			return;
 		}

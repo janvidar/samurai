@@ -128,7 +128,7 @@ bool Samurai::IO::Net::ServerSocket::listen(size_t backlog, std::error_code& ec)
 	if (::listen(sd, (int) std::max(backlog, MIN_LISTEN_BACKLOG)) == -1)
 	{
 		ec = Samurai::system_error(Samurai::IO::Net::net_error());
-		QERR("Unable to listen to socket: %s (%d)", strerror(Samurai::IO::Net::net_error()), Samurai::IO::Net::net_error());
+		QERR("Unable to listen to socket: %s (%d)", Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()), Samurai::IO::Net::net_error());
 		return false;
 	}
 
@@ -205,7 +205,7 @@ void Samurai::IO::Net::ServerSocket::internal_accept() {
 	// accept() does not inherit O_NONBLOCK from the listening socket.
 	if (!sock->setNonBlocking(true))
 	{
-		QERR("Unable to set accepted socket non-blocking: %s", strerror(Samurai::IO::Net::net_error()));
+		QERR("Unable to set accepted socket non-blocking: %s", Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 	}
 
 	if (eventHandler)

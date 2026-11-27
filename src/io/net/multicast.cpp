@@ -82,7 +82,7 @@ bool Samurai::IO::Net::MulticastSocket::changeMembership(
 		if (Samurai::IO::Net::membership4(sd, option, wanted->sin_addr, iface, netif) != 0)
 		{
 			QERR("Unable to %s multicast group: (%d) %s", join_it ? "join" : "leave",
-			     Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
+			     Samurai::IO::Net::net_error(), Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 			return false;
 		}
 		return true;
@@ -94,7 +94,7 @@ bool Samurai::IO::Net::MulticastSocket::changeMembership(
 	if (Samurai::IO::Net::membership6(sd, option, wanted->sin6_addr, netif) != 0)
 	{
 		QERR("Unable to %s multicast group: (%d) %s", join_it ? "join" : "leave",
-		     Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
+		     Samurai::IO::Net::net_error(), Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 		return false;
 	}
 	return true;
@@ -182,7 +182,7 @@ bool Samurai::IO::Net::MulticastSocket::setInterface(
 		{
 			QERR("Unable to select multicast interface %s: (%d) %s",
 			     iface.getName() ? iface.getName() : "?",
-			     Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
+			     Samurai::IO::Net::net_error(), Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 			return false;
 		}
 
@@ -222,7 +222,7 @@ bool Samurai::IO::Net::MulticastSocket::setInterface(
 	{
 		QERR("Unable to select multicast interface %s: (%d) %s",
 		     iface.getName() ? iface.getName() : "?",
-		     Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
+		     Samurai::IO::Net::net_error(), Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 		return false;
 	}
 
@@ -266,7 +266,7 @@ bool Samurai::IO::Net::MulticastSocket::setMulticastTimeToLive(uint8_t ttl)
 	if (ret != 0)
 	{
 		QERR("Unable to set multicast hop limit (%d) %s",
-		     Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
+		     Samurai::IO::Net::net_error(), Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 		return false;
 	}
 	return true;
@@ -284,7 +284,7 @@ uint8_t Samurai::IO::Net::MulticastSocket::getMulticastTimeToLive() const
 	if (ret != 0)
 	{
 		QERR("Unable to read multicast hop limit (%d) %s",
-		     Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
+		     Samurai::IO::Net::net_error(), Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 		return 0;
 	}
 	return value;
@@ -307,7 +307,7 @@ bool Samurai::IO::Net::MulticastSocket::setLoopbackMode(bool toggle)
 	if (ret != 0)
 	{
 		QERR("Unable to set loopback mode (%d) %s",
-		     Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
+		     Samurai::IO::Net::net_error(), Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 		return false;
 	}
 	return true;
@@ -325,7 +325,7 @@ bool Samurai::IO::Net::MulticastSocket::getLoopbackMode()
 	if (ret != 0)
 	{
 		QERR("Unable to get loopback mode (%d) %s",
-		     Samurai::IO::Net::net_error(), strerror(Samurai::IO::Net::net_error()));
+		     Samurai::IO::Net::net_error(), Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 		return false;
 	}
 	return loop;

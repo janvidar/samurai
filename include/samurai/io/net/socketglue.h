@@ -8,6 +8,7 @@
 #include <span>
 #include <errno.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include <samurai/samurai.h>
@@ -119,6 +120,26 @@ inline bool socket_pair(socket_t fds[2])
 	fds[0] = raw[0];
 	fds[1] = raw[1];
 	return true;
+#endif
+}
+
+/**
+ * The text for a socket error from net_error(): strerror() on POSIX, and Windows'
+ * own message for a Winsock code, which strerror() knows nothing of. Valid until
+ * the next call on the same thread.
+ */
+inline const char* net_error_text(int error)
+{
+#ifdef SAMURAI_WINSOCK
+	thread_local char text[256];
+	const DWORD length = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+		nullptr, (DWORD) error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), text, sizeof(text), nullptr);
+	if (length == 0) snprintf(text, sizeof(text), "socket error %d", error);
+	for (size_t n = strlen(text); n > 0 && (text[n - 1] == '\r' || text[n - 1] == '\n' || text[n - 1] == ' '); n--)
+		text[n - 1] = 0;
+	return text;
+#else
+	return strerror(error);
 #endif
 }
 

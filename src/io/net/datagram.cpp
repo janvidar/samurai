@@ -185,7 +185,7 @@ int Samurai::IO::Net::DatagramSocket::send(DatagramPacket* packet) {
 		if (Samurai::IO::Net::net_error() == EAGAIN || Samurai::IO::Net::net_error() == EWOULDBLOCK || Samurai::IO::Net::net_error() == EINTR) {
 			return 0;
 		} else {
-			if (eventHandler) eventHandler->EventDatagramError(this, strerror(Samurai::IO::Net::net_error()));
+			if (eventHandler) eventHandler->EventDatagramError(this, Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 			return -1;
 		}
 	}
@@ -218,7 +218,7 @@ int Samurai::IO::Net::DatagramSocket::read(DatagramPacket* packet) {
 			|| Samurai::IO::Net::net_error() == EINTR)
 			return 0;
 
-		QERR("recvfrom err: %s", strerror(Samurai::IO::Net::net_error()));
+		QERR("recvfrom err: %s", Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 		return -1;
 	}
 
@@ -266,7 +266,7 @@ void Samurai::IO::Net::DatagramSocket::internal_canRead() {
 	
 	switch (read(myPacket.get())) {
 		case -1:
-			if (eventHandler) eventHandler->EventDatagramError(this, strerror(Samurai::IO::Net::net_error()));
+			if (eventHandler) eventHandler->EventDatagramError(this, Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 			break;
 		case 0:
 			break;
@@ -277,7 +277,7 @@ void Samurai::IO::Net::DatagramSocket::internal_canRead() {
 }
 
 void Samurai::IO::Net::DatagramSocket::internal_error() {
-	if (eventHandler) eventHandler->EventDatagramError(this, strerror(Samurai::IO::Net::net_error()));
+	if (eventHandler) eventHandler->EventDatagramError(this, Samurai::IO::Net::net_error_text(Samurai::IO::Net::net_error()));
 	disableMonitor();
 }
 
